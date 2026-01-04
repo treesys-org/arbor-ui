@@ -14,6 +14,8 @@ class ArborModals extends HTMLElement {
         // Local state for security warning
         this.pendingSourceUrl = null;
         this.showSecurityWarning = false;
+        // Local state for Impressum
+        this.showImpressumDetails = false;
     }
 
     connectedCallback() {
@@ -39,6 +41,7 @@ class ArborModals extends HTMLElement {
         const modal = store.value.modal;
         if (!modal) {
             this.innerHTML = '';
+            this.showImpressumDetails = false; // Reset impressum state on close
             return;
         }
 
@@ -65,7 +68,7 @@ class ArborModals extends HTMLElement {
         this.innerHTML = `
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
             <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full relative overflow-hidden flex flex-col max-h-[90vh]">
-                <button class="btn-close absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 z-20">✕</button>
+                <button class="btn-close absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors z-20">✕</button>
                 ${content}
             </div>
         </div>`;
@@ -76,6 +79,13 @@ class ArborModals extends HTMLElement {
         
         if (type === 'tutorial') this.bindTutorialEvents();
         if (type === 'sources') this.bindSourcesEvents();
+        if (type === 'impressum') {
+            const btnImp = this.querySelector('#btn-show-impressum');
+            if(btnImp) btnImp.onclick = () => {
+                this.showImpressumDetails = true;
+                this.render();
+            };
+        }
         if (type === 'language') {
             this.querySelectorAll('.btn-lang-sel').forEach(b => b.onclick = (e) => {
                 store.setLanguage(e.currentTarget.dataset.code);
@@ -295,6 +305,10 @@ class ArborModals extends HTMLElement {
                 <p><strong>${ui.missionTitle}</strong><br>${ui.missionText}</p>
                 <p class="text-xs text-slate-400 font-mono pt-4 border-t border-slate-200 dark:border-slate-700">${ui.lastUpdated} ${store.value.data?.generatedAt || 'N/A'}</p>
             </div>
+            <a href="https://github.com" target="_blank" rel="noopener noreferrer" class="mt-6 w-full flex items-center justify-center gap-3 py-3 px-4 bg-slate-800 hover:bg-slate-700 dark:bg-slate-200 dark:hover:bg-slate-300 text-white dark:text-slate-800 font-bold text-sm rounded-xl transition-all">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"></path></svg>
+                ${ui.viewOnGithub}
+            </a>
         </div>`;
     }
 
@@ -304,9 +318,16 @@ class ArborModals extends HTMLElement {
              <h2 class="text-xl font-black text-slate-800 dark:text-white mb-4">${ui.impressumTitle}</h2>
              <div class="text-left bg-slate-50 dark:bg-slate-800 p-6 rounded-xl text-sm text-slate-600 dark:text-slate-300 space-y-4">
                  <p>${ui.impressumText}</p>
-                 <div class="font-mono pt-4 border-t border-slate-200 dark:border-slate-700 whitespace-pre-wrap text-xs">
-                     ${ui.impressumDetails}
-                 </div>
+                 
+                 ${!this.showImpressumDetails ? `
+                    <button id="btn-show-impressum" class="text-sky-600 dark:text-sky-400 font-bold text-xs hover:underline">
+                        ${ui.showImpressumDetails}
+                    </button>
+                 ` : `
+                    <div class="font-mono pt-4 border-t border-slate-200 dark:border-slate-700 whitespace-pre-wrap animate-in fade-in duration-300 text-xs">
+                        ${ui.impressumDetails}
+                    </div>
+                 `}
              </div>
         </div>`;
     }
@@ -380,7 +401,7 @@ class ArborModals extends HTMLElement {
                     <button id="btn-cert-filter" class="px-4 py-2 rounded-xl text-sm font-bold ${this.certShowAll ? 'bg-slate-700 text-white' : 'bg-green-600 text-white'} whitespace-nowrap">
                         ${this.certShowAll ? ui.showAll : ui.showEarned}
                     </button>
-                    <button class="w-10 h-10 rounded-full bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center flex-shrink-0" onclick="store.setViewMode('explore')">✕</button>
+                    <button class="btn-close-certs w-10 h-10 rounded-full bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center flex-shrink-0">✕</button>
                  </div>
              </header>
              
@@ -416,6 +437,7 @@ class ArborModals extends HTMLElement {
              </div>
         </div>`;
 
+        this.querySelector('.btn-close-certs').onclick = () => store.setViewMode('explore');
         this.querySelector('#inp-cert-search').oninput = (e) => {
             this.certSearch = e.target.value;
             this.render();

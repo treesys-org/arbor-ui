@@ -7,6 +7,13 @@ export function processInlineStyles(text) {
     return parsed;
 }
 
+function slugify(text) {
+    return text.toLowerCase()
+        .replace(/[^\w\s-]/g, '')
+        .replace(/[\s_-]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+}
+
 export function parseContent(text) {
     if (!text) return [];
     const lines = text.split('\n');
@@ -42,12 +49,14 @@ export function parseContent(text) {
         // Headers
         if (line.startsWith('# ')) {
             flushText();
-            blocks.push({ type: 'h1', text: line.substring(2) });
+            const t = line.substring(2);
+            blocks.push({ type: 'h1', text: t, id: slugify(t) });
             continue;
         }
         if (line.startsWith('## ')) {
             flushText();
-            blocks.push({ type: 'h2', text: line.substring(3) });
+            const t = line.substring(3);
+            blocks.push({ type: 'h2', text: t, id: slugify(t) });
             continue;
         }
 
@@ -68,6 +77,14 @@ export function parseContent(text) {
             if (src.includes('watch?v=')) safeSrc = src.replace('watch?v=', 'embed/');
             if (src.includes('youtu.be/')) safeSrc = src.replace('youtu.be/', 'youtube.com/embed/');
             blocks.push({ type: 'video', src: safeSrc });
+            continue;
+        }
+        
+        // Audio
+        if (line.startsWith('@audio:')) {
+            flushText();
+            const src = line.substring(7).trim();
+            blocks.push({ type: 'audio', src });
             continue;
         }
 
@@ -93,6 +110,32 @@ export function parseContent(text) {
             }
             if (options.length) currentQuizQuestions.push({ question: qText, options });
             continue;
+        }
+        
+        // Code Block
+        if (line.startsWith('```')) {
+             flushText();
+             let codeContent = '';
+             i++;
+             while(i < lines.length && !lines[i].trim().startsWith('```')) {
+                 codeContent += lines[i] + '\n';
+                 i++;
+             }
+             blocks.push({ type: 'code', text: codeContent.trim() });
+             continue;
+        }
+        
+        // List
+        if (line.startsWith('- ')) {
+             flushText();
+             const items = [];
+             items.push(processInlineStyles(line.substring(2)));
+             while(i + 1 < lines.length && lines[i+1].trim().startsWith('- ')) {
+                 i++;
+                 items.push(processInlineStyles(lines[i].trim().substring(2)));
+             }
+             blocks.push({ type: 'list', items });
+             continue;
         }
 
         finalizeQuiz();

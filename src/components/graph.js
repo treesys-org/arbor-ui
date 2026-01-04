@@ -18,15 +18,21 @@ class ArborGraph extends HTMLElement {
              <!-- Clouds -->
              <div class="absolute top-10 left-10 opacity-40 dark:opacity-10 pointer-events-none text-6xl select-none">☁️</div>
              <div class="absolute top-20 right-20 opacity-30 dark:opacity-5 pointer-events-none text-8xl select-none">☁️</div>
+             
+             <!-- Overlays Container -->
+             <div id="overlays" class="absolute inset-0 pointer-events-none"></div>
         </div>`;
 
         // Defer init to ensure container has size
-        requestAnimationFrame(() => this.initGraph());
+        requestAnimationFrame(() => {
+             this.initGraph();
+             this.renderOverlays();
+        });
 
         store.addEventListener('graph-update', () => this.updateGraph());
         store.addEventListener('state-change', (e) => {
-             // Redraw ground on theme change
              if(this.g) this.drawGround(); 
+             this.renderOverlays();
         });
         store.addEventListener('focus-node', (e) => this.focusNode(e.detail));
         
@@ -41,6 +47,48 @@ class ArborGraph extends HTMLElement {
                 }
             }
         });
+    }
+    
+    renderOverlays() {
+        const overlayContainer = this.querySelector('#overlays');
+        if(!overlayContainer) return;
+        
+        const state = store.value;
+        const ui = store.ui;
+        
+        if (state.loading) {
+            overlayContainer.innerHTML = `
+            <div class="absolute inset-0 flex flex-col items-center justify-center z-10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm pointer-events-auto">
+              <div class="w-16 h-16 border-4 border-sky-200 border-t-green-500 rounded-full animate-spin mb-4"></div>
+              <p class="font-bold text-sky-600 dark:text-sky-400 animate-pulse tracking-wide font-comic text-xl">${ui.loading}</p>
+            </div>`;
+        } else if (state.error) {
+             overlayContainer.innerHTML = `
+            <div class="absolute top-20 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center animate-in pointer-events-auto">
+                 <div class="w-full flex justify-between px-8 absolute -top-16 h-20 z-0">
+                     <div class="w-1 h-full bg-amber-900/40 dark:bg-amber-900/20"></div>
+                     <div class="w-1 h-full bg-amber-900/40 dark:bg-amber-900/20"></div>
+                 </div>
+                 <div class="bg-[#8D6E63] border-4 border-[#5D4037] rounded-lg p-8 shadow-2xl relative max-w-md text-center transform rotate-1 z-10 flex flex-col items-center">
+                      <div class="absolute top-2 left-2 w-3 h-3 rounded-full bg-[#3E2723] shadow-inner"></div>
+                      <div class="absolute top-2 right-2 w-3 h-3 rounded-full bg-[#3E2723] shadow-inner"></div>
+                      <div class="absolute bottom-2 left-2 w-3 h-3 rounded-full bg-[#3E2723] shadow-inner"></div>
+                      <div class="absolute bottom-2 right-2 w-3 h-3 rounded-full bg-[#3E2723] shadow-inner"></div>
+                      <div class="text-5xl mb-4 drop-shadow-lg">🍂</div>
+                      <h2 class="text-white font-black text-2xl mb-2 drop-shadow-md uppercase tracking-widest border-b-2 border-white/20 pb-2 w-full">
+                          ${ui.errorTitle}
+                      </h2>
+                      <p class="text-amber-100 font-bold font-mono text-sm leading-relaxed mb-4">
+                        ${state.error}
+                      </p>
+                      <div class="text-amber-200/60 text-xs font-bold uppercase tracking-widest border-t border-white/10 pt-2 w-full">
+                          ${ui.errorNoTrees}
+                      </div>
+                 </div>
+            </div>`;
+        } else {
+            overlayContainer.innerHTML = '';
+        }
     }
 
     initGraph() {
@@ -57,12 +105,24 @@ class ArborGraph extends HTMLElement {
 
         // Filters
         const defs = this.svg.append("defs");
+        
+        // 1. Drop Shadow
         const filter = defs.append("filter").attr("id", "drop-shadow");
         filter.append("feGaussianBlur").attr("in", "SourceAlpha").attr("stdDeviation", 3);
         filter.append("feOffset").attr("dx", 0).attr("dy", 3);
         const merge = filter.append("feMerge");
         merge.append("feMergeNode");
         merge.append("feMergeNode").attr("in", "SourceGraphic");
+
+        // 2. Leaf Glow
+        const leafGlow = defs.append("filter")
+            .attr("id", "leaf-glow")
+            .attr("x", "-50%").attr("y", "-50%")
+            .attr("width", "200%").attr("height", "200%");
+        leafGlow.append("feGaussianBlur").attr("stdDeviation", "5").attr("result", "coloredBlur");
+        const lgMerge = leafGlow.append("feMerge");
+        lgMerge.append("feMergeNode").attr("in", "coloredBlur");
+        lgMerge.append("feMergeNode").attr("in", "SourceGraphic");
 
         // Groups
         this.g = this.svg.append("g");
@@ -136,7 +196,7 @@ class ArborGraph extends HTMLElement {
         });
 
         // --- NODES ---
-        const nodes = this.nodeGroup.selectAll(".node")
+        const nodes = this.nodeGroup.selectAll("g.node")
             .data(root.descendants(), d => d.data.id);
 
         const nodeEnter = nodes.enter().append("g")
@@ -156,8 +216,7 @@ class ArborGraph extends HTMLElement {
         nodeEnter.append("path")
             .attr("class", "node-body")
             .attr("stroke", "#fff")
-            .attr("stroke-width", 3)
-            .style("filter", "url(#drop-shadow)");
+            .attr("stroke-width", 3);
 
         // 2. Icon
         nodeEnter.append("text")
@@ -192,6 +251,26 @@ class ArborGraph extends HTMLElement {
                     .attr("width", bbox.width + 16);
             });
 
+        // 4. Status Badge (+/-)
+        const badge = nodeEnter.append("g")
+            .attr("class", "badge-group")
+            .attr("transform", d => `translate(${d.data.type === 'root' ? 30 : 22}, -${d.data.type === 'root' ? 30 : 22})`)
+            .style("display", "none"); // Hidden by default
+
+        badge.append("circle")
+            .attr("r", 14)
+            .attr("stroke", "#fff")
+            .attr("stroke-width", 2)
+            .style("filter", "drop-shadow(0px 2px 3px rgba(0,0,0,0.3))");
+
+        badge.append("text")
+            .attr("dy", "0.35em")
+            .attr("text-anchor", "middle")
+            .attr("font-weight", "900")
+            .attr("font-size", "18px")
+            .attr("fill", "#ffffff")
+            .style("pointer-events", "none");
+
         // UPDATE
         const nodeUpdate = nodes.merge(nodeEnter).transition().duration(this.duration)
             .attr("transform", d => `translate(${d.x},${d.y}) scale(1)`);
@@ -199,19 +278,31 @@ class ArborGraph extends HTMLElement {
         nodeUpdate.select(".node-body")
             .attr("fill", d => {
                 if (d.data.type === 'root') return '#8D6E63';
-                if (d.data.type === 'leaf') return store.isCompleted(d.data.id) ? '#22c55e' : '#a855f7'; // Purple or Green
-                return '#F59E0B'; // Amber for branches
+                if (d.data.type === 'leaf') return store.isCompleted(d.data.id) ? '#22c55e' : '#a855f7'; 
+                return '#F59E0B'; 
             })
             .attr("d", d => {
                 const r = d.data.type === 'root' ? 45 : 32;
                 if (d.data.type === 'leaf') return "M0,0 C-25,10 -35,35 0,65 C35,35 25,10 0,0";
                 return `M${-r},0 a${r},${r} 0 1,0 ${r*2},0 a${r},${r} 0 1,0 ${-r*2},0`;
-            });
+            })
+            .style("filter", d => d.data.type === 'leaf' && store.isCompleted(d.data.id) ? "url(#leaf-glow)" : "url(#drop-shadow)");
 
         nodeUpdate.select(".node-icon")
             .text(d => d.data.type === 'leaf' && store.isCompleted(d.data.id) ? '✓' : (d.data.icon || '🌱'))
             .attr("fill", d => d.data.type === 'leaf' && store.isCompleted(d.data.id) ? '#fff' : '#1e293b')
-            .attr("dy", d => d.data.type === 'leaf' ? "38px" : "0.35em");
+            .attr("dy", d => d.data.type === 'leaf' ? "38px" : "0.35em")
+            .attr("font-weight", d => d.data.type === 'leaf' && store.isCompleted(d.data.id) ? "900" : "normal");
+        
+        // Update Badges
+        nodeUpdate.select(".badge-group")
+            .style("display", d => d.data.type === 'leaf' ? 'none' : 'block');
+        
+        nodeUpdate.select(".badge-group circle")
+            .attr("fill", d => d.data.expanded ? "#ef4444" : "#22c55e");
+
+        nodeUpdate.select(".badge-group text")
+            .text(d => d.data.expanded ? '-' : '+');
 
         // EXIT
         nodes.exit().transition().duration(this.duration)
