@@ -1,3 +1,4 @@
+
 import { Injectable, signal, computed } from '@angular/core';
 
 declare const gapi: any;
@@ -5,7 +6,11 @@ declare const google: any;
 
 const CLIENT_ID = 'YOUR_CLIENT_ID.apps.googleusercontent.com';
 
-const API_KEY = process.env.API_KEY || '';
+// SAFELY ACCESS PROCESS.ENV
+// In browser environments (like GitHub Pages), 'process' is undefined.
+// We must check for its existence to prevent a "ReferenceError: process is not defined" crash.
+const API_KEY = (typeof process !== 'undefined' && process.env && process.env['API_KEY']) ? process.env['API_KEY'] : '';
+
 const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"];
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
 const PROGRESS_FILE_NAME = 'arbor_progress.json';
