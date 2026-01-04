@@ -113,8 +113,18 @@ import { DataService } from '../services/data.service';
                 } @else if (type() === 'impressum') {
                     <div class="mb-6">
                         <h2 class="text-xl font-black text-slate-800 dark:text-white mb-4">{{ dataService.ui().impressumTitle }}</h2>
-                        <div class="text-left bg-slate-50 dark:bg-slate-800 p-6 rounded-xl font-mono text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap">
-                            {{ dataService.ui().impressumText }}
+                        <div class="text-left bg-slate-50 dark:bg-slate-800 p-6 rounded-xl text-sm text-slate-600 dark:text-slate-300 space-y-4">
+                            <p>{{ dataService.ui().impressumText }}</p>
+
+                            @if (!isImpressumDetailsVisible()) {
+                                <button (click)="isImpressumDetailsVisible.set(true)" class="text-sky-600 dark:text-sky-400 font-bold text-xs hover:underline">
+                                    {{ dataService.ui().showImpressumDetails }}
+                                </button>
+                            } @else {
+                                <div class="font-mono pt-4 border-t border-slate-200 dark:border-slate-700 whitespace-pre-wrap animate-in fade-in duration-300 text-xs">
+                                    {{ dataService.ui().impressumDetails }}
+                                </div>
+                            }
                         </div>
                     </div>
                 } @else if (type() === 'language') {
@@ -171,12 +181,18 @@ export class InfoModalsComponent {
 
   currentStep = signal(0);
   totalSteps = computed(() => this.dataService.ui().tutorialSteps.length);
+  isImpressumDetailsVisible = signal(false);
 
   constructor() {
-      // Reset step when modal opens
+      // Reset state when modal opens
       effect(() => {
-          if (this.isOpen() && this.type() === 'tutorial') {
-              this.currentStep.set(0);
+          if (this.isOpen()) {
+              if (this.type() === 'tutorial') {
+                  this.currentStep.set(0);
+              }
+              if (this.type() === 'impressum') {
+                  this.isImpressumDetailsVisible.set(false);
+              }
           }
       }, { allowSignalWrites: true });
   }

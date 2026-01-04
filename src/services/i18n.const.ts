@@ -72,15 +72,24 @@ export const UI_LABELS = {
       completeAndNext: 'COMPLETAR Y SEGUIR',
       
       // About & Legal
-      aboutTitle: 'Manifiesto Arbor',
+      aboutTitle: 'Manifiesto de Arbor',
       missionTitle: 'Conocimiento Libre y Abierto',
       missionText: 'Arbor es una plataforma educativa descentralizada y construida por la comunidad. Su objetivo es democratizar el acceso a la información permitiendo que cualquiera pueda aprender, contribuir y mejorar el currículo global de forma transparente y colaborativa. La educación es un derecho humano, no un negocio.',
       metaphorTitle: 'La Metáfora',
       metaphorText: 'Como un árbol, el conocimiento crece orgánicamente gracias a los aportes de todos (las raíces) para dar frutos a cualquiera que los necesite (las hojas).',
       lastUpdated: 'Última actualización de datos: ',
       impressumTitle: 'Aviso Legal (Impressum)',
-      impressumText: 'Este es un proyecto demostrativo creado por Treesys. Todo el contenido es proporcionado "tal cual" sin garantías de ningún tipo. Arbor no es una institución educativa acreditada.\n\nResponsable:\nTreesys Labs\nDigital Avenue 42\nInternet City',
-      createdBy: 'Un proyecto creado por',
+      impressumText: 'Arbor™ es un producto de Treesys®. Todo el contenido es proporcionado "tal cual" sin garantías de ningún tipo. Arbor no es una institución educativa acreditada.',
+      showImpressumDetails: 'Mostrar información del publicador',
+      impressumDetails: `treesys.org
+Inhaber: Carlos Valin
+Geschäftsadresse: Oberstraße 3 47829 Krefeld
+E-Mail: sales@treesys.org
+Einzelunternehmen nach deutschem Recht
+Verantwortlich nach §5 TMG: Carlos Valin
+
+Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
+      createdBy: 'Un producto de',
       
       // Sync & Auth
       syncButton: 'Iniciar sesión para sincronizar progreso',
@@ -124,7 +133,7 @@ export const UI_LABELS = {
       sourceWarning: 'Estás utilizando una fuente de conocimiento de terceros. El contenido es responsabilidad de su publicador.',
       officialRepoDesc: 'Repositorio oficial curado por Arbor.',
       secVerified: 'Verificada por Arbor',
-      secUnverified: 'Árbol No Verificado',
+      secUnverified: 'Ábol No Verificado',
       secWarningTitle: 'Advertencia de Seguridad',
       secWarningBody: 'Estás a punto de añadir un árbol de conocimiento externo que NO ha sido verificado por el equipo de Arbor. Cualquiera puede clonar un repositorio y hacerse pasar por una institución oficial.',
       secWarningCheck: 'Por favor, verifica que la URL provenga de una fuente confiable:',
@@ -232,8 +241,17 @@ export const UI_LABELS = {
       metaphorText: 'Like a tree, knowledge grows organically thanks to everyone\'s contributions (the roots) to provide fruit for anyone who needs it (the leaves).',
       lastUpdated: 'Data last updated: ',
       impressumTitle: 'Legal Notice (Impressum)',
-      impressumText: 'This is a demo project created by Treesys. All content is provided "as is" without warranties of any kind. Arbor is not an accredited educational institution.\n\nResponsible:\nTreesys Labs\nDigital Avenue 42\nInternet City',
-      createdBy: 'A project created by',
+      impressumText: 'Arbor™ is a product of Treesys®. All content is provided "as is" without warranties of any kind. Arbor is not an accredited educational institution.',
+      showImpressumDetails: 'Show publisher information',
+      impressumDetails: `treesys.org
+Inhaber: Carlos Valin
+Geschäftsadresse: Oberstraße 3 47829 Krefeld
+E-Mail: sales@treesys.org
+Einzelunternehmen nach deutschem Recht
+Verantwortlich nach §5 TMG: Carlos Valin
+
+Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
+      createdBy: 'A product of',
       syncButton: 'Sign in to sync progress',
       syncing: 'Syncing...',
       signOut: 'Sign Out',

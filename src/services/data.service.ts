@@ -1,4 +1,5 @@
 
+
 import { Injectable, signal, computed, effect, inject } from '@angular/core';
 import { GoogleDriveSyncService } from './google-drive-sync.service';
 import { KnowledgeSource, TreeNode, SearchNode, ModuleStatus, Language, Theme, ViewMode, LanguageDefinition } from '../models/arbor.model';
@@ -12,7 +13,7 @@ const OFFICIAL_DOMAINS = [
 const DEFAULT_SOURCES: KnowledgeSource[] = [
     {
         id: 'default-arbor',
-        name: 'Arbor Official Index',
+        name: 'Arbor Official',
         url: 'https://treesys-org.github.io/arbor-knowledge/dist/arbor-build/data.json',
         isDefault: true,
         isTrusted: true
