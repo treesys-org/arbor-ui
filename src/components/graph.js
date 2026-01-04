@@ -1,4 +1,5 @@
 
+
 import { store } from '../store.js';
 
 class ArborGraph extends HTMLElement {
@@ -10,20 +11,21 @@ class ArborGraph extends HTMLElement {
         this.height = 0;
         this.zoom = null;
         this.duration = 750;
+        // Cache to store where nodes are, so we can animate FROM there or TO there
+        this.nodePositions = new Map();
     }
 
     connectedCallback() {
         this.innerHTML = `
-        <div id="chart" class="w-full h-full cursor-grab active:cursor-grabbing relative overflow-hidden bg-gradient-to-b from-sky-200 to-sky-50 dark:from-slate-900 dark:to-slate-800 transition-colors duration-500">
+        <div id="chart" class="w-full h-full cursor-grab active:cursor-grabbing relative overflow-hidden bg-gradient-to-b from-sky-200 to-sky-50 dark:from-slate-900 dark:to-slate-800 transition-colors duration-500" style="touch-action: none;">
              <!-- Clouds -->
-             <div class="absolute top-10 left-10 opacity-40 dark:opacity-10 pointer-events-none text-6xl select-none">☁️</div>
-             <div class="absolute top-20 right-20 opacity-30 dark:opacity-5 pointer-events-none text-8xl select-none">☁️</div>
+             <div class="absolute top-10 left-10 opacity-40 dark:opacity-10 pointer-events-none text-6xl select-none animate-pulse" style="animation-duration: 10s">☁️</div>
+             <div class="absolute top-20 right-20 opacity-30 dark:opacity-5 pointer-events-none text-8xl select-none animate-pulse" style="animation-duration: 15s">☁️</div>
              
              <!-- Overlays Container -->
              <div id="overlays" class="absolute inset-0 pointer-events-none"></div>
         </div>`;
 
-        // Defer init to ensure container has size
         requestAnimationFrame(() => {
              this.initGraph();
              this.renderOverlays();
@@ -34,14 +36,18 @@ class ArborGraph extends HTMLElement {
              if(this.g) this.drawGround(); 
              this.renderOverlays();
         });
+        
+        // External focus request (search, deep link)
         store.addEventListener('focus-node', (e) => this.focusNode(e.detail));
         
         window.addEventListener('resize', () => {
-            if (this.querySelector('#chart')) {
-                this.width = this.offsetWidth;
-                this.height = this.offsetHeight;
+            const container = this.querySelector('#chart');
+            if (container) {
+                this.width = container.clientWidth;
+                this.height = container.clientHeight;
                 if(this.svg) {
                     this.svg.attr("viewBox", [0, 0, this.width, this.height]);
+                    this.updateZoomExtent();
                     this.drawGround();
                     this.updateGraph();
                 }
@@ -56,24 +62,34 @@ class ArborGraph extends HTMLElement {
         const state = store.value;
         const ui = store.ui;
         
+        let html = '';
+
+        if (state.lastErrorMessage) {
+            html += `
+            <div class="absolute top-20 left-1/2 -translate-x-1/2 z-[60] bg-red-100 border-l-4 border-red-500 text-red-700 px-6 py-4 rounded shadow-2xl animate-in fade-in slide-in-from-top-4 pointer-events-auto flex items-center gap-3 max-w-md w-[90%]">
+                <svg class="w-6 h-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                <div class="flex-1">
+                    <p class="font-bold">Error</p>
+                    <p class="text-sm">${state.lastErrorMessage}</p>
+                </div>
+                <button onclick="this.parentElement.remove()" class="text-red-500 hover:text-red-800">✕</button>
+            </div>`;
+        }
+
         if (state.loading) {
-            overlayContainer.innerHTML = `
+            html += `
             <div class="absolute inset-0 flex flex-col items-center justify-center z-10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm pointer-events-auto">
               <div class="w-16 h-16 border-4 border-sky-200 border-t-green-500 rounded-full animate-spin mb-4"></div>
               <p class="font-bold text-sky-600 dark:text-sky-400 animate-pulse tracking-wide font-comic text-xl">${ui.loading}</p>
             </div>`;
         } else if (state.error) {
-             overlayContainer.innerHTML = `
+             html += `
             <div class="absolute top-20 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center animate-in pointer-events-auto">
                  <div class="w-full flex justify-between px-8 absolute -top-16 h-20 z-0">
                      <div class="w-1 h-full bg-amber-900/40 dark:bg-amber-900/20"></div>
                      <div class="w-1 h-full bg-amber-900/40 dark:bg-amber-900/20"></div>
                  </div>
                  <div class="bg-[#8D6E63] border-4 border-[#5D4037] rounded-lg p-8 shadow-2xl relative max-w-md text-center transform rotate-1 z-10 flex flex-col items-center">
-                      <div class="absolute top-2 left-2 w-3 h-3 rounded-full bg-[#3E2723] shadow-inner"></div>
-                      <div class="absolute top-2 right-2 w-3 h-3 rounded-full bg-[#3E2723] shadow-inner"></div>
-                      <div class="absolute bottom-2 left-2 w-3 h-3 rounded-full bg-[#3E2723] shadow-inner"></div>
-                      <div class="absolute bottom-2 right-2 w-3 h-3 rounded-full bg-[#3E2723] shadow-inner"></div>
                       <div class="text-5xl mb-4 drop-shadow-lg">🍂</div>
                       <h2 class="text-white font-black text-2xl mb-2 drop-shadow-md uppercase tracking-widest border-b-2 border-white/20 pb-2 w-full">
                           ${ui.errorTitle}
@@ -86,9 +102,8 @@ class ArborGraph extends HTMLElement {
                       </div>
                  </div>
             </div>`;
-        } else {
-            overlayContainer.innerHTML = '';
         }
+        overlayContainer.innerHTML = html;
     }
 
     initGraph() {
@@ -103,13 +118,14 @@ class ArborGraph extends HTMLElement {
             .style("width", "100%")
             .style("height", "100%");
 
-        // Filters
+        // --- Filters ---
         const defs = this.svg.append("defs");
         
         // 1. Drop Shadow
         const filter = defs.append("filter").attr("id", "drop-shadow");
         filter.append("feGaussianBlur").attr("in", "SourceAlpha").attr("stdDeviation", 3);
         filter.append("feOffset").attr("dx", 0).attr("dy", 3);
+        filter.append("feComponentTransfer").append("feFuncA").attr("type","linear").attr("slope",0.3); // Softer shadow
         const merge = filter.append("feMerge");
         merge.append("feMergeNode");
         merge.append("feMergeNode").attr("in", "SourceGraphic");
@@ -124,7 +140,7 @@ class ArborGraph extends HTMLElement {
         lgMerge.append("feMergeNode").attr("in", "coloredBlur");
         lgMerge.append("feMergeNode").attr("in", "SourceGraphic");
 
-        // Groups
+        // --- Layers ---
         this.g = this.svg.append("g");
         this.groundGroup = this.g.append("g").attr("class", "ground");
         this.linkGroup = this.g.append("g").attr("class", "links");
@@ -132,16 +148,16 @@ class ArborGraph extends HTMLElement {
 
         this.drawGround();
 
-        // Zoom logic
+        // --- Zoom Behavior ---
         this.zoom = d3.zoom()
-            .scaleExtent([0.1, 3])
+            .scaleExtent([0.1, 4])
             .on("zoom", (e) => {
                 this.g.attr("transform", e.transform);
-                // Parallax ground
-                this.groundGroup.attr("transform", `translate(${e.transform.x}, ${e.transform.y}) scale(${e.transform.k})`);
+                // Parallax could go here, but kept simple for stability
             });
         
-        this.svg.call(this.zoom);
+        this.svg.call(this.zoom).on("dblclick.zoom", null);
+        this.updateZoomExtent();
 
         // Initial Position (Bottom Center)
         const k = 0.85;
@@ -152,33 +168,59 @@ class ArborGraph extends HTMLElement {
         if(store.value.data) this.updateGraph();
     }
 
+    updateZoomExtent() {
+        if (!this.zoom) return;
+        
+        // Moderate bounds - enough to pan but not get lost
+        const horizontalPadding = this.width * 2;
+        const topPadding = this.height * 10;
+        
+        // Prevent panning below the ground (the +150 allows just a little bounce)
+        const bottomPadding = this.height + 150;
+
+        this.zoom.translateExtent([
+            [-horizontalPadding, -topPadding], 
+            [horizontalPadding * 2, bottomPadding]
+        ]);
+    }
+
     drawGround() {
         this.groundGroup.selectAll("*").remove();
         const theme = store.value.theme;
         const color = theme === 'dark' ? '#1e293b' : '#22c55e';
         const backColor = theme === 'dark' ? '#0f172a' : '#4ade80';
 
-        const bottom = this.height + 4000;
-        
-        // Back Hill
+        const cx = this.width / 2;
+        const groundY = this.height;
+        // Finite width: wider than screen but not infinite
+        const groundWidth = Math.max(this.width * 1.5, 3000); 
+        const groundDepth = 4000;
+
+        // Back Hill (Parallax-ish background layer)
         this.groundGroup.append("path")
-            .attr("d", `M-2000,${this.height} C${this.width * 0.2},${this.height - 180} ${this.width * 0.8},${this.height - 60} ${this.width + 2000},${this.height} L${this.width + 2000},${bottom} L-2000,${bottom} Z`)
+            .attr("d", `M${cx - groundWidth},${groundY} 
+                        C${cx - 500},${groundY - 180} ${cx + 500},${groundY - 60} ${cx + groundWidth},${groundY} 
+                        L${cx + groundWidth},${groundY + groundDepth} 
+                        L${cx - groundWidth},${groundY + groundDepth} Z`)
             .attr("fill", backColor)
             .style("opacity", 0.7);
 
-        // Front Hill
+        // Front Hill (Main Ground)
         this.groundGroup.append("path")
-            .attr("d", `M-2000,${this.height} Q${this.width/2},${this.height - 120} ${this.width + 2000},${this.height} L${this.width+2000},${bottom} L-2000,${bottom} Z`)
+            .attr("d", `M${cx - groundWidth},${groundY} 
+                        Q${cx},${groundY - 120} ${cx + groundWidth},${groundY} 
+                        L${cx + groundWidth},${groundY + groundDepth} 
+                        L${cx - groundWidth},${groundY + groundDepth} Z`)
             .attr("fill", color);
     }
 
     updateGraph() {
         if (!this.svg || !store.value.data) return;
 
-        // Construct D3 Hierarchy
+        // 1. Construct Hierarchy
         const root = d3.hierarchy(store.value.data, d => d.expanded ? d.children : null);
         
-        // Calculate dynamic width based on leaves to prevent overlap
+        // 2. Tree Layout
         let leaves = 0;
         root.each(d => { if (!d.children) leaves++; });
         const dynamicWidth = Math.max(this.width, leaves * 140);
@@ -186,39 +228,59 @@ class ArborGraph extends HTMLElement {
         const treeLayout = d3.tree().size([dynamicWidth, 1]);
         treeLayout(root);
 
-        // Invert Y to grow Upwards
+        // 3. Coordinate Transformation (Invert Y for growing Up)
+        const levelHeight = 180;
         root.descendants().forEach(d => {
-            d.y = (this.height - 150) - (d.depth * 180);
-            // Center if tree is smaller than screen
+            d.y = (this.height - 150) - (d.depth * levelHeight);
             if (dynamicWidth < this.width) {
                 d.x += (this.width - dynamicWidth) / 2;
             }
         });
 
-        // --- NODES ---
-        const nodes = this.nodeGroup.selectAll("g.node")
-            .data(root.descendants(), d => d.data.id);
+        const nodes = root.descendants();
+        const links = root.links();
 
-        const nodeEnter = nodes.enter().append("g")
+        // 4. Animation Origin Logic (The key fix for "collapsing poorly")
+        // We use cached positions to determine where nodes should fly FROM or TO.
+        
+        const findOrigin = (d) => {
+            // New node entering? Start from parent's OLD position if possible
+            if (d.parent && this.nodePositions.has(d.parent.data.id)) {
+                return this.nodePositions.get(d.parent.data.id);
+            }
+            // Fallback
+            return { x: this.width / 2, y: this.height };
+        };
+
+        const findDest = (d) => {
+            // Node leaving? Fly to parent's NEW position
+            if (d.parent) {
+                const parentInNewLayout = nodes.find(n => n.data.id === d.parent.data.id);
+                if (parentInNewLayout) return { x: parentInNewLayout.x, y: parentInNewLayout.y };
+            }
+            return { x: this.width/2, y: this.height };
+        };
+
+        // --- NODES RENDER ---
+        const nodeSelection = this.nodeGroup.selectAll("g.node")
+            .data(nodes, d => d.data.id);
+
+        // ENTER
+        const nodeEnter = nodeSelection.enter().append("g")
             .attr("class", "node")
             .attr("transform", d => {
-                // Animate from parent position if available, else center
-                const origin = d.parent ? {x: d.parent.x, y: d.parent.y} : {x: this.width/2, y: this.height};
-                return `translate(${origin.x},${origin.y}) scale(0)`;
+                const o = findOrigin(d);
+                return `translate(${o.x},${o.y}) scale(0)`;
             })
             .style("cursor", "pointer")
-            .on("click", (e, d) => {
-                e.stopPropagation();
-                store.toggleNode(d.data.id);
-            });
+            .on("click", (e, d) => this.handleNodeClick(e, d));
 
-        // 1. Body
+        // Visuals
         nodeEnter.append("path")
             .attr("class", "node-body")
             .attr("stroke", "#fff")
             .attr("stroke-width", 3);
 
-        // 2. Icon
         nodeEnter.append("text")
             .attr("class", "node-icon")
             .attr("text-anchor", "middle")
@@ -227,7 +289,7 @@ class ArborGraph extends HTMLElement {
             .style("user-select", "none")
             .style("pointer-events", "none");
 
-        // 3. Label
+        // Labels
         const labelGroup = nodeEnter.append("g")
             .attr("transform", d => `translate(0, ${d.data.type === 'leaf' ? 55 : 45})`);
         
@@ -245,34 +307,40 @@ class ArborGraph extends HTMLElement {
             .style("pointer-events", "none")
             .text(d => d.data.name)
             .each(function() {
-                const bbox = this.getBBox();
-                d3.select(this.parentNode).select("rect")
-                    .attr("x", -bbox.width/2 - 8)
-                    .attr("width", bbox.width + 16);
+                try {
+                    const bbox = this.getBBox();
+                    d3.select(this.parentNode).select("rect")
+                        .attr("x", -bbox.width/2 - 8)
+                        .attr("width", bbox.width + 16);
+                } catch(e){}
             });
 
-        // 4. Status Badge (+/-)
+        // Badges (+/-)
         const badge = nodeEnter.append("g")
             .attr("class", "badge-group")
             .attr("transform", d => `translate(${d.data.type === 'root' ? 30 : 22}, -${d.data.type === 'root' ? 30 : 22})`)
-            .style("display", "none"); // Hidden by default
+            .style("display", "none");
 
         badge.append("circle")
-            .attr("r", 14)
-            .attr("stroke", "#fff")
-            .attr("stroke-width", 2)
+            .attr("r", 14).attr("stroke", "#fff").attr("stroke-width", 2)
             .style("filter", "drop-shadow(0px 2px 3px rgba(0,0,0,0.3))");
 
         badge.append("text")
-            .attr("dy", "0.35em")
-            .attr("text-anchor", "middle")
-            .attr("font-weight", "900")
-            .attr("font-size", "18px")
-            .attr("fill", "#ffffff")
-            .style("pointer-events", "none");
+            .attr("dy", "0.35em").attr("text-anchor", "middle")
+            .attr("font-weight", "900").attr("font-size", "18px").attr("fill", "#ffffff");
+
+        // Spinner
+        nodeEnter.append("path")
+            .attr("class", "spinner")
+            .attr("d", "M-10,0 a10,10 0 0,1 20,0")
+            .attr("fill", "none").attr("stroke", "#fff").attr("stroke-width", 3)
+            .style("display", "none")
+            .append("animateTransform")
+            .attr("attributeName", "transform").attr("type", "rotate")
+            .attr("from", "0 0 0").attr("to", "360 0 0").attr("dur", "1s").attr("repeatCount", "indefinite");
 
         // UPDATE
-        const nodeUpdate = nodes.merge(nodeEnter).transition().duration(this.duration)
+        const nodeUpdate = nodeSelection.merge(nodeEnter).transition().duration(this.duration)
             .attr("transform", d => `translate(${d.x},${d.y}) scale(1)`);
 
         nodeUpdate.select(".node-body")
@@ -294,7 +362,6 @@ class ArborGraph extends HTMLElement {
             .attr("dy", d => d.data.type === 'leaf' ? "38px" : "0.35em")
             .attr("font-weight", d => d.data.type === 'leaf' && store.isCompleted(d.data.id) ? "900" : "normal");
         
-        // Update Badges
         nodeUpdate.select(".badge-group")
             .style("display", d => d.data.type === 'leaf' ? 'none' : 'block');
         
@@ -304,49 +371,90 @@ class ArborGraph extends HTMLElement {
         nodeUpdate.select(".badge-group text")
             .text(d => d.data.expanded ? '-' : '+');
 
+        nodeUpdate.select(".spinner")
+            .style("display", d => d.data.status === 'loading' ? 'block' : 'none');
+
         // EXIT
-        nodes.exit().transition().duration(this.duration)
+        nodeSelection.exit().transition().duration(this.duration)
             .attr("transform", d => {
-                 const dest = d.parent || d;
+                 const dest = findDest(d); // Fly to parent's new position
                  return `translate(${dest.x},${dest.y}) scale(0)`;
             })
             .remove();
 
-        // --- LINKS ---
-        const links = this.linkGroup.selectAll(".link")
-            .data(root.links(), d => d.target.data.id);
+        // --- LINKS RENDER ---
+        const linkSelection = this.linkGroup.selectAll(".link")
+            .data(links, d => d.target.data.id);
 
-        const linkEnter = links.enter().append("path")
+        const linkEnter = linkSelection.enter().append("path")
             .attr("class", "link")
             .attr("fill", "none")
             .attr("stroke", "#8D6E63")
             .attr("stroke-width", d => Math.max(2, 12 - d.target.depth * 2))
             .attr("d", d => {
-                const o = {x: d.source.x, y: d.source.y};
+                const o = findOrigin(d.target); // Start link from parent's old pos
                 return this.diagonal({source: o, target: o});
             });
 
-        links.merge(linkEnter).transition().duration(this.duration)
+        linkSelection.merge(linkEnter).transition().duration(this.duration)
             .attr("d", d => this.diagonal(d));
 
-        links.exit().transition().duration(this.duration)
+        linkSelection.exit().transition().duration(this.duration)
             .attr("d", d => {
-                const o = {x: d.source.x, y: d.source.y};
+                const dest = findDest(d.target); // Shrink link to parent's new pos
+                const o = {x: dest.x, y: dest.y};
                 return this.diagonal({source: o, target: o});
             })
             .remove();
+
+        // --- Cache Positions for Next Render ---
+        this.nodePositions.clear();
+        nodes.forEach(d => {
+            this.nodePositions.set(d.data.id, {x: d.x, y: d.y});
+        });
     }
 
     diagonal(d) {
         const s = d.source;
         const t = d.target;
-        // Simple Bezier
         const midY = (s.y + t.y) / 2;
         return `M ${s.x} ${s.y} C ${s.x} ${midY}, ${t.x} ${midY}, ${t.x} ${t.y}`;
     }
 
+    handleNodeClick(e, d) {
+        e.stopPropagation();
+        if (d.data.status === 'loading') return;
+        
+        // 1. Toggle State
+        store.toggleNode(d.data.id);
+        
+        // 2. Adjust Camera Verticality (Auto-Pan)
+        // If expanding, shift view slightly down so the new branches (which grow up) are visible
+        if (!d.data.expanded) { 
+            this.adjustVerticalView(d);
+        }
+    }
+
+    adjustVerticalView(d) {
+        if (!this.svg || !this.zoom) return;
+        
+        // Logic: Try to keep the clicked node in the lower 3/4 of the screen
+        // to leave room for the tree growing upwards.
+        
+        const transform = d3.zoomTransform(this.svg.node());
+        const currentScreenY = transform.apply([d.x, d.y])[1];
+        const targetScreenY = this.height * 0.75; 
+        const dy = targetScreenY - currentScreenY;
+        
+        // Only move if significantly far off
+        if (Math.abs(dy) > 50) {
+            this.svg.transition().duration(1000)
+                .call(this.zoom.transform, transform.translate(0, dy / transform.k));
+        }
+    }
+
     focusNode(nodeId) {
-        // Find node position (d3 data is bound to DOM)
+        // Search in rendered nodes
         let target = null;
         this.nodeGroup.selectAll(".node").each(d => {
             if(d.data.id === nodeId) target = d;
