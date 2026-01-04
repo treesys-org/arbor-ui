@@ -1,5 +1,4 @@
 
-
 import { store } from '../store.js';
 
 class ArborGraph extends HTMLElement {
@@ -240,25 +239,28 @@ class ArborGraph extends HTMLElement {
         const nodes = root.descendants();
         const links = root.links();
 
-        // 4. Animation Origin Logic (The key fix for "collapsing poorly")
-        // We use cached positions to determine where nodes should fly FROM or TO.
-        
+        // 4. Animation Origin Logic
         const findOrigin = (d) => {
-            // New node entering? Start from parent's OLD position if possible
             if (d.parent && this.nodePositions.has(d.parent.data.id)) {
                 return this.nodePositions.get(d.parent.data.id);
             }
-            // Fallback
             return { x: this.width / 2, y: this.height };
         };
 
+        // Recursive Logic for Destination (Fix for shrinking bug)
         const findDest = (d) => {
-            // Node leaving? Fly to parent's NEW position
-            if (d.parent) {
-                const parentInNewLayout = nodes.find(n => n.data.id === d.parent.data.id);
-                if (parentInNewLayout) return { x: parentInNewLayout.x, y: parentInNewLayout.y };
+            let ancestor = d.parent;
+            while (ancestor) {
+                // Check if this ancestor exists in the NEW layout (nodes array)
+                const ancestorInNewLayout = nodes.find(n => n.data.id === ancestor.data.id);
+                if (ancestorInNewLayout) {
+                    return { x: ancestorInNewLayout.x, y: ancestorInNewLayout.y };
+                }
+                // If not found (because it's also collapsing), go up one level
+                ancestor = ancestor.parent;
             }
-            return { x: this.width/2, y: this.height };
+            // If we run out of ancestors (collapsing root), go to start
+            return { x: this.width / 2, y: this.height };
         };
 
         // --- NODES RENDER ---
@@ -377,7 +379,7 @@ class ArborGraph extends HTMLElement {
         // EXIT
         nodeSelection.exit().transition().duration(this.duration)
             .attr("transform", d => {
-                 const dest = findDest(d); // Fly to parent's new position
+                 const dest = findDest(d); // Uses the recursive ancestor logic
                  return `translate(${dest.x},${dest.y}) scale(0)`;
             })
             .remove();
@@ -401,7 +403,7 @@ class ArborGraph extends HTMLElement {
 
         linkSelection.exit().transition().duration(this.duration)
             .attr("d", d => {
-                const dest = findDest(d.target); // Shrink link to parent's new pos
+                const dest = findDest(d.target); // Shrink link to visible ancestor
                 const o = {x: dest.x, y: dest.y};
                 return this.diagonal({source: o, target: o});
             })
@@ -429,7 +431,6 @@ class ArborGraph extends HTMLElement {
         store.toggleNode(d.data.id);
         
         // 2. Adjust Camera Verticality (Auto-Pan)
-        // If expanding, shift view slightly down so the new branches (which grow up) are visible
         if (!d.data.expanded) { 
             this.adjustVerticalView(d);
         }
