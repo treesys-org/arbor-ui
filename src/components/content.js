@@ -1,4 +1,5 @@
 
+
 import { store } from '../store.js';
 import { parseContent } from '../utils/parser.js';
 
@@ -150,7 +151,7 @@ class ArborContent extends HTMLElement {
         const progress = Math.round(((this.activeSectionIndex + 1) / toc.length) * 100);
 
         this.innerHTML = `
-        <div class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity" onclick="store.closeContent()"></div>
+        <div id="content-backdrop" class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity"></div>
         <div class="relative w-full md:w-[900px] bg-white dark:bg-slate-900 shadow-2xl h-full flex flex-col animate-slide-in">
             
             <!-- Header -->
@@ -164,7 +165,7 @@ class ArborContent extends HTMLElement {
                          ${this.currentNode.path ? `<p class="text-xs text-slate-500 truncate">${this.currentNode.path}</p>` : ''}
                     </div>
                 </div>
-                <button onclick="store.closeContent()" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500">✕</button>
+                <button id="btn-close-content" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500">✕</button>
             </header>
 
             <div class="flex-1 flex overflow-hidden relative">
@@ -232,6 +233,9 @@ class ArborContent extends HTMLElement {
         `;
 
         // Bind events
+        this.querySelector('#content-backdrop').onclick = () => store.closeContent();
+        this.querySelector('#btn-close-content').onclick = () => store.closeContent();
+
         const btnPrev = this.querySelector('#btn-prev');
         if(btnPrev) btnPrev.onclick = () => this.scrollToSection(this.activeSectionIndex - 1);
 
