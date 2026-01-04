@@ -34,6 +34,7 @@ class Store extends EventTarget {
             previewNode: null,
             loading: true,
             error: null,
+            lastErrorMessage: null, // New error state for toasts
             viewMode: 'explore', 
             modal: null, 
             lastActionMessage: null
@@ -263,45 +264,62 @@ class Store extends EventTarget {
     }
 
     async toggleNode(nodeId) {
+        console.log('Toggling Node:', nodeId);
         const node = this.findNode(nodeId);
-        if (!node) return;
-
-        let path = [];
-        let curr = node;
-        while(curr) {
-            path.unshift(curr);
-            curr = curr.parentId ? this.findNode(curr.parentId) : null;
+        
+        if (!node) {
+            console.error('Node not found:', nodeId);
+            return;
         }
-        
-        const pathIds = new Set(path.map(p => p.id));
-        const prune = (n) => {
-            if (n.expanded && n.children) {
-                n.children.forEach(child => {
-                    if(pathIds.has(child.id)) prune(child);
-                    else this.collapseRecursively(child);
-                });
-            }
-        };
-        if(this.state.data) prune(this.state.data);
-        
-        // Ensure parents expanded (EXCLUDING the node itself to allow toggle)
-        path.forEach(p => { 
-            if (p.type !== 'leaf' && p.id !== nodeId) p.expanded = true; 
-        });
-        this.update({ path });
 
-        if (node.type === 'leaf') {
-            this.update({ previewNode: node, selectedNode: null });
-        } else {
+        try {
+            // 1. Update Path
+            let path = [];
+            let curr = node;
+            while(curr) {
+                path.unshift(curr);
+                curr = curr.parentId ? this.findNode(curr.parentId) : null;
+            }
+            this.update({ path });
+
+            // 2. Collapse siblings (Accordion) - Explicit loop
+            // We only collapse siblings if we are EXPANDING.
             if (!node.expanded) {
-                if (node.hasUnloadedChildren) await this.loadNodeChildren(node);
-                node.expanded = true;
-            } else {
-                this.collapseRecursively(node);
+                // Find parent to get siblings
+                if (node.parentId) {
+                    const parent = this.findNode(node.parentId);
+                    if (parent && parent.children) {
+                        parent.children.forEach(sibling => {
+                            if (sibling.id !== nodeId && sibling.expanded) {
+                                this.collapseRecursively(sibling);
+                            }
+                        });
+                    }
+                }
             }
-            this.update({ selectedNode: null, previewNode: null });
+
+            // 3. Toggle Target
+            if (node.type === 'leaf') {
+                this.update({ previewNode: node, selectedNode: null });
+            } else {
+                if (!node.expanded) {
+                    if (node.hasUnloadedChildren) {
+                        await this.loadNodeChildren(node);
+                    }
+                    node.expanded = true;
+                } else {
+                    this.collapseRecursively(node);
+                }
+                this.update({ selectedNode: null, previewNode: null });
+            }
+            
+            this.dispatchEvent(new CustomEvent('graph-update')); 
+
+        } catch (e) {
+            console.error('Error toggling node:', e);
+            this.update({ lastErrorMessage: "Error interacting with node: " + e.message });
+            setTimeout(() => this.update({ lastErrorMessage: null }), 5000);
         }
-        this.dispatchEvent(new CustomEvent('graph-update')); 
     }
 
     collapseRecursively(node) {
@@ -310,7 +328,12 @@ class Store extends EventTarget {
     }
 
     async loadNodeChildren(node) {
-        if (!node.apiPath) return;
+        if (!node.apiPath) {
+            this.update({ lastErrorMessage: "Node API Path missing." });
+            setTimeout(() => this.update({ lastErrorMessage: null }), 4000);
+            return;
+        }
+
         node.status = 'loading';
         this.dispatchEvent(new CustomEvent('graph-update'));
         
@@ -326,9 +349,16 @@ class Store extends EventTarget {
                 node.children = await res.json();
                 node.hasUnloadedChildren = false;
             } else {
-                console.error(`Failed to load children from ${url}: ${res.status}`);
+                const msg = `Failed to load children: Server responded with ${res.status}`;
+                console.error(msg);
+                this.update({ lastErrorMessage: msg });
+                setTimeout(() => this.update({ lastErrorMessage: null }), 5000);
             }
-        } catch(e) { console.error(e); }
+        } catch(e) { 
+            console.error(e); 
+            this.update({ lastErrorMessage: "Network error loading node: " + e.message });
+            setTimeout(() => this.update({ lastErrorMessage: null }), 5000);
+        }
         finally {
             node.status = 'available';
             this.dispatchEvent(new CustomEvent('graph-update'));
