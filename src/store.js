@@ -107,7 +107,23 @@ class Store extends EventTarget {
     loadSources() {
         let sources = [];
         try { sources = JSON.parse(localStorage.getItem('arbor-sources')) || []; } catch(e) {}
-        if (sources.length === 0) sources = DEFAULT_SOURCES;
+        
+        if (sources.length === 0) sources = [...DEFAULT_SOURCES];
+
+        // FORCE UPDATE DEFAULT SOURCE
+        // This ensures returning users get the updated URL pointing to the correct repo
+        const defaultDef = DEFAULT_SOURCES.find(s => s.isDefault);
+        const storedDefaultIdx = sources.findIndex(s => s.id === defaultDef.id);
+        
+        if (storedDefaultIdx !== -1) {
+            // Merge to update URL while keeping other props if any changed (though usually read-only)
+            sources[storedDefaultIdx] = { ...sources[storedDefaultIdx], ...defaultDef };
+        } else {
+            sources.unshift(defaultDef);
+        }
+        
+        // Persist the correction
+        localStorage.setItem('arbor-sources', JSON.stringify(sources));
         
         const activeId = localStorage.getItem('arbor-active-source-id');
         let activeSource = sources.find(s => s.id === activeId) || sources[0];
@@ -299,11 +315,18 @@ class Store extends EventTarget {
         this.dispatchEvent(new CustomEvent('graph-update'));
         
         try {
-            const url = this.state.activeSource.url.replace('data.json', `nodes/${node.apiPath}.json`);
+            // Robust URL construction
+            const sourceUrl = this.state.activeSource.url;
+            // Get base dir: "https://site.com/repo/" from "https://site.com/repo/data.json"
+            const baseDir = sourceUrl.substring(0, sourceUrl.lastIndexOf('/') + 1);
+            const url = `${baseDir}nodes/${node.apiPath}.json`;
+            
             const res = await fetch(url);
             if (res.ok) {
                 node.children = await res.json();
                 node.hasUnloadedChildren = false;
+            } else {
+                console.error(`Failed to load children from ${url}: ${res.status}`);
             }
         } catch(e) { console.error(e); }
         finally {
