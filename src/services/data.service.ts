@@ -478,7 +478,8 @@ export class DataService {
              const dataUrl = new URL(source.url, window.location.href);
              const searchUrl = new URL(source.url.replace('data.json', 'search-index.json'), window.location.href);
              const [treeResponse, searchResponse] = await Promise.all([fetch(dataUrl.href), fetch(searchUrl.href)]);
-             if(!treeResponse.ok) throw new Error("Could not reach the Arbor content repository.");
+             
+             if(!treeResponse.ok) throw new Error("Could not find data.json. Did you deploy the content?");
              
              const data = await treeResponse.json();
              this.trees.set(data.languages);
@@ -488,7 +489,7 @@ export class DataService {
              this.updatePathForNewRoot();
         } catch(e) {
             console.error(e);
-            this.loadError.set("Failed to load knowledge trees. Please check your internet connection or the source URL.");
+            this.loadError.set("Could not load knowledge tree. Please check if the 'arbor-knowledge' repository is deployed.");
         } finally {
             this.isLoading.set(false);
         }
