@@ -14,7 +14,7 @@ const DEFAULT_SOURCES: KnowledgeSource[] = [
     {
         id: 'default-arbor',
         name: 'Arbor Official',
-        url: 'https://treesys-org.github.io/arbor-knowledge/dist/arbor-build/data.json',
+        url: 'https://treesys-org.github.io/arbor-knowledge/data.json',
         isDefault: true,
         isTrusted: true
     }
