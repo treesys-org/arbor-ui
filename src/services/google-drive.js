@@ -1,6 +1,15 @@
 
 const CLIENT_ID = 'YOUR_CLIENT_ID.apps.googleusercontent.com'; // Replace with real ID
-const API_KEY = process.env.API_KEY || '';
+
+// Safety check for process.env to prevent "ReferenceError: process is not defined" in browser
+const getEnvVar = (key) => {
+    if (typeof process !== 'undefined' && process.env) {
+        return process.env[key];
+    }
+    return '';
+};
+
+const API_KEY = getEnvVar('API_KEY') || ''; 
 const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"];
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
 const PROGRESS_FILE_NAME = 'arbor_progress.json';
@@ -27,9 +36,11 @@ class GoogleDriveSync {
     }
 
     loadScripts() {
+        // Define global callbacks for Google Scripts
         window.onGapiLoad = () => gapi.load('client', this.initializeGapiClient.bind(this));
         window.onGisLoad = () => this.initializeGisClient();
 
+        // Check if scripts are already loaded or load them
         if (typeof gapi !== 'undefined' && gapi.load) window.onGapiLoad();
         else this.injectScript('https://apis.google.com/js/api.js', 'onGapiLoad');
 
@@ -56,15 +67,19 @@ class GoogleDriveSync {
     }
 
     initializeGisClient() {
-        this.tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: CLIENT_ID,
-            scope: SCOPES,
-            callback: (resp) => {
-                if (resp && resp.access_token) this.handleAuthSuccess(resp);
-                else console.error("Auth Error", resp);
-            }
-        });
-        this.gisInited = true;
+        try {
+            this.tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: SCOPES,
+                callback: (resp) => {
+                    if (resp && resp.access_token) this.handleAuthSuccess(resp);
+                    else console.error("Auth Error", resp);
+                }
+            });
+            this.gisInited = true;
+        } catch (e) {
+            console.error("GIS Init Error", e);
+        }
     }
 
     handleAuthSuccess(tokenResponse) {
@@ -125,7 +140,6 @@ class GoogleDriveSync {
             const res = await gapi.client.drive.files.get({ fileId, alt: 'media' });
             this.isSyncing = false;
             this.notify();
-            // gapi client typically parses JSON response automatically in result
             return new Set(res.result || []); 
         } catch(e) { 
             this.isSyncing = false; 
