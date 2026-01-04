@@ -1,5 +1,6 @@
 
 import { store } from '../store.js';
+import { googleDrive } from '../services/google-drive.js';
 
 class ArborSidebar extends HTMLElement {
     constructor() { super(); }
@@ -7,14 +8,15 @@ class ArborSidebar extends HTMLElement {
     connectedCallback() {
         this.render();
         store.addEventListener('state-change', () => this.render());
+        // Listen to drive changes
+        googleDrive.subscribe(() => this.render());
     }
 
     render() {
         const ui = store.ui;
-        // Mock user & sync state for demo, as GDrive is not fully ported to Vanilla yet
-        const user = null; // { name: 'Demo User', email: 'demo@arbor.org', picture: 'https://picsum.photos/40' };
-        const isSyncing = false;
-        const isLoggedIn = user !== null;
+        const user = googleDrive.userProfile;
+        const isSyncing = googleDrive.isSyncing;
+        const isLoggedIn = !!user;
 
         this.innerHTML = `
         <style>
@@ -38,7 +40,7 @@ class ArborSidebar extends HTMLElement {
                 <div class="relative group">
                     <button id="btn-certs" class="w-10 h-10 rounded-xl flex items-center justify-center transition-colors
                         ${store.value.viewMode === 'certificates' ? 'bg-yellow-500 text-white' : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500 hover:text-white'}">
-                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0V5.625a2.25 2.25 0 00-2.25-2.25h-1.5a2.25 2.25 0 00-2.25 2.25v7.875" /></svg>
+                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0V5.625a2.25 2.25 0 00-2.25-2.25h-1.5a2.25 2.25 0 00-2.25-2.25v7.875" /></svg>
                     </button>
                     <span class="tooltip">${ui.navCertificates}</span>
                 </div>
@@ -57,16 +59,16 @@ class ArborSidebar extends HTMLElement {
                 <!-- User Profile / Login -->
                 <div class="relative group">
                      ${isLoggedIn ? `
-                        <button class="w-10 h-10 rounded-full border-2 border-slate-200 dark:border-slate-700 p-0.5 overflow-hidden">
+                        <button class="w-10 h-10 rounded-full border-2 border-slate-200 dark:border-slate-700 p-0.5 overflow-hidden relative">
                             <img src="${user.picture}" alt="${user.name}" class="w-full h-full rounded-full">
                             ${isSyncing ? `<div class="absolute inset-0 bg-black/50 flex items-center justify-center"><div class="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin"></div></div>` : ''}
                         </button>
                         <div class="absolute bottom-12 left-1/2 -translate-x-1/2 mb-2 w-52 bg-white dark:bg-slate-800 rounded-lg shadow-xl border dark:border-slate-700 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto z-50">
-                            <div class="p-3 border-b dark:border-slate-700"><p class="text-sm font-bold truncate">${user.name}</p><p class="text-xs text-slate-500 truncate">${user.email}</p></div>
-                            <div class="p-2"><button class="w-full text-left flex items-center gap-3 px-3 py-2 rounded-md text-sm hover:bg-slate-100 dark:hover:bg-slate-700">${ui.signOut}</button></div>
+                            <div class="p-3 border-b dark:border-slate-700"><p class="text-sm font-bold truncate text-slate-800 dark:text-white">${user.name}</p><p class="text-xs text-slate-500 truncate">${user.email}</p></div>
+                            <div class="p-2"><button id="btn-sign-out" class="w-full text-left flex items-center gap-3 px-3 py-2 rounded-md text-sm hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300">${ui.signOut}</button></div>
                         </div>
                      ` : `
-                        <button title="${ui.syncButton}" class="w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:text-sky-500 transition-colors">
+                        <button id="btn-sign-in" title="${ui.syncButton}" class="w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:text-sky-500 transition-colors">
                             <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632" /></svg>
                         </button>
                      `}
@@ -90,6 +92,12 @@ class ArborSidebar extends HTMLElement {
         this.querySelector('#btn-lang').onclick = () => store.setModal('language');
         this.querySelector('#btn-help').onclick = () => store.setModal('tutorial');
         this.querySelector('#btn-impressum').onclick = () => store.setModal('impressum');
+        
+        const btnSignIn = this.querySelector('#btn-sign-in');
+        if (btnSignIn) btnSignIn.onclick = () => googleDrive.signIn();
+
+        const btnSignOut = this.querySelector('#btn-sign-out');
+        if (btnSignOut) btnSignOut.onclick = () => googleDrive.signOut();
     }
 }
 customElements.define('arbor-sidebar', ArborSidebar);

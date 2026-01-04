@@ -63,9 +63,10 @@ export function parseContent(text) {
         if (line.startsWith('@video:')) {
             flushText();
             const src = line.substring(7).trim();
-            // Simple Youtube convert
             let safeSrc = src;
+            // Convert simple YT links to embed
             if (src.includes('watch?v=')) safeSrc = src.replace('watch?v=', 'embed/');
+            if (src.includes('youtu.be/')) safeSrc = src.replace('youtu.be/', 'youtube.com/embed/');
             blocks.push({ type: 'video', src: safeSrc });
             continue;
         }
@@ -96,6 +97,7 @@ export function parseContent(text) {
 
         finalizeQuiz();
 
+        // Ignore metadata lines in body
         if (!line.startsWith('@')) {
             currentTextBuffer.push(line);
         }
