@@ -351,25 +351,51 @@ class ArborModals extends HTMLElement {
         </div>`;
     }
 
+    // --- CERTIFICATES ---
+
+    getPct(m) {
+        if(m.totalLeaves === 0) return 0;
+        return Math.round((m.completedLeaves / m.totalLeaves) * 100);
+    }
+
     renderSingleCertificate(ui, moduleId) {
         const module = store.getModulesStatus().find(m => m.id === moduleId);
         if(!module) return;
 
         this.innerHTML = `
         <div class="fixed inset-0 z-[100] flex items-center justify-center bg-white dark:bg-slate-950 p-6 overflow-y-auto animate-in" onclick="store.setModal(null)">
-          <div class="max-w-3xl w-full border-8 border-double border-stone-800 dark:border-stone-600 p-8 bg-stone-50 dark:bg-[#1a2e22] text-center shadow-2xl relative" onclick="event.stopPropagation()">
-              <button class="absolute top-4 right-4 p-3 bg-white/50 rounded-full hover:bg-red-500 hover:text-white" onclick="store.setModal(null)">✕</button>
+          
+          <button class="absolute top-4 right-4 z-[110] p-3 bg-white/50 dark:bg-slate-900/50 rounded-full hover:bg-red-500 hover:text-white transition-colors no-print" onclick="store.setModal(null)">
+             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+
+          <div class="max-w-3xl w-full border-8 border-double border-stone-800 dark:border-stone-600 p-8 bg-stone-50 dark:bg-[#1a2e22] text-center shadow-2xl relative certificate-container" onclick="event.stopPropagation()">
               
-              <div class="py-12 px-6 border-2 border-stone-800/20 dark:border-stone-600/20">
-                  <div class="w-24 h-24 mb-6 bg-green-700 text-white rounded-full flex items-center justify-center text-5xl shadow-lg mx-auto">🎓</div>
+              <!-- Ornamental Corners -->
+              <div class="absolute top-2 left-2 w-12 md:w-16 h-12 md:h-16 border-t-4 border-l-4 border-stone-800 dark:border-stone-600"></div>
+              <div class="absolute top-2 right-2 w-12 md:w-16 h-12 md:h-16 border-t-4 border-r-4 border-stone-800 dark:border-stone-600"></div>
+              <div class="absolute bottom-2 left-2 w-12 md:w-16 h-12 md:h-16 border-b-4 border-l-4 border-stone-800 dark:border-stone-600"></div>
+              <div class="absolute bottom-2 right-2 w-12 md:w-16 h-12 md:h-16 border-b-4 border-r-4 border-stone-800 dark:border-stone-600"></div>
+
+              <div class="py-12 px-6 border-2 border-stone-800/20 dark:border-stone-600/20 flex flex-col items-center justify-center">
+                  <div class="w-24 h-24 mb-6 bg-green-700 text-white rounded-full flex items-center justify-center text-5xl shadow-lg">🎓</div>
+
                   <h1 class="text-3xl md:text-5xl font-black text-slate-800 dark:text-green-400 mb-2 uppercase tracking-widest font-serif">${ui.certTitle}</h1>
+                  
                   <div class="w-32 h-1 bg-stone-700 dark:bg-stone-500 mx-auto mb-8"></div>
+
                   <p class="text-xl text-slate-500 dark:text-slate-400 italic font-serif mb-6">${ui.certBody}</p>
-                  <h2 class="text-2xl md:text-4xl font-bold text-slate-900 dark:text-white mb-12 font-serif border-b-2 border-stone-300 pb-2 px-12 inline-block">${module.name}</h2>
+
+                  <h2 class="text-2xl md:text-4xl font-bold text-slate-900 dark:text-white mb-12 font-serif border-b-2 border-slate-300 dark:border-slate-700 pb-2 px-12 inline-block min-w-[300px]">
+                      ${module.name}
+                  </h2>
+
                   <p class="text-md text-slate-600 dark:text-slate-300 mb-1">${ui.certSign}</p>
                   <p class="text-sm text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-12">${new Date().toLocaleDateString()}</p>
 
-                  <button class="px-8 py-3 bg-stone-800 hover:bg-stone-700 text-white font-bold rounded-xl shadow-lg" onclick="window.print()">${ui.printCert}</button>
+                  <button class="px-8 py-3 bg-stone-800 hover:bg-stone-700 text-white font-bold rounded-xl shadow-lg no-print" onclick="window.print()">
+                      ${ui.printCert}
+                  </button>
               </div>
           </div>
         </div>`;
@@ -390,66 +416,111 @@ class ArborModals extends HTMLElement {
         });
 
         this.innerHTML = `
-        <div class="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md p-4 md:p-10 flex flex-col animate-in">
-             <header class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-                 <div>
-                    <h2 class="text-3xl font-black text-white flex items-center gap-3"><span class="text-green-500">🏆</span> ${ui.navCertificates}</h2>
-                 </div>
-                 
-                 <div class="flex items-center gap-3 w-full md:w-auto">
-                    <input id="inp-cert-search" type="text" placeholder="${ui.searchCert}" value="${this.certSearch}" class="bg-slate-800 text-white px-4 py-2 rounded-xl outline-none border border-slate-700 focus:border-green-500">
-                    <button id="btn-cert-filter" class="px-4 py-2 rounded-xl text-sm font-bold ${this.certShowAll ? 'bg-slate-700 text-white' : 'bg-green-600 text-white'} whitespace-nowrap">
-                        ${this.certShowAll ? ui.showAll : ui.showEarned}
-                    </button>
-                    <button class="btn-close-certs w-10 h-10 rounded-full bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center flex-shrink-0">✕</button>
-                 </div>
-             </header>
-             
-             <div class="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 custom-scrollbar pb-20">
-                 ${filtered.length === 0 ? `<div class="col-span-3 text-center text-slate-400 py-20">${ui.noResults}</div>` : ''}
-                 ${filtered.map(m => `
-                    <div class="relative overflow-hidden rounded-2xl border-2 transition-all bg-white dark:bg-slate-900 p-6 flex flex-col
-                        ${m.isComplete ? 'border-green-600 shadow-xl shadow-green-900/20' : 'border-slate-800 opacity-75'}">
-                        
-                        <div class="flex justify-between items-start mb-4">
-                            <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-4xl shadow-inner ${m.isComplete ? 'bg-green-100 dark:bg-green-900/30' : 'bg-slate-100 dark:bg-slate-800 grayscale'}">${m.icon || '📦'}</div>
-                            ${m.isComplete ? `<span class="bg-green-600 text-white text-[10px] font-black px-2 py-1 rounded uppercase">Finished</span>` : ''}
-                        </div>
-                        
-                        <h3 class="text-xl font-black text-slate-800 dark:text-white mb-2 leading-tight">${m.name}</h3>
-                        <div class="mt-auto">
-                            <div class="flex justify-between text-xs font-bold text-slate-400 mb-1">
-                                <span>${m.completedLeaves}/${m.totalLeaves}</span>
-                                <span>${m.totalLeaves > 0 ? Math.round((m.completedLeaves/m.totalLeaves)*100) : 0}%</span>
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-md p-0 md:p-10 animate-in fade-in duration-300">
+          
+          <div class="bg-white dark:bg-slate-950 rounded-none md:rounded-3xl w-full max-w-6xl h-full md:max-h-[90vh] shadow-2xl relative border-0 md:border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden">
+            
+            <!-- Header -->
+            <div class="p-6 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row gap-4 justify-between items-start md:items-center bg-white dark:bg-slate-950 z-10 pt-16 md:pt-6">
+               <div>
+                   <h2 class="text-3xl font-black text-slate-800 dark:text-white flex items-center gap-3">
+                       <span class="text-green-600">🏆</span> ${ui.navCertificates}
+                   </h2>
+                   <p class="text-slate-500 dark:text-slate-400 mt-1">${ui.modulesProgress}</p>
+               </div>
+               
+               <div class="flex items-center gap-4 w-full md:w-auto">
+                   <!-- Search Bar -->
+                   <div class="relative flex-1 md:w-64">
+                       <input id="inp-cert-search" type="text" placeholder="${ui.searchCert}" value="${this.certSearch}"
+                        class="w-full bg-slate-100 dark:bg-slate-900 border-none rounded-xl px-4 py-2 pl-10 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-green-600 outline-none">
+                       <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
+                   </div>
+
+                   <!-- Filter Toggle -->
+                   <button id="btn-cert-filter" class="whitespace-nowrap px-4 py-2 rounded-xl text-sm font-bold transition-colors ${!this.certShowAll ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}">
+                       ${this.certShowAll ? ui.showAll : ui.showEarned}
+                   </button>
+
+                   <button class="btn-close-certs w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center transition-colors flex-shrink-0">
+                       <svg class="w-6 h-6 text-slate-500" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                   </button>
+               </div>
+            </div>
+
+            <!-- Scrollable Grid -->
+            <div class="flex-1 overflow-y-auto custom-scrollbar p-6 bg-slate-50 dark:bg-slate-900/50">
+                ${filtered.length === 0 ? `
+                    <div class="flex flex-col items-center justify-center h-full text-slate-400">
+                        <div class="text-4xl mb-4">🔍</div><p>${ui.noResults}</p>
+                    </div>` : ''}
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20 md:pb-0">
+                    ${filtered.map(module => `
+                        <div class="relative group overflow-hidden rounded-2xl border-2 transition-all duration-300 bg-white dark:bg-slate-900
+                             ${module.isComplete ? 'border-green-600 shadow-xl shadow-green-600/20' : 'border-slate-200 dark:border-slate-800 opacity-75'}">
+                            
+                            <div class="p-6 flex flex-col h-full relative z-10">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-4xl shadow-inner border border-white dark:border-slate-700
+                                         ${module.isComplete ? 'bg-gradient-to-br from-green-100 to-white dark:from-green-900/20 dark:to-slate-900' : 'bg-slate-100 dark:bg-slate-800 grayscale'}">
+                                        ${module.icon || '📦'}
+                                    </div>
+                                    ${module.isComplete 
+                                        ? `<div class="bg-green-600 text-white text-[10px] font-black px-2 py-1 rounded uppercase tracking-wider shadow-sm">${ui.lessonFinished}</div>`
+                                        : `<div class="text-slate-400"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg></div>`
+                                    }
+                                </div>
+
+                                <h3 class="text-xl font-black text-slate-800 dark:text-white mb-2 leading-tight">${module.name}</h3>
+                                <p class="text-sm text-slate-500 dark:text-slate-400 mb-4 line-clamp-2 min-h-[2.5em]">${module.description || module.path}</p>
+
+                                <div class="mt-auto">
+                                    <div class="flex justify-between text-xs font-bold text-slate-400 mb-1">
+                                        <span>${module.completedLeaves} / ${module.totalLeaves}</span>
+                                        <span>${this.getPct(module)}%</span>
+                                    </div>
+                                    <div class="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                        <div class="h-full bg-green-600 transition-all duration-500" style="width: ${this.getPct(module)}%"></div>
+                                    </div>
+                                </div>
+
+                                <div class="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+                                    ${module.isComplete 
+                                        ? `<button class="btn-cert-view w-full py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl shadow-lg shadow-green-600/30 transition-all active:scale-95 flex items-center justify-center gap-2" data-id="${module.id}">
+                                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                            ${ui.viewCert}
+                                           </button>`
+                                        : `<button disabled class="w-full py-3 bg-slate-100 dark:bg-slate-800 text-slate-400 font-bold rounded-xl cursor-not-allowed border border-transparent">${ui.lockedCert}</button>`
+                                    }
+                                </div>
                             </div>
-                            <div class="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                <div class="h-full bg-green-600" style="width: ${m.totalLeaves > 0 ? Math.round((m.completedLeaves/m.totalLeaves)*100) : 0}%"></div>
-                            </div>
                         </div>
-                        <div class="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
-                             ${m.isComplete 
-                                ? `<button class="btn-cert-view w-full py-3 bg-green-600 text-white font-bold rounded-xl" data-id="${m.id}">${ui.viewCert}</button>`
-                                : `<button disabled class="w-full py-3 bg-slate-100 dark:bg-slate-800 text-slate-400 font-bold rounded-xl cursor-not-allowed">${ui.lockedCert}</button>`
-                             }
-                        </div>
-                    </div>
-                 `).join('')}
-             </div>
+                    `).join('')}
+                </div>
+            </div>
+          </div>
         </div>`;
 
         this.querySelector('.btn-close-certs').onclick = () => store.setViewMode('explore');
-        this.querySelector('#inp-cert-search').oninput = (e) => {
+        const searchInput = this.querySelector('#inp-cert-search');
+        
+        searchInput.oninput = (e) => {
             this.certSearch = e.target.value;
             this.render();
-            this.querySelector('#inp-cert-search').focus();
+            // Restore focus after re-render
+            const el = this.querySelector('#inp-cert-search');
+            el.focus();
+            el.setSelectionRange(el.value.length, el.value.length);
         };
+        
         this.querySelector('#btn-cert-filter').onclick = () => {
             this.certShowAll = !this.certShowAll;
             this.render();
         };
 
         this.querySelectorAll('.btn-cert-view').forEach(b => {
-            b.onclick = (e) => store.setModal({ type: 'certificate', moduleId: e.target.dataset.id });
+            b.onclick = (e) => store.setModal({ type: 'certificate', moduleId: e.currentTarget.dataset.id });
         });
     }
 }

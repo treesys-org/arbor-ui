@@ -5,6 +5,7 @@ import './components/graph.js';
 import './components/content.js';
 import './components/breadcrumbs.js';
 import './components/modals.js';
+import './components/progress-widget.js';
 
 // Initialize App
 document.addEventListener('DOMContentLoaded', () => {

@@ -167,12 +167,14 @@ export class GraphVisualizerComponent implements AfterViewInit, OnDestroy {
    */
   updateZoomExtent() {
       if (!this.zoom) return;
-      const bottomLimit = this.height + 50; 
-      const topLimit = -(this.height * 5);
+      
+      // Massive extents to prevent user from hitting an invisible wall
+      const verticalPadding = this.height * 10;
+      const horizontalPadding = this.width * 10;
       
       this.zoom.translateExtent([
-          [-this.width * 2, topLimit], 
-          [this.width * 3, bottomLimit]
+          [-horizontalPadding, -verticalPadding], 
+          [horizontalPadding, verticalPadding]
       ]);
   }
 
@@ -244,7 +246,7 @@ export class GraphVisualizerComponent implements AfterViewInit, OnDestroy {
 
     // Zoom setup
     this.zoom = d3.zoom()
-      .scaleExtent([0.1, 3.0])
+      .scaleExtent([0.1, 4.0]) // Increased zoom in slightly
       .on("zoom", (event: any) => {
          this.linkGroup.attr("transform", event.transform);
          this.nodeGroup.attr("transform", event.transform);
@@ -265,21 +267,34 @@ export class GraphVisualizerComponent implements AfterViewInit, OnDestroy {
     this.groundGroup.selectAll("*").remove();
     const hillColor = this.dataService.theme() === 'dark' ? '#1e293b' : '#22c55e';
     const hillColorBack = this.dataService.theme() === 'dark' ? '#0f172a' : '#4ade80';
-    const deepBottom = this.height + 4000;
+    
+    // We create a truly massive ground shape so user never sees the edge
+    const groundWidth = 500000; 
+    const groundDepth = 500000;
+    
+    // Start drawing from the horizontal center of the SVG
+    const cx = this.width / 2;
+    const groundY = this.height; // The visual "floor" line
 
+    // Back Hill (Darker/Lighter)
     this.groundGroup.append("path")
-        .attr("d", `M-2000,${this.height} 
-                    C${this.width * 0.2},${this.height - 180} ${this.width * 0.8},${this.height - 60} ${this.width + 2000},${this.height} 
-                    L${this.width + 2000},${deepBottom} 
-                    L-2000,${deepBottom} Z`)
+        .attr("d", `
+            M${cx - groundWidth},${groundY} 
+            C${cx - 500},${groundY - 180} ${cx + 500},${groundY - 60} ${cx + groundWidth},${groundY} 
+            L${cx + groundWidth},${groundY + groundDepth} 
+            L${cx - groundWidth},${groundY + groundDepth} Z
+        `)
         .attr("fill", hillColorBack)
         .style("opacity", 0.7);
 
+    // Front Hill (Main)
     this.groundGroup.append("path")
-        .attr("d", `M-2000,${this.height} 
-                    Q${this.width/2},${this.height - 120} ${this.width + 2000},${this.height} 
-                    L${this.width + 2000},${deepBottom} 
-                    L-2000,${deepBottom} Z`)
+        .attr("d", `
+            M${cx - groundWidth},${groundY} 
+            Q${cx},${groundY - 120} ${cx + groundWidth},${groundY} 
+            L${cx + groundWidth},${groundY + groundDepth} 
+            L${cx - groundWidth},${groundY + groundDepth} Z
+        `)
         .attr("fill", hillColor);
   }
 
