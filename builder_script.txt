@@ -1,0 +1,390 @@
+
+import os
+import json
+import datetime
+import re
+import shutil
+import uuid
+
+# Configuration Constants
+UNIVERSE_ID = "arbor" 
+UNIVERSE_NAME = "Arbor Standard Universe"
+NAMESPACE = "org.arbor.demo"
+
+# Directory Setup
+ROOT_DIR = "./content" 
+OUTPUT_DIR = "dist"
+DATA_ROOT_DIR = os.path.join(OUTPUT_DIR, "arbor-build")
+API_DIR = os.path.join(DATA_ROOT_DIR, "nodes") # Where lazy-loaded folder JSONs go
+OUTPUT_FILE = os.path.join(DATA_ROOT_DIR, "data.json") # Main entry file
+SEARCH_INDEX_FILE = os.path.join(DATA_ROOT_DIR, "search-index.json") # Flat index for search bar
+CACHE_FILE = os.path.join(DATA_ROOT_DIR, ".build_cache.json") # To speed up subsequent builds
+ALLOWED_EXTENSIONS = {'.arbor', '.md', '.txt'}
+
+def get_latest_mtime(path):
+    """
+    Recursively finds the latest modification time in a folder.
+    Used to determine if a folder needs rebuilding.
+    """
+    latest_mtime = 0
+    if os.path.isdir(path):
+        for root, _, files in os.walk(path):
+            for name in files:
+                try:
+                    filepath = os.path.join(root, name)
+                    latest_mtime = max(latest_mtime, os.path.getmtime(filepath))
+                except FileNotFoundError:
+                    continue 
+    elif os.path.exists(path):
+        latest_mtime = os.path.getmtime(path)
+    return latest_mtime
+
+def parse_frontmatter(content):
+    """
+    Parses standard YAML Frontmatter (between --- lines).
+    Used for standard Markdown (.md) files.
+    Returns: (metadata_dict, cleaned_content_string)
+    """
+    meta = {}
+    clean_content = content
+    # Regex to find content between the first two --- lines
+    match = re.match(r'^---\n(.*?)\n---\n(.*)', content, re.DOTALL)
+    if match:
+        frontmatter_str, clean_content = match.groups()
+        clean_content = clean_content.strip()
+        for line in frontmatter_str.split('\n'):
+            if ':' in line:
+                key, val = line.split(':', 1)
+                # Cleanup quotes and whitespace
+                meta[key.strip()] = val.strip().strip('"\'')
+    return meta, clean_content
+
+def parse_arbor_format(content):
+    """
+    Parses the custom Arbor format (.arbor files).
+    Directives start with @ (e.g., @title: My Lesson).
+    Directives that are part of the content body (like @image or @quiz) are ignored here
+    and passed to the frontend parser.
+    """
+    meta = {}
+    content_lines = []
+    
+    lines = content.split('\n')
+    parsing_metadata = True
+
+    for line in lines:
+        stripped = line.strip()
+        
+        # Identify metadata directives at the top of the file
+        if parsing_metadata and stripped.startswith('@') and ':' in stripped:
+            key_part, val_part = stripped.split(':', 1)
+            raw_key = key_part[1:].strip().lower()
+            val = val_part.strip()
+            
+            # Normalization of keys (EN/ES support)
+            key = raw_key
+            if raw_key == 'title' or raw_key == 'titulo': key = 'name'
+            if raw_key == 'icon' or raw_key == 'icono': key = 'icon'
+            if raw_key == 'description' or raw_key == 'descripcion': key = 'description'
+            if raw_key == 'order' or raw_key == 'orden': key = 'order'
+            if raw_key == 'discussion' or raw_key == 'discusion': key = 'discussionUrl'
+            
+            # These tags are Content, not Metadata. Stop parsing metadata.
+            if raw_key in ['image', 'video', 'audio', 'quiz', 'section', 'h1', 'h2']:
+                 parsing_metadata = False
+                 content_lines.append(line)
+            else:
+                 meta[key] = val
+        else:
+            parsing_metadata = False
+            content_lines.append(line)
+            
+    return meta, '\n'.join(content_lines).strip()
+
+def get_or_create_persistent_id(folder_path):
+    """
+    Generates a persistent UUID for a folder and saves it to a hidden meta.json file inside that folder.
+    This ensures that if you rename a folder, the user's progress (tracked by ID) is not lost.
+    """
+    meta_path = os.path.join(folder_path, "meta.json")
+    meta_data = {}
+    
+    # Read existing meta.json
+    if os.path.exists(meta_path):
+        try:
+            with open(meta_path, 'r', encoding='utf-8') as f:
+                meta_data = json.load(f)
+        except Exception as e:
+            print(f"Warning: Failed to parse {meta_path}: {e}")
+            meta_data = {}
+
+    raw_uuid = meta_data.get("uuid")
+    
+    # Generate new UUID if missing
+    if not raw_uuid:
+        raw_uuid = str(uuid.uuid4())
+        meta_data["uuid"] = raw_uuid
+        
+        try:
+            with open(meta_path, 'w', encoding='utf-8') as f:
+                json.dump(meta_data, f, indent=2, ensure_ascii=False)
+            print(f"  [ID] Generated new UUID for: {os.path.basename(folder_path)}")
+        except Exception as e:
+            print(f"Error writing meta.json to {folder_path}: {e}")
+
+    full_id = f"{NAMESPACE}::{raw_uuid}"
+    return meta_data, full_id
+
+def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None, api_files_collector=None, breadcrumb_path="", relative_slug_path=""):
+    """
+    Traverses the directory structure recursively to build the JSON tree.
+    - Folders become Branches.
+    - Files become Leaves.
+    - Generates 'api_files' for lazy loading of folders.
+    - Populates 'node_collector' for the global Search Index.
+    """
+    if node_collector is None: node_collector = []
+    if api_files_collector is None: api_files_collector = []
+
+    name = os.path.basename(path)
+    # Create a URL-friendly slug from the filename
+    name_slug = re.sub(r'[^a-zA-Z0-9]+', '-', os.path.splitext(name)[0]).lower().strip('-')
+
+    current_slug_path = name_slug
+    if relative_slug_path:
+        current_slug_path = f"{relative_slug_path}/{name_slug}"
+
+    if os.path.isdir(path):
+        # --- PROCESS DIRECTORY (BRANCH) ---
+        meta, node_id = get_or_create_persistent_id(path)
+        
+        node = {
+            "id": node_id, 
+            "name": meta.get("name", name.replace('_', ' ')), 
+            "parentId": parent_id, 
+            "icon": "📁", 
+            "expanded": False, 
+            "status": "available",
+            "type": "branch",
+            "namespace": NAMESPACE,
+            "apiPath": f"{lang_folder.lower()}/{current_slug_path}" # API path for lazy loading
+        }
+        node.update(meta)
+        
+        # Don't expose raw UUID to frontend config if not needed
+        if 'uuid' in node: del node['uuid']
+
+        current_breadcrumb = f"{breadcrumb_path} / {node['name']}" if breadcrumb_path else node['name']
+        node['path'] = current_breadcrumb
+
+        # List items (ignoring hidden files)
+        child_items = sorted([item for item in os.listdir(path) if not item.startswith('.') and item != 'meta.json']) if os.path.exists(path) else []
+        
+        if child_items:
+            node["hasUnloadedChildren"] = True
+            children_for_api_file = []
+            
+            # Recurse into children
+            for item in child_items:
+                item_path = os.path.join(path, item)
+                child_node = build_tree_recursive(item_path, lang_folder, node_id, node_collector, api_files_collector, current_breadcrumb, current_slug_path)
+                if child_node:
+                    children_for_api_file.append(child_node)
+            
+            # Sort children by @order metadata
+            children_for_api_file.sort(key=lambda x: (int(x.get('order', 999)), x.get('name', '')))
+
+            # Write the children to a separate JSON file (Lazy Loading)
+            api_relative_path = os.path.join(lang_folder.lower(), *current_slug_path.split('/')) + ".json"
+            api_filepath = os.path.join(API_DIR, api_relative_path)
+            
+            if api_filepath:
+                os.makedirs(os.path.dirname(api_filepath), exist_ok=True)
+                with open(api_filepath, 'w', encoding='utf-8') as f:
+                    json.dump(children_for_api_file, f, ensure_ascii=False)
+                api_files_collector.append(api_filepath)
+
+    else: 
+        # --- PROCESS FILE (LEAF) ---
+        ext = os.path.splitext(path)[1].lower()
+        if ext in ALLOWED_EXTENSIONS:
+            # Leaf IDs are deterministic based on parent + slug (less critical to persist than folders)
+            node_id = f"{parent_id}__{name_slug}"
+            
+            node = {
+                "id": node_id,
+                "parentId": parent_id,
+                "type": "leaf",
+                "namespace": NAMESPACE,
+                "name": os.path.splitext(name)[0].replace('_', ' '),
+                "icon": "📄"
+            }
+            
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    raw_content = f.read()
+                
+                # Use appropriate parser
+                if ext == '.arbor':
+                     meta, content = parse_arbor_format(raw_content)
+                else:
+                     meta, content = parse_frontmatter(raw_content)
+                
+                node["content"] = content
+                node.update(meta)
+                
+                node['path'] = f"{breadcrumb_path} / {node['name']}"
+
+            except Exception as e:
+                node["content"] = f"Error reading file: {e}"
+        else:
+            return None
+
+    # Add to global search index
+    search_node = {
+        "id": node.get("id"), "name": node.get("name"), "type": node.get("type"),
+        "icon": node.get("icon"), "description": node.get("description"), "lang": lang_folder.upper(),
+        "path": node.get("path"), "namespace": NAMESPACE
+    }
+    node_collector.append(search_node)
+    
+    # Clean up children from the main tree object to keep it light (since we used lazy loading)
+    if 'children' in node:
+        del node['children']
+
+    return node
+
+def main():
+    if not os.path.exists(ROOT_DIR):
+        print(f"Error: Content directory '{ROOT_DIR}' not found.")
+        return
+
+    # Ensure output directories exist
+    os.makedirs(DATA_ROOT_DIR, exist_ok=True)
+    os.makedirs(API_DIR, exist_ok=True)
+
+    # Track existing files to clean up stale ones later
+    existing_files = set()
+    for root, _, files in os.walk(DATA_ROOT_DIR):
+        for name in files:
+            if name.endswith('.json'):
+                existing_files.add(os.path.join(root, name))
+
+    generated_files = set()
+
+    # Load cache
+    try:
+        with open(CACHE_FILE, 'r', encoding='utf-8') as f:
+            old_cache = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        old_cache = {}
+    
+    new_cache = {}
+    full_search_index = []
+    
+    # The master object
+    full_data = {
+        "generatedAt": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "universeId": UNIVERSE_ID,
+        "universeName": UNIVERSE_NAME,
+        "primaryNamespace": NAMESPACE,
+        "languages": {}
+    }
+
+    print(f"Starting Arbor incremental build...")
+    print(f"Universe: {UNIVERSE_ID}")
+    print(f"Namespace: {NAMESPACE}")
+    print(f"Output directory: '{DATA_ROOT_DIR}'")
+    
+    # Process each language folder (e.g., /ES, /EN) as a separate Root
+    language_folders = sorted([d for d in os.listdir(ROOT_DIR) if os.path.isdir(os.path.join(ROOT_DIR, d)) and not d.startswith('.')])
+    
+    for lang_folder in language_folders:
+        print(f"\nProcessing Language: {lang_folder.upper()}")
+        lang_path = os.path.join(ROOT_DIR, lang_folder)
+        
+        root_id = f"{UNIVERSE_ID}-{lang_folder.lower()}-root"
+        root_name = f"Arbor {lang_folder.upper()}"
+        root_node = { "id": root_id, "name": root_name, "parentId": None, "icon": "🌳", "expanded": True, "status": "available", "type": "root", "description": f"{lang_folder.upper()} Root", "path": root_name }
+        
+        full_search_index.append({ "id": root_node["id"], "name": root_node["name"], "type": root_node["type"], "icon": root_node["icon"], "description": root_node["description"], "lang": lang_folder.upper(), "path": root_node["path"] })
+
+        root_children_nodes = []
+        top_level_items = sorted([item for item in os.listdir(lang_path) if not item.startswith('.') and item != 'meta.json'])
+
+        for item in top_level_items:
+            item_path = os.path.join(lang_path, item)
+            latest_mtime = get_latest_mtime(item_path)
+            cached_entry = old_cache.get(item_path)
+            
+            # Check Cache Integrity
+            cached_universe = cached_entry.get('universe_id') if cached_entry else None
+            cached_ns = cached_entry.get('namespace') if cached_entry else None
+
+            # Incremental Build Logic
+            if cached_entry and cached_entry.get('mtime') == latest_mtime and cached_universe == UNIVERSE_ID and cached_ns == NAMESPACE:
+                print(f"  [CACHE HIT] Skipping '{item}', no changes detected.")
+                # Reuse data from cache
+                full_search_index.extend(cached_entry.get('search_nodes', []))
+                root_children_nodes.append(cached_entry.get('top_node'))
+                generated_files.update(cached_entry.get('api_files', []))
+                new_cache[item_path] = cached_entry
+            else:
+                print(f"  [CACHE MISS] Processing '{item}', changes detected.")
+                # Rebuild this branch
+                branch_search_nodes = []
+                branch_api_files = [] 
+                top_node = build_tree_recursive(item_path, lang_folder, root_node['id'], branch_search_nodes, branch_api_files, root_name)
+                if top_node:
+                    root_children_nodes.append(top_node)
+                    full_search_index.extend(branch_search_nodes)
+                    generated_files.update(branch_api_files)
+                    # Update Cache
+                    new_cache[item_path] = {
+                        'mtime': latest_mtime,
+                        'universe_id': UNIVERSE_ID,
+                        'namespace': NAMESPACE,
+                        'search_nodes': branch_search_nodes,
+                        'top_node': top_node,
+                        'api_files': branch_api_files
+                    }
+
+        root_node['children'] = root_children_nodes
+        full_data["languages"][lang_folder.upper()] = root_node
+
+    # Write Main Data File
+    with open(OUTPUT_FILE, 'w', encoding='utf-8') as f: json.dump(full_data, f, indent=2, ensure_ascii=False)
+    generated_files.add(OUTPUT_FILE)
+    
+    # Write Search Index
+    with open(SEARCH_INDEX_FILE, 'w', encoding='utf-8') as f: json.dump(full_search_index, f, ensure_ascii=False)
+    generated_files.add(SEARCH_INDEX_FILE)
+
+    # Write Cache
+    with open(CACHE_FILE, 'w', encoding='utf-8') as f: json.dump(new_cache, f, ensure_ascii=False)
+    generated_files.add(CACHE_FILE)
+
+    # Clean up stale files (files that exist in dist/ but weren't generated in this run or the cache)
+    stale_files = existing_files - generated_files
+    if stale_files:
+        print(f"\nCleaning up {len(stale_files)} stale file(s)...")
+        for f in sorted(list(stale_files)):
+            try:
+                os.remove(f)
+                print(f"  - Removed {f}")
+            except OSError as e:
+                print(f"  - Error removing {f}: {e}")
+
+    # Remove empty directories left behind
+    for root, dirs, files in os.walk(DATA_ROOT_DIR, topdown=False):
+        if not dirs and not files and root != DATA_ROOT_DIR:
+            try:
+                os.rmdir(root)
+                print(f"  - Removed empty directory {root}")
+            except OSError as e:
+                print(f"  - Error removing directory {root}: {e}")
+
+    print(f"\n✅ Success! Build completed incrementally. Files are up to date in '{DATA_ROOT_DIR}'.")
+
+if __name__ == "__main__":
+    main()
