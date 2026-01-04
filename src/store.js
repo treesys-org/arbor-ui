@@ -111,18 +111,15 @@ class Store extends EventTarget {
         if (sources.length === 0) sources = [...DEFAULT_SOURCES];
 
         // FORCE UPDATE DEFAULT SOURCE
-        // This ensures returning users get the updated URL pointing to the correct repo
         const defaultDef = DEFAULT_SOURCES.find(s => s.isDefault);
         const storedDefaultIdx = sources.findIndex(s => s.id === defaultDef.id);
         
         if (storedDefaultIdx !== -1) {
-            // Merge to update URL while keeping other props if any changed (though usually read-only)
             sources[storedDefaultIdx] = { ...sources[storedDefaultIdx], ...defaultDef };
         } else {
             sources.unshift(defaultDef);
         }
         
-        // Persist the correction
         localStorage.setItem('arbor-sources', JSON.stringify(sources));
         
         const activeId = localStorage.getItem('arbor-active-source-id');
@@ -287,7 +284,10 @@ class Store extends EventTarget {
         };
         if(this.state.data) prune(this.state.data);
         
-        path.forEach(p => { if (p.type !== 'leaf') p.expanded = true; });
+        // Ensure parents expanded (EXCLUDING the node itself to allow toggle)
+        path.forEach(p => { 
+            if (p.type !== 'leaf' && p.id !== nodeId) p.expanded = true; 
+        });
         this.update({ path });
 
         if (node.type === 'leaf') {
