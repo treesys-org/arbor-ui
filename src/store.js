@@ -12,7 +12,7 @@ const DEFAULT_SOURCES = [
     {
         id: 'default-arbor',
         name: 'Arbor Official',
-        url: './data.json',
+        url: 'https://treesys-org.github.io/arbor-knowledge/data.json',
         isDefault: true,
         isTrusted: true
     }
@@ -69,6 +69,30 @@ class Store extends EventTarget {
         if (partialState.lang) {
             localStorage.setItem('arbor-lang', this.state.lang);
         }
+    }
+
+    // --- Theme & UI ---
+
+    setTheme(theme) {
+        this.update({ theme });
+    }
+
+    toggleTheme() { 
+        this.update({ theme: this.state.theme === 'light' ? 'dark' : 'light' }); 
+    }
+
+    setLanguage(lang) { 
+        if(this.state.lang !== lang) {
+            this.update({ lang }); 
+            this.loadData(this.state.activeSource); 
+        }
+    }
+
+    setModal(modal) { this.update({ modal }); }
+    
+    setViewMode(viewMode) { 
+        this.update({ viewMode });
+        if(viewMode === 'certificates') this.update({ modal: null });
     }
 
     // --- Sources ---
@@ -142,8 +166,6 @@ class Store extends EventTarget {
             const searchRes = await fetch(searchUrl).catch(() => null);
             const searchIndex = searchRes && searchRes.ok ? await searchRes.json() : [];
 
-            // Simple load for vanilla version (Switch, not merge, for simplicity unless needed)
-            // But matching Angular behavior:
             const langData = json.languages?.[this.state.lang] || Object.values(json.languages)[0];
             
             if (json.universeName && json.universeName !== source.name) {
@@ -187,7 +209,6 @@ class Store extends EventTarget {
         let node = this.findNode(nodeId);
         
         if (!node) {
-            // Logic ported from Angular DataService to reconstruct path for deep linking
             const pathIdsToUnfold = [];
             let currentId = nodeId;
             let highestAncestorInMemory = null;
@@ -199,21 +220,15 @@ class Store extends EventTarget {
                     break;
                 }
                 pathIdsToUnfold.unshift(currentId);
-                
-                // Heuristic: leaf IDs are "parent__leaf". 
-                // We attempt to find parent ID.
-                // For folders, if they are UUIDs, this fails and relies on user manually navigating or search index hints (not implemented in this simplified version).
                 const parentId = currentId.substring(0, currentId.lastIndexOf('__'));
                 
                 if (!parentId || !parentId.includes('-root')) {
-                    // Fallback to root if we can't determine parent by string
                     highestAncestorInMemory = this.state.data;
                     break;
                 }
                 currentId = parentId;
             }
 
-            // Expand down
             let parentToExpand = highestAncestorInMemory;
             while (pathIdsToUnfold.length > 0 && parentToExpand) {
                 if (parentToExpand.type !== 'leaf' && !parentToExpand.expanded) {
@@ -231,7 +246,6 @@ class Store extends EventTarget {
         if (!node) return;
 
         this.toggleNode(nodeId);
-        // Force graph to focus
         this.dispatchEvent(new CustomEvent('focus-node', { detail: nodeId }));
     }
 
@@ -239,7 +253,6 @@ class Store extends EventTarget {
         const node = this.findNode(nodeId);
         if (!node) return;
 
-        // Path update
         let path = [];
         let curr = node;
         while(curr) {
@@ -247,7 +260,6 @@ class Store extends EventTarget {
             curr = curr.parentId ? this.findNode(curr.parentId) : null;
         }
         
-        // Prune siblings (auto-collapse)
         const pathIds = new Set(path.map(p => p.id));
         const prune = (n) => {
             if (n.expanded && n.children) {
@@ -259,7 +271,6 @@ class Store extends EventTarget {
         };
         if(this.state.data) prune(this.state.data);
         
-        // Ensure parents expanded
         path.forEach(p => { if (p.type !== 'leaf') p.expanded = true; });
         this.update({ path });
 
@@ -301,20 +312,8 @@ class Store extends EventTarget {
         }
     }
 
-    // --- UI Actions ---
+    // --- UI Actions (Content) ---
 
-    toggleTheme() { this.update({ theme: this.state.theme === 'light' ? 'dark' : 'light' }); }
-    setLanguage(lang) { 
-        if(this.state.lang !== lang) {
-            this.update({ lang }); 
-            this.loadData(this.state.activeSource); 
-        }
-    }
-    setModal(modal) { this.update({ modal }); }
-    setViewMode(viewMode) { 
-        this.update({ viewMode });
-        if(viewMode === 'certificates') this.update({ modal: null });
-    }
     enterLesson() {
         if (this.state.previewNode) {
             this.update({ selectedNode: this.state.previewNode, previewNode: null });
@@ -352,7 +351,6 @@ class Store extends EventTarget {
         this.update({}); 
         this.dispatchEvent(new CustomEvent('graph-update'));
 
-        // Sync if logged in
         if (googleDrive.userProfile) {
             clearTimeout(this.saveTimer);
             this.saveTimer = setTimeout(() => googleDrive.saveProgress(this.state.completedNodes), 2000);
