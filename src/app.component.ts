@@ -48,8 +48,8 @@ export class AppComponent implements OnInit {
 
   ngOnInit() {
     // FORCE REMOVE LOADER
-    // If Angular boots up, we must remove the HTML loader from index.html manually 
-    // to ensure it doesn't block the view if template replacement is slow.
+    // If Angular boots up, the template usually overwrites the content,
+    // but explicit removal guarantees no artifacts remain.
     const loader = document.getElementById('app-loader');
     if (loader) {
         loader.style.opacity = '0';

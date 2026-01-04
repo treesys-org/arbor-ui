@@ -5,31 +5,16 @@
   <title>Arbor Academy</title>
   
   <!-- DYNAMIC BASE HREF: Critical for GitHub Pages & Localhost compatibility -->
-  <!-- This script auto-detects if the app is running in a subfolder (like /arbor-ui/) or root -->
   <script>
     (function() {
-      // If we are on GitHub Pages (or any subpath deployment), use the repository name
-      // otherwise (localhost), use root '/'
       var base = '/';
       var path = window.location.pathname;
-      
-      // Check if we are in a subdirectory (common in GitHub Pages)
-      // Logic: If path contains more than just '/', take the first segment.
       if (path.length > 1 && path.lastIndexOf('/') !== 0) {
-          // Extract the first segment: /arbor-ui/foo -> /arbor-ui/
           var segments = path.split('/').filter(p => p);
           if (segments.length > 0) {
-              // Ensure we include the leading slash and trailing slash
               base = '/' + segments[0] + '/';
           }
       }
-      
-      // Override for specific known cases if needed, otherwise dynamic is best
-      if (window.location.hostname.includes('github.io')) {
-          // On GitHub Pages, pathname usually starts with /repo-name/
-          // The logic above handles it, but let's be explicit via <base> tag injection
-      }
-      
       document.write('<base href="' + base + '">');
     })();
   </script>
@@ -49,15 +34,12 @@
     }
   </script>
   <script src="https://d3js.org/d3.v7.min.js"></script>
-  <!-- Google Fonts: Nunito (Rounded for friendly/modern look) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <!-- Google API Scripts for Drive Sync -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://apis.google.com/js/api.js" async defer></script>
   <style>
-    /* Critical CSS to ensure full height visibility independent of Tailwind */
     html, body {
       height: 100%;
       width: 100%;
@@ -73,28 +55,13 @@
     body {
       font-family: 'Nunito', sans-serif;
     }
-    /* Professional Scrollbar */
-    ::-webkit-scrollbar {
-      width: 8px;
-    }
-    ::-webkit-scrollbar-track {
-      background: transparent;
-    }
-    ::-webkit-scrollbar-thumb {
-      background: #cbd5e1;
-      border-radius: 4px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: #94a3b8;
-    }
-    /* Dark mode scrollbar */
-    .dark ::-webkit-scrollbar-thumb {
-      background: #475569;
-    }
-    .dark ::-webkit-scrollbar-thumb:hover {
-      background: #64748b;
-    }
-    /* Fallback loader styles */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    .dark ::-webkit-scrollbar-thumb { background: #475569; }
+    .dark ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+    
     .initial-loader {
       height: 100%;
       width: 100%;
@@ -108,12 +75,22 @@
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
       z-index: 9999;
+      transition: opacity 0.5s ease-out;
+    }
+    .error-console {
+        display: none;
+        margin-top: 20px;
+        padding: 10px;
+        background: #fee2e2;
+        color: #b91c1c;
+        border-radius: 8px;
+        font-family: monospace;
+        font-size: 12px;
+        max-width: 80%;
+        word-break: break-all;
     }
     @media (prefers-color-scheme: dark) {
-      .initial-loader {
-        background-color: #0f172a;
-        color: #38bdf8;
-      }
+      .initial-loader { background-color: #0f172a; color: #38bdf8; }
     }
   </style>
 <script type="importmap">
@@ -125,26 +102,47 @@
     "rxjs/webSocket": "https://esm.sh/rxjs@^7.8.2/webSocket?conditions=es2015",
     "rxjs/testing": "https://esm.sh/rxjs@^7.8.2/testing?conditions=es2015",
     "rxjs/fetch": "https://esm.sh/rxjs@^7.8.2/fetch?conditions=es2015",
-    "@angular/router": "https://esm.sh/@angular/router@^21.0.6?external=rxjs",
-    "@angular/compiler": "https://esm.sh/@angular/compiler@^21.0.6?external=rxjs",
-    "@angular/platform-browser": "https://esm.sh/@angular/platform-browser@^21.0.6?external=rxjs",
-    "@angular/common": "https://esm.sh/@angular/common@^21.0.6?external=rxjs",
-    "@angular/core": "https://esm.sh/@angular/core@^21.0.6?external=rxjs",
-    "@angular/forms": "https://esm.sh/@angular/forms@^21.0.6?external=rxjs",
+    "@angular/router": "https://esm.sh/@angular/router@^19.0.0?external=rxjs",
+    "@angular/compiler": "https://esm.sh/@angular/compiler@^19.0.0?external=rxjs",
+    "@angular/platform-browser": "https://esm.sh/@angular/platform-browser@^19.0.0?external=rxjs",
+    "@angular/common": "https://esm.sh/@angular/common@^19.0.0?external=rxjs",
+    "@angular/core": "https://esm.sh/@angular/core@^19.0.0?external=rxjs",
+    "@angular/forms": "https://esm.sh/@angular/forms@^19.0.0?external=rxjs",
     "d3": "https://esm.sh/d3@^7.9.0?external=rxjs",
-    "@angular/common/http": "https://esm.sh/@angular/common@^21.0.6/http?external=rxjs"
+    "@angular/common/http": "https://esm.sh/@angular/common@^19.0.0/http?external=rxjs"
   }
 }
 </script>
 </head>
 <body>
   <app-root>
-     <!-- This content shows immediately before Angular loads -->
      <div id="app-loader" class="initial-loader">
         <div style="font-size: 40px; margin-bottom: 20px;">🌳</div>
         <div style="font-weight: bold; letter-spacing: 1px;">CARGANDO ARBOR...</div>
-        <div style="margin-top: 10px; font-size: 12px; opacity: 0.7">Iniciando aplicación...</div>
+        <div style="margin-top: 10px; font-size: 12px; opacity: 0.7">Versión v0.2 - Inicializando...</div>
+        <div id="loader-error" class="error-console"></div>
      </div>
   </app-root>
+  <script>
+      // Failsafe: If Angular doesn't boot in 5 seconds, show error info
+      setTimeout(() => {
+          const loader = document.getElementById('app-loader');
+          const errDiv = document.getElementById('loader-error');
+          if (loader && document.querySelector('app-root').children.length > 0 && document.querySelector('app-root').firstChild === loader) {
+              if (errDiv) {
+                  errDiv.style.display = 'block';
+                  errDiv.innerText = "Tiempo de espera agotado. Si esto persiste, comprueba la consola (F12) o verifica que tu importmap usa versiones válidas.";
+              }
+          }
+      }, 8000);
+      
+      window.addEventListener('error', function(e) {
+          const errDiv = document.getElementById('loader-error');
+          if (errDiv) {
+              errDiv.style.display = 'block';
+              errDiv.innerText = "Error crítico: " + e.message;
+          }
+      });
+  </script>
 </body>
 </html>
