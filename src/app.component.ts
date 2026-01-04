@@ -1,6 +1,6 @@
 
 
-import { Component, inject, OnInit } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { GraphVisualizerComponent } from './components/graph-visualizer.component';
@@ -32,7 +32,7 @@ import { GoogleDriveSyncService } from './services/google-drive-sync.service';
   ],
   templateUrl: './app.component.html'
 })
-export class AppComponent implements OnInit {
+export class AppComponent {
   dataService = inject(DataService);
   googleDriveSyncService = inject(GoogleDriveSyncService);
   
@@ -45,17 +45,6 @@ export class AppComponent implements OnInit {
 
   searchQuery = '';
   searchResults: SearchNode[] = [];
-
-  ngOnInit() {
-    // FORCE REMOVE LOADER
-    // If Angular boots up, the template usually overwrites the content,
-    // but explicit removal guarantees no artifacts remain.
-    const loader = document.getElementById('app-loader');
-    if (loader) {
-        loader.style.opacity = '0';
-        setTimeout(() => loader.remove(), 500);
-    }
-  }
 
   // Actions delegated to service or internal state
   closeModal() { this.activeModal = null; }

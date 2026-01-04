@@ -13,12 +13,12 @@ NAMESPACE = "org.arbor.demo"
 
 # Directory Setup
 ROOT_DIR = "./content" 
-OUTPUT_DIR = "dist"
-DATA_ROOT_DIR = os.path.join(OUTPUT_DIR, "arbor-build")
+# Output directly to a 'data' folder in the root so index.html can read it
+DATA_ROOT_DIR = "./data"
 API_DIR = os.path.join(DATA_ROOT_DIR, "nodes") # Where lazy-loaded folder JSONs go
 OUTPUT_FILE = os.path.join(DATA_ROOT_DIR, "data.json") # Main entry file
 SEARCH_INDEX_FILE = os.path.join(DATA_ROOT_DIR, "search-index.json") # Flat index for search bar
-CACHE_FILE = os.path.join(DATA_ROOT_DIR, ".build_cache.json") # To speed up subsequent builds
+CACHE_FILE = os.path.join(DATA_ROOT_DIR, "build_cache.json") # To speed up subsequent builds
 ALLOWED_EXTENSIONS = {'.arbor', '.md', '.txt'}
 
 def get_latest_mtime(path):
@@ -256,7 +256,7 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
 
 def main():
     if not os.path.exists(ROOT_DIR):
-        print(f"Error: Content directory '{ROOT_DIR}' not found.")
+        print(f"Error: Content directory '{ROOT_DIR}' not found. Please create it and add 'ES' and 'EN' folders inside.")
         return
 
     # Ensure output directories exist
@@ -298,6 +298,9 @@ def main():
     
     # Process each language folder (e.g., /ES, /EN) as a separate Root
     language_folders = sorted([d for d in os.listdir(ROOT_DIR) if os.path.isdir(os.path.join(ROOT_DIR, d)) and not d.startswith('.')])
+    
+    if not language_folders:
+        print("Warning: No language folders (ES, EN) found in 'content/'.")
     
     for lang_folder in language_folders:
         print(f"\nProcessing Language: {lang_folder.upper()}")
@@ -384,7 +387,7 @@ def main():
             except OSError as e:
                 print(f"  - Error removing directory {root}: {e}")
 
-    print(f"\n✅ Success! Build completed incrementally. Files are up to date in '{DATA_ROOT_DIR}'.")
+    print(f"\n✅ Success! Data generated in '{DATA_ROOT_DIR}'. Open index.html to view.")
 
 if __name__ == "__main__":
     main()

@@ -1,37 +1,40 @@
+
 # 🌳 Arbor UI
 
-**Explore knowledge visually. A free, open-source, and community-driven platform for decentralized learning.**
+**Explorador de conocimiento visual. Una plataforma de aprendizaje descentralizada.**
 
-Arbor is a dynamic knowledge explorer that visualizes learning paths as interactive, growing trees. It's built to be decentralized, allowing anyone to create, share, and merge different knowledge trees.
+Arbor es un mapa de conocimiento dinámico que visualiza rutas de aprendizaje como árboles interactivos.
 
-## ✨ Features
+## ✨ Características
 
-*   **Visual Exploration:** Navigate complex subjects as an intuitive, interactive mind map.
-*   **Decentralized Content:** Load knowledge trees from any URL. No central server, no censorship.
-*   **Community-Driven:** Anyone can create and share a knowledge tree. See `HOW_TO_WRITE_CONTENT.md`.
-*   **Progress Tracking:** Save your learning progress locally or sync it with Google Drive.
-*   **Certificates of Completion:** Earn certificates for completing modules and build your open-source learning profile.
-*   **Open Source:** Licensed under GPL-3.0 to guarantee it remains free and open forever.
+*   **Exploración Visual:** Navega temas complejos como un mapa mental interactivo.
+*   **Contenido Descentralizado:** Carga árboles desde cualquier URL.
+*   **Sin Servidor:** Funciona 100% en el navegador (Vanilla JS).
+*   **Código Abierto:** Licencia GPL-3.0.
 
-## 🚀 Running Locally
+## 🚀 Cómo usar (Zero Build)
 
-This project is designed to run in a web-based development environment that handles dependencies automatically.
+Este proyecto no requiere compilación (ni Node.js, ni NPM, ni Angular).
 
-1.  **Google Drive Sync (Optional):** To enable progress synchronization, you need to create Google API credentials:
-    *   Go to the [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
-    *   Create a new project.
-    *   Create an **API Key** and an **OAuth 2.0 Client ID** (for a Web Application).
-    *   In `src/services/google-drive-sync.service.ts`, replace `YOUR_CLIENT_ID.apps.googleusercontent.com` with your OAuth Client ID.
-    *   The `API_KEY` is expected to be provided as an environment variable (`process.env.API_KEY`). You will need to configure this in your local environment.
+1.  **Contenido:** Crea tus lecciones en la carpeta `content/ES/` (o `EN`).
+2.  **Generar Datos:** Ejecuta el script de Python para convertir el contenido en JSON:
+    ```bash
+    python builder_script.txt
+    ```
+    *Nota: Aunque tiene extensión .txt, es un script de Python.*
+3.  **Abrir:** Simplemente abre `index.html` en tu navegador.
 
-2.  **Run the application:** Use the standard commands provided by your development environment, typically `npm install` followed by `npm run dev`.
+## 🌐 Despliegue en GitHub Pages
 
-## 🤝 Contributing
+1.  Asegúrate de haber ejecutado el script para generar la carpeta `data/`.
+2.  Sube los archivos al repositorio (`index.html`, carpeta `src`, carpeta `data`, carpeta `content`).
+3.  Activa GitHub Pages en la configuración del repositorio apuntando a la rama `main` (root).
+4.  ¡Listo!
 
-Contributions are welcome! This project is for the community. Whether it's improving the code, fixing bugs, or suggesting new features, your help is appreciated.
+## 🤝 Contribuir
 
-Please read `HOW_TO_WRITE_CONTENT.md` to learn how to create your own knowledge trees.
+Lee `HOW_TO_WRITE_CONTENT.md` para aprender a crear tus propios árboles de conocimiento.
 
-## 📄 License
+## 📄 Licencia
 
-Arbor is licensed under the **GNU General Public License v3.0**. You are free to use, study, share, and modify this software. Any modifications you distribute must also be licensed under the GPL-3.0.
+Arbor está licenciado bajo **GNU General Public License v3.0**.
