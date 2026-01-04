@@ -1,4 +1,5 @@
 
+
 import { UI_LABELS, AVAILABLE_LANGUAGES } from './i18n.js';
 import { googleDrive } from './services/google-drive.js';
 
@@ -11,7 +12,7 @@ const DEFAULT_SOURCES = [
     {
         id: 'default-arbor',
         name: 'Arbor Official',
-        url: './data/data.json',
+        url: './data.json',
         isDefault: true,
         isTrusted: true
     }
@@ -74,7 +75,7 @@ class Store extends EventTarget {
 
     isUrlTrusted(urlStr) {
         try {
-            const url = new URL(urlStr);
+            const url = new URL(urlStr, window.location.href);
             return OFFICIAL_DOMAINS.includes(url.hostname);
         } catch { return false; }
     }
@@ -94,7 +95,11 @@ class Store extends EventTarget {
     addSource(url) {
         if (!url) return;
         const isTrusted = this.isUrlTrusted(url);
-        const name = new URL(url).hostname; 
+        let name = 'New Tree';
+        try {
+            name = new URL(url, window.location.href).hostname; 
+        } catch (e) {}
+
         const newSource = { id: crypto.randomUUID(), name, url, isTrusted };
         const newSources = [...this.state.sources, newSource];
         

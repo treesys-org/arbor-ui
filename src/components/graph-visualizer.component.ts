@@ -168,13 +168,16 @@ export class GraphVisualizerComponent implements AfterViewInit, OnDestroy {
   updateZoomExtent() {
       if (!this.zoom) return;
       
-      // Massive extents to prevent user from hitting an invisible wall
-      const verticalPadding = this.height * 10;
-      const horizontalPadding = this.width * 10;
+      const horizontalPadding = this.width * 5;
+      const topPadding = this.height * 15; // Allow going way up (tree grows up)
+      
+      // RESTRICTION: Limit bottom padding to barely below the container height.
+      // This prevents dragging the "ground" way up the screen.
+      const bottomPadding = this.height + 50; 
       
       this.zoom.translateExtent([
-          [-horizontalPadding, -verticalPadding], 
-          [horizontalPadding, verticalPadding]
+          [-horizontalPadding, -topPadding], 
+          [horizontalPadding, bottomPadding]
       ]);
   }
 

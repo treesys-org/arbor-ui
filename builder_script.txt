@@ -1,4 +1,5 @@
 
+
 import os
 import json
 import datetime
@@ -12,8 +13,8 @@ NAMESPACE = "org.arbor.demo"
 
 # Directory Setup
 ROOT_DIR = "./content" 
-# Output directly to a 'data' folder in the root so index.html can read it
-DATA_ROOT_DIR = "./data"
+# Output directly to the root directory
+DATA_ROOT_DIR = "."
 API_DIR = os.path.join(DATA_ROOT_DIR, "nodes") # Where lazy-loaded folder JSONs go
 OUTPUT_FILE = os.path.join(DATA_ROOT_DIR, "data.json") # Main entry file
 SEARCH_INDEX_FILE = os.path.join(DATA_ROOT_DIR, "search-index.json") # Flat index for search bar
