@@ -5,7 +5,7 @@
   <title>Arbor Academy</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   
-  <!-- Tailwind CSS -->
+  <!-- Tailwind CSS (CDN for zero-build) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -32,30 +32,22 @@
     body {
       font-family: 'Nunito', sans-serif;
       overflow: hidden; 
-    }
-    .custom-scrollbar::-webkit-scrollbar {
-      width: 8px;
-    }
-    .custom-scrollbar::-webkit-scrollbar-track {
-      background: transparent;
-    }
-    .custom-scrollbar::-webkit-scrollbar-thumb {
-      background: #cbd5e1;
-      border-radius: 4px;
-    }
-    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-      background: #94a3b8;
-    }
-    .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-      background: #475569;
+      user-select: none; /* Improve app-like feel */
     }
     
-    /* Animation Utilities */
-    .animate-spin { animation: spin 1s linear infinite; }
-    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    /* Custom Scrollbar */
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; }
     
+    /* Animations */
     .fade-in { animation: fadeIn 0.3s ease-in-out; }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    
+    /* Web Component loading state helper */
+    :not(:defined) { display: none; }
   </style>
 <script type="importmap">
 {
@@ -66,13 +58,13 @@
     "rxjs/webSocket": "https://esm.sh/rxjs@^7.8.2/webSocket?conditions=es2015",
     "rxjs/testing": "https://esm.sh/rxjs@^7.8.2/testing?conditions=es2015",
     "rxjs/fetch": "https://esm.sh/rxjs@^7.8.2/fetch?conditions=es2015",
+    "@angular/compiler": "https://esm.sh/@angular/compiler@^21.0.6?external=rxjs",
     "@angular/platform-browser": "https://esm.sh/@angular/platform-browser@^21.0.6?external=rxjs",
     "@angular/core": "https://esm.sh/@angular/core@^21.0.6?external=rxjs",
     "@angular/router": "https://esm.sh/@angular/router@^21.0.6?external=rxjs",
     "@angular/common": "https://esm.sh/@angular/common@^21.0.6?external=rxjs",
-    "vite": "https://esm.sh/vite@^7.3.0?external=rxjs",
     "@angular/forms": "https://esm.sh/@angular/forms@^21.0.6?external=rxjs",
-    "@angular/compiler": "https://esm.sh/@angular/compiler@^21.0.6?external=rxjs"
+    "vite": "https://esm.sh/vite@^7.3.0?external=rxjs"
   }
 }
 </script>
@@ -81,7 +73,7 @@
   
   <!-- App Root Container -->
   <div id="app" class="h-screen w-screen flex relative overflow-hidden">
-     <!-- Components will be injected here by main.js -->
+     <!-- Web Components -->
      <arbor-sidebar></arbor-sidebar>
      
      <main class="flex-1 relative flex flex-col h-full pt-0">
@@ -95,7 +87,7 @@
      <arbor-modals></arbor-modals>
   </div>
 
-  <!-- Main Entry Point -->
+  <!-- Main Entry Point (Native ES Modules) -->
   <script type="module" src="./src/main.js"></script>
 </body>
 </html>
