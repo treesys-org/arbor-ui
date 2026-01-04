@@ -1,20 +1,17 @@
 
+
 import { store } from '../store.js';
 
 class ArborModals extends HTMLElement {
     constructor() {
         super();
         this.tutorialStep = 0;
-        // Local state for certificates filtering
         this.certSearch = '';
         this.certShowAll = false;
-        // Local state for search modal
         this.searchQuery = '';
         this.searchResults = [];
-        // Local state for security warning
         this.pendingSourceUrl = null;
         this.showSecurityWarning = false;
-        // Local state for Impressum
         this.showImpressumDetails = false;
     }
 
@@ -41,7 +38,7 @@ class ArborModals extends HTMLElement {
         const modal = store.value.modal;
         if (!modal) {
             this.innerHTML = '';
-            this.showImpressumDetails = false; // Reset impressum state on close
+            this.showImpressumDetails = false;
             return;
         }
 
@@ -126,10 +123,8 @@ class ArborModals extends HTMLElement {
          inp.oninput = (e) => {
              this.searchQuery = e.target.value;
              this.searchResults = store.search(this.searchQuery);
-             this.render(); // Re-render to show results
-             // Restore focus
+             this.render();
              this.querySelector('#inp-search').focus();
-             // Hack: move cursor to end
              const el = this.querySelector('#inp-search');
              el.setSelectionRange(el.value.length, el.value.length);
          };
@@ -147,8 +142,8 @@ class ArborModals extends HTMLElement {
         const isDone = store.isCompleted(node.id);
         
         this.innerHTML = `
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in" onclick="store.closePreview()">
-            <div class="bg-white dark:bg-slate-900 rounded-3xl p-8 max-w-sm w-full shadow-2xl relative text-center" onclick="event.stopPropagation()">
+        <div id="preview-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in">
+            <div class="bg-white dark:bg-slate-900 rounded-3xl p-8 max-w-sm w-full shadow-2xl relative text-center">
                  <div class="absolute -top-10 left-1/2 -translate-x-1/2 w-20 h-20 bg-white dark:bg-slate-800 rounded-2xl shadow-xl flex items-center justify-center text-4xl border-4 border-slate-50 dark:border-slate-700">
                     ${node.icon || '📄'}
                  </div>
@@ -164,12 +159,18 @@ class ArborModals extends HTMLElement {
                         </div>
                     </div>
                     <div class="flex gap-3">
-                         <button onclick="store.closePreview()" class="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold rounded-xl">${ui.cancel}</button>
-                         <button onclick="store.enterLesson()" class="flex-1 py-3 bg-sky-500 text-white font-bold rounded-xl shadow-lg">${ui.enter}</button>
+                         <button id="btn-prev-cancel" class="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold rounded-xl">${ui.cancel}</button>
+                         <button id="btn-prev-enter" class="flex-1 py-3 bg-sky-500 text-white font-bold rounded-xl shadow-lg">${ui.enter}</button>
                     </div>
                  </div>
             </div>
         </div>`;
+
+        this.querySelector('#preview-overlay').onclick = (e) => {
+            if(e.target.id === 'preview-overlay') store.closePreview();
+        };
+        this.querySelector('#btn-prev-cancel').onclick = () => store.closePreview();
+        this.querySelector('#btn-prev-enter').onclick = () => store.enterLesson();
     }
 
     // --- TUTORIAL ---
@@ -363,13 +364,13 @@ class ArborModals extends HTMLElement {
         if(!module) return;
 
         this.innerHTML = `
-        <div class="fixed inset-0 z-[100] flex items-center justify-center bg-white dark:bg-slate-950 p-6 overflow-y-auto animate-in" onclick="store.setModal(null)">
+        <div id="cert-overlay" class="fixed inset-0 z-[100] flex items-center justify-center bg-white dark:bg-slate-950 p-6 overflow-y-auto animate-in">
           
-          <button class="absolute top-4 right-4 z-[110] p-3 bg-white/50 dark:bg-slate-900/50 rounded-full hover:bg-red-500 hover:text-white transition-colors no-print" onclick="store.setModal(null)">
+          <button id="btn-cert-close" class="absolute top-4 right-4 z-[110] p-3 bg-white/50 dark:bg-slate-900/50 rounded-full hover:bg-red-500 hover:text-white transition-colors no-print">
              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
 
-          <div class="max-w-3xl w-full border-8 border-double border-stone-800 dark:border-stone-600 p-8 bg-stone-50 dark:bg-[#1a2e22] text-center shadow-2xl relative certificate-container" onclick="event.stopPropagation()">
+          <div class="max-w-3xl w-full border-8 border-double border-stone-800 dark:border-stone-600 p-8 bg-stone-50 dark:bg-[#1a2e22] text-center shadow-2xl relative certificate-container">
               
               <!-- Ornamental Corners -->
               <div class="absolute top-2 left-2 w-12 md:w-16 h-12 md:h-16 border-t-4 border-l-4 border-stone-800 dark:border-stone-600"></div>
@@ -393,12 +394,18 @@ class ArborModals extends HTMLElement {
                   <p class="text-md text-slate-600 dark:text-slate-300 mb-1">${ui.certSign}</p>
                   <p class="text-sm text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-12">${new Date().toLocaleDateString()}</p>
 
-                  <button class="px-8 py-3 bg-stone-800 hover:bg-stone-700 text-white font-bold rounded-xl shadow-lg no-print" onclick="window.print()">
+                  <button id="btn-cert-print" class="px-8 py-3 bg-stone-800 hover:bg-stone-700 text-white font-bold rounded-xl shadow-lg no-print">
                       ${ui.printCert}
                   </button>
               </div>
           </div>
         </div>`;
+
+        this.querySelector('#cert-overlay').onclick = (e) => {
+            if(e.target.id === 'cert-overlay') store.setModal(null);
+        };
+        this.querySelector('#btn-cert-close').onclick = () => store.setModal(null);
+        this.querySelector('#btn-cert-print').onclick = () => window.print();
     }
 
     renderCertificatesGallery() {
@@ -508,7 +515,6 @@ class ArborModals extends HTMLElement {
         searchInput.oninput = (e) => {
             this.certSearch = e.target.value;
             this.render();
-            // Restore focus after re-render
             const el = this.querySelector('#inp-cert-search');
             el.focus();
             el.setSelectionRange(el.value.length, el.value.length);
