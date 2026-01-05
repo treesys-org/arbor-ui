@@ -1,5 +1,6 @@
 
 
+
 import { store } from '../store.js';
 import { parseContent } from '../utils/parser.js';
 
@@ -91,18 +92,24 @@ class ArborContent extends HTMLElement {
 
                 // CHECK FOR MODULE COMPLETION (Certificate Trigger)
                 // New Logic: Check if the Top-Level Module (Ancestor) is complete.
+                // We use the fresh modules status which recalculates completion based on the just-marked node
                 const modules = store.getModulesStatus();
+                
                 // Find which top-level module owns this node.
-                // ID hierarchy: root__module__chapter__lesson
+                // Robust ID check: Does the lesson ID start with "ModuleID__"?
                 const parentModule = modules.find(m => this.currentNode.id.startsWith(m.id + '__'));
 
-                if (parentModule && parentModule.isComplete) {
-                     store.closeContent();
-                     // Small delay to allow the close animation to start/finish before showing the modal
-                     setTimeout(() => {
-                         store.setModal({ type: 'certificate', moduleId: parentModule.id });
-                     }, 400);
-                     return;
+                if (parentModule) {
+                    console.log(`Module Check: ${parentModule.name} -> ${parentModule.completedLeaves}/${parentModule.totalLeaves}`);
+                    
+                    if (parentModule.isComplete) {
+                        store.closeContent();
+                        // Small delay to allow the close animation to start/finish before showing the modal
+                        setTimeout(() => {
+                            store.setModal({ type: 'certificate', moduleId: parentModule.id });
+                        }, 500);
+                        return;
+                    }
                 }
             }
             
