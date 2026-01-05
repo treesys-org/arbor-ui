@@ -15,8 +15,9 @@ const DEFAULT_SOURCES = [
     {
         id: 'default-arbor',
         name: 'Arbor Knowledge (Official)',
-        // FIX: The builder script outputs to a 'data' folder, so the URL must include /data/
-        url: 'https://treesys-org.github.io/arbor-knowledge/data/data.json',
+        // FIX: Use raw.githubusercontent.com to ensure reliable data fetching
+        // This bypasses GitHub Pages configuration issues.
+        url: 'https://raw.githubusercontent.com/treesys-org/arbor-knowledge/main/data/data.json',
         isDefault: true,
         isTrusted: true
     }
