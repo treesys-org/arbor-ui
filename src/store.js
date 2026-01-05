@@ -1,4 +1,5 @@
 
+
 import { UI_LABELS, AVAILABLE_LANGUAGES } from './i18n.js';
 import { googleDrive } from './services/google-drive.js';
 
@@ -186,7 +187,9 @@ class Store extends EventTarget {
         localStorage.setItem('arbor-active-source-id', source.id);
 
         try {
-            const res = await fetch(source.url);
+            // Cache busting for main data file
+            const url = `${source.url}?t=${Date.now()}`;
+            const res = await fetch(url);
             
             if (!res.ok) {
                 throw new Error(`Failed to fetch data from ${source.name} (Status ${res.status}).`);
@@ -386,21 +389,35 @@ class Store extends EventTarget {
             const baseDir = sourceUrl.substring(0, sourceUrl.lastIndexOf('/') + 1);
             
             // This works for both local and remote if structure is maintained (data.json + nodes/)
-            const url = `${baseDir}nodes/${node.apiPath}.json`;
+            // Add timestamp to avoid aggressive caching during content development
+            const url = `${baseDir}nodes/${node.apiPath}.json?t=${Date.now()}`;
             
             const res = await fetch(url);
             if (res.ok) {
-                const text = await res.text();
+                let text = await res.text();
+
+                // FIX: Handle BOM (Byte Order Mark) \uFEFF which breaks JSON.parse on some systems
+                if (text.charCodeAt(0) === 0xFEFF) {
+                    text = text.slice(1);
+                }
+                text = text.trim();
+
                 try {
                     node.children = JSON.parse(text);
                     node.hasUnloadedChildren = false;
                 } catch(e) {
                     console.error("JSON Error in:", url, text);
+                    
+                    // Specific check for HTML returned instead of JSON (Soft 404)
+                    if (text.startsWith('<')) {
+                         throw new Error(`Server returned HTML instead of JSON for ${node.apiPath}. Check if file exists.`);
+                    }
+
                     // This is the critical change to show YOU which file is broken
-                    throw new Error(`Corrupt Data in file: ${node.apiPath}.json`);
+                    throw new Error(`Corrupt Data in file: ${node.apiPath}.json. Error: ${e.message}`);
                 }
             } else {
-                const msg = `Failed to load children: Server responded with ${res.status}`;
+                const msg = `Failed to load children: ${node.apiPath}.json (Status ${res.status})`;
                 console.error(msg);
                 this.update({ lastErrorMessage: msg });
                 setTimeout(() => this.update({ lastErrorMessage: null }), 5000);

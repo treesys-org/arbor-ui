@@ -1,5 +1,6 @@
 
 
+
 import os
 import json
 import datetime
@@ -117,7 +118,8 @@ def get_or_create_persistent_id(folder_path):
     # Read existing meta.json
     if os.path.exists(meta_path):
         try:
-            with open(meta_path, 'r', encoding='utf-8') as f:
+            # use utf-8-sig to handle BOM if user edited meta.json in notepad
+            with open(meta_path, 'r', encoding='utf-8-sig') as f:
                 meta_data = json.load(f)
         except Exception as e:
             print(f"⚠️  Warning: Corrupt meta.json in {folder_path}: {e}")
@@ -228,7 +230,8 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
             }
             
             try:
-                with open(path, 'r', encoding='utf-8') as f:
+                # use utf-8-sig to handle BOM automatically if file was edited in Windows Notepad
+                with open(path, 'r', encoding='utf-8-sig') as f:
                     raw_content = f.read()
                 
                 # Parse content based on extension
