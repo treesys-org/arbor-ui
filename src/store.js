@@ -1,17 +1,19 @@
 
-
 import { UI_LABELS, AVAILABLE_LANGUAGES } from './i18n.js';
 import { googleDrive } from './services/google-drive.js';
 
 const OFFICIAL_DOMAINS = [
     'treesys-org.github.io',
-    'localhost'
+    'localhost',
+    '127.0.0.1'
 ];
 
+// REFACTOR: The philosophy is that Arbor is a browser for external repos.
+// Only the official cloud curriculum is loaded by default.
 const DEFAULT_SOURCES = [
     {
         id: 'default-arbor',
-        name: 'Arbor Official',
+        name: 'Arbor Knowledge (Official)',
         url: 'https://treesys-org.github.io/arbor-knowledge/data.json',
         isDefault: true,
         isTrusted: true
@@ -23,7 +25,7 @@ class Store extends EventTarget {
         super();
         this.state = {
             theme: localStorage.getItem('arbor-theme') || 'light',
-            lang: localStorage.getItem('arbor-lang') || 'ES',
+            lang: localStorage.getItem('arbor-lang') || 'EN',
             sources: [],
             activeSource: null,
             data: null, // Current Tree Root
@@ -109,24 +111,30 @@ class Store extends EventTarget {
         let sources = [];
         try { sources = JSON.parse(localStorage.getItem('arbor-sources')) || []; } catch(e) {}
         
-        if (sources.length === 0) sources = [...DEFAULT_SOURCES];
-
-        // FORCE UPDATE DEFAULT SOURCE
-        const defaultDef = DEFAULT_SOURCES.find(s => s.isDefault);
-        const storedDefaultIdx = sources.findIndex(s => s.id === defaultDef.id);
+        // Always merge defaults to ensure we have the official repo
+        // but preserve user-added sources
+        const mergedSources = [...DEFAULT_SOURCES];
         
-        if (storedDefaultIdx !== -1) {
-            sources[storedDefaultIdx] = { ...sources[storedDefaultIdx], ...defaultDef };
-        } else {
-            sources.unshift(defaultDef);
+        sources.forEach(s => {
+            // If user has a source that is NOT in defaults, add it
+            if (!DEFAULT_SOURCES.find(d => d.id === s.id)) {
+                mergedSources.push(s);
+            }
+        });
+
+        // Save back the clean list
+        localStorage.setItem('arbor-sources', JSON.stringify(mergedSources));
+        
+        // Determine active source
+        const savedActiveId = localStorage.getItem('arbor-active-source-id');
+        let activeSource = mergedSources.find(s => s.id === savedActiveId);
+        
+        // Fallback: Default Arbor Official
+        if (!activeSource) {
+            activeSource = mergedSources.find(s => s.id === 'default-arbor');
         }
-        
-        localStorage.setItem('arbor-sources', JSON.stringify(sources));
-        
-        const activeId = localStorage.getItem('arbor-active-source-id');
-        let activeSource = sources.find(s => s.id === activeId) || sources[0];
 
-        this.update({ sources, activeSource });
+        this.update({ sources: mergedSources, activeSource });
         this.loadData(activeSource);
     }
 
@@ -148,6 +156,7 @@ class Store extends EventTarget {
 
     removeSource(id) {
         const sourceToRemove = this.state.sources.find(s => s.id === id);
+        // Prevent removing official defaults
         if (sourceToRemove?.isDefault) return;
 
         const newSources = this.state.sources.filter(s => s.id !== id);
@@ -155,7 +164,9 @@ class Store extends EventTarget {
         localStorage.setItem('arbor-sources', JSON.stringify(newSources));
         
         if (this.state.activeSource.id === id) {
-            this.loadAndSmartMerge(newSources[0].id);
+            // Fallback to official if current was deleted
+            const fallback = newSources.find(s => s.id === 'default-arbor') || newSources[0];
+            this.loadAndSmartMerge(fallback.id);
         }
     }
 
@@ -173,7 +184,11 @@ class Store extends EventTarget {
 
         try {
             const res = await fetch(source.url);
-            if (!res.ok) throw new Error("Failed to fetch data.json");
+            
+            if (!res.ok) {
+                throw new Error(`Failed to fetch data from ${source.name} (Status ${res.status}).`);
+            }
+
             const json = await res.json();
             
             const searchUrl = source.url.replace('data.json', 'search-index.json');
@@ -365,7 +380,10 @@ class Store extends EventTarget {
             // Robust URL construction
             const sourceUrl = this.state.activeSource.url;
             // Get base dir: "https://site.com/repo/" from "https://site.com/repo/data.json"
+            // If local "./data/data.json", baseDir is "./data/"
             const baseDir = sourceUrl.substring(0, sourceUrl.lastIndexOf('/') + 1);
+            
+            // This works for both local and remote if structure is maintained (data.json + nodes/)
             const url = `${baseDir}nodes/${node.apiPath}.json`;
             
             const res = await fetch(url);
@@ -458,11 +476,6 @@ class Store extends EventTarget {
         if (!this.state.data || !this.state.data.children) return [];
         const modules = [];
         
-        // --- LOGIC CHANGE ---
-        // Instead of traversing everything, we ONLY look at the direct children
-        // of the Language Root. This defines a "Module" as a top-level course.
-        // Nested folders are just organization within that module.
-
         this.state.data.children.forEach(topLevelNode => {
             if (topLevelNode.type !== 'branch') return; // Ignore loose files at root
 
@@ -474,13 +487,7 @@ class Store extends EventTarget {
                  total = topLevelNode.totalLeaves;
             }
 
-            // 2. Count completed leaves by checking the Search Index or Recursive Walk
-            // Since we might not have all children loaded, we must rely on the completedNodes Set 
-            // matched against the ID namespace.
-            // Assumption: IDs are hierarchical (root__module__chapter...).
-            // We can iterate the completedNodes Set and count how many start with this module ID.
-            
-            // However, to be perfectly accurate with Total (if metadata missing), we fallback to count.
+            // 2. Count completed leaves if not available
             if (total === 0) {
                 const countLeaves = (node) => {
                     if (node.type === 'leaf') {
@@ -493,9 +500,7 @@ class Store extends EventTarget {
             }
 
             // Calculate Completed
-            // Efficient approach: Filter the completed Set for IDs starting with this module
             this.state.completedNodes.forEach(id => {
-                // Strict check: id starts with "moduleID" AND followed by "__" to prevent partial matches
                 if (id.startsWith(topLevelNode.id + '__')) {
                     completed++;
                 }

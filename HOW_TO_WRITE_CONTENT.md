@@ -1,104 +1,125 @@
 
-# How to Write Content for Arbor
+# 🌳 Arbor Knowledge Repository
 
-Arbor uses a simple and readable format called `.arbor` (similar to Markdown). This guide shows you how to structure your lessons using the **At-Rule (`@`) Syntax**.
+Welcome to the **Arbor Knowledge Source**. This repository contains the raw educational content that powers the Arbor visual learning interface.
 
-## 1. File Metadata
-Every file should start with metadata to define its appearance in the tree.
+Unlike traditional LMS platforms, Arbor is **serverless**. The content is compiled into static JSON files that the frontend consumes directly.
+
+---
+
+## 🚀 Quick Start Guide
+
+### 1. Prerequisites
+You need **Python 3** installed on your system to run the build script.
+
+### 2. Directory Structure
+All content lives in the `content/` folder. The compiler will generate the interactive API in the `data/` folder.
 
 ```text
-@title: Introduction to Physics
-@icon: ⚛️
-@description: Learn the fundamental forces of the universe.
+.
+├── builder_script.txt     # ⚙️ The Compiler (Python script)
+├── content/               # ✏️ YOUR CONTENT GOES HERE
+│   ├── EN/                # English Root
+│   │   ├── 01_Science/    # Branch (Folder)
+│   │   │   ├── meta.json  # Branch Metadata
+│   │   │   └── Intro.arbor # Leaf (Lesson)
+│   └── ES/                # Spanish Root
+└── data/                  # 📤 GENERATED OUTPUT (Do not edit manually)
+    ├── data.json          # Main API entry point
+    └── nodes/             # Lazy-loaded branches
+```
+
+### 3. How to Build
+After making changes to the `content/` folder, you must compile the graph.
+
+1.  Open your terminal in this folder.
+2.  Run the builder script:
+    ```bash
+    python builder_script.txt
+    ```
+3.  This will create or update the `data/` folder containing your compiled API.
+4.  **Testing:** To test your changes, you can upload this `data/` folder to a web server or GitHub pages, and then add the URL to `data.json` inside the Arbor App.
+
+---
+
+## 📝 Authoring Guide
+
+Arbor uses a specialized format called **`.arbor`** (or `.txt`). It is essentially Markdown with specific **Metadata Directives**.
+
+### A. The Header (Metadata)
+Every file **must** start with these tags to define how it appears on the tree.
+
+```text
+@title: Introduction to Biology
+@icon: 🧬
+@description: Learn the basics of life.
 @order: 1
 ```
 
-*   **@title**: The name shown on the tree node.
-*   **@icon**: An emoji to represent the node.
-*   **@description**: A short summary.
-*   **@order**: (Optional) Number to sort nodes in the list.
+| Directive | Description |
+| :--- | :--- |
+| `@title` | The label on the tree node. |
+| `@icon` | An emoji (single character) for the node. |
+| `@description` | Brief summary shown in search and previews. |
+| `@order` | (Optional) Number to sort nodes (1, 2, 3...). |
 
----
+### B. Formatting Text
+Write your lesson content using standard Markdown.
 
-## 2. Text and Formatting
-You can write normal text just like a document.
+*   `# Heading 1` (Main Title)
+*   `## Heading 2` (Subtitle)
+*   `**Bold**` for emphasis
+*   `*Italic*` for subtle emphasis
+*   `- List item` for bullet points
 
-*   **Bold**: Use `**text**` -> **text**
-*   **Italic**: Use `*text*` -> *text*
-*   **Code**: Use `` `code` `` -> `code`
-*   **Headers**: Use `#` for main titles and `##` for subtitles.
+### C. Rich Media
+Use the `@` syntax to embed media players.
 
+**Images:**
 ```text
-# The Laws of Motion
-Sir Isaac Newton described **three** laws.
+@image: https://upload.wikimedia.org/wikipedia/commons/example.jpg
 ```
 
----
-
-## 3. Adding Media
-Use the `@` syntax to embed media easily.
-
-### Images
-```text
-@image: https://example.com/diagram.png
-```
-
-### Videos
-You can paste YouTube links or direct video files.
+**Videos (YouTube):**
 ```text
 @video: https://www.youtube.com/watch?v=dQw4w9WgXcQ
 ```
 
-### Audio
+**Audio:**
 ```text
-@audio: https://example.com/podcast_episode.mp3
+@audio: https://example.com/podcast.mp3
 ```
+
+### D. Interactive Quizzes
+Insert a quiz anywhere in the text. This acts as a "Gate" that the user must pass.
+
+```text
+@quiz: What is the powerhouse of the cell?
+@option: Nucleus
+@correct: Mitochondria
+@option: Ribosome
+```
+*   `@quiz:` The question text.
+*   `@correct:` The right answer.
+*   `@option:` A wrong answer.
+
+### E. Folder Metadata
+To customize a Folder (Branch), place a `meta.json` file inside it.
+
+```json
+{
+  "name": "Advanced Physics",
+  "icon": "⚛️",
+  "description": "For 3rd year students.",
+  "order": "2"
+}
+```
+*If no `meta.json` is provided, the folder name will be used.*
 
 ---
 
-## 4. Creating Quizzes
-You can add interactive quizzes anywhere in the text.
+## ⚠️ Important Rules
 
-*   Start with `@quiz:` followed by the question.
-*   Use `@correct:` for the right answer.
-*   Use `@option:` for wrong answers.
-
-```text
-@quiz: What is the unit of force?
-@option: Joule
-@correct: Newton
-@option: Watt
-@option: Pascal
-```
-
----
-
-## Example of a Full File
-
-```text
-@title: Solar System
-@icon: 🪐
-@description: A tour of our celestial neighborhood.
-
-# The Sun
-The Sun is the star at the center of the Solar System. It is a nearly perfect sphere of hot plasma.
-
-@image: https://upload.wikimedia.org/wikipedia/commons/b/b4/The_Sun_by_the_Atmospheric_Imaging_Assembly_of_NASA%27s_Solar_Dynamics_Observatory_-_20100819.jpg
-
-## The Planets
-There are 8 planets.
-
-- Mercury
-- Venus
-- Earth
-- Mars
-
-@video: https://www.youtube.com/watch?v=libKVRa01L8
-
-@quiz: Which planet is closest to the Sun?
-@correct: Mercury
-@option: Venus
-@option: Earth
-
-Great job!
-```
+1.  **Unique Filenames:** Avoid special characters in filenames. Use `01_Intro.arbor`.
+2.  **Valid URLs:** Ensure all `@image` and `@video` links are HTTPS and publicly accessible.
+3.  **No HTML:** Do not write raw HTML. Use the provided syntax.

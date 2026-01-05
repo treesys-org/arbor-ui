@@ -391,7 +391,7 @@ class ArborModals extends HTMLElement {
 
                   <p class="text-xl text-slate-500 dark:text-slate-400 italic font-serif mb-6">${ui.certBody}</p>
 
-                  <h2 class="text-2xl md:text-4xl font-bold text-slate-900 dark:text-white mb-12 font-serif border-b-2 border-slate-300 dark:border-slate-700 pb-2 px-12 inline-block min-w-[300px]">
+                  <h2 class="text-2xl md:text-4xl font-bold text-slate-900 dark:text-white mb-12 font-serif border-b-2 border-slate-300 dark:border-slate-700 pb-2 px-6 md:px-12 inline-block min-w-[200px] w-full max-w-[500px] break-words">
                       ${module.name}
                   </h2>
 

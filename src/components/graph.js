@@ -31,6 +31,13 @@ class ArborGraph extends HTMLElement {
              this.renderOverlays();
         });
 
+        // Ensure fonts are loaded to calculate BBox correctly
+        if (document.fonts) {
+            document.fonts.ready.then(() => {
+                if(store.value.data) this.updateGraph();
+            });
+        }
+
         store.addEventListener('graph-update', () => this.updateGraph());
         store.addEventListener('state-change', (e) => {
              if(this.g) this.drawGround(); 
@@ -304,6 +311,7 @@ class ArborGraph extends HTMLElement {
 
         // Labels
         const labelGroup = nodeEnter.append("g")
+            .attr("class", "label-group")
             .attr("transform", d => `translate(0, ${d.data.type === 'leaf' ? 55 : 45})`);
         
         labelGroup.append("rect")
@@ -312,21 +320,13 @@ class ArborGraph extends HTMLElement {
             .attr("stroke", "#e2e8f0");
         
         labelGroup.append("text")
+            .attr("class", "label-text")
             .attr("text-anchor", "middle")
             .attr("dy", 15)
             .attr("fill", "#334155")
             .attr("font-size", "12px")
             .attr("font-weight", "800")
-            .style("pointer-events", "none")
-            .text(d => d.data.name)
-            .each(function() {
-                try {
-                    const bbox = this.getBBox();
-                    d3.select(this.parentNode).select("rect")
-                        .attr("x", -bbox.width/2 - 8)
-                        .attr("width", bbox.width + 16);
-                } catch(e){}
-            });
+            .style("pointer-events", "none");
 
         // Badges (+/-)
         const badge = nodeEnter.append("g")
@@ -353,7 +353,10 @@ class ArborGraph extends HTMLElement {
             .attr("from", "0 0 0").attr("to", "360 0 0").attr("dur", "1s").attr("repeatCount", "indefinite");
 
         // UPDATE
-        const nodeUpdate = nodeSelection.merge(nodeEnter).transition().duration(this.duration)
+        const nodeMerged = nodeSelection.merge(nodeEnter);
+        
+        // 1. Visual Transitions
+        const nodeUpdate = nodeMerged.transition().duration(this.duration)
             .attr("transform", d => `translate(${d.x},${d.y}) scale(1)`);
 
         nodeUpdate.select(".node-body")
@@ -386,6 +389,20 @@ class ArborGraph extends HTMLElement {
 
         nodeUpdate.select(".spinner")
             .style("display", d => d.data.status === 'loading' ? 'block' : 'none');
+
+        // 2. Immediate Label Updates (Fixes sizing issues)
+        // We select from the Merged selection (not transition) to run .each and getBBox immediately
+        nodeMerged.select(".label-group text")
+            .text(d => d.data.name)
+            .each(function() {
+                try {
+                    const bbox = this.getBBox();
+                    const w = Math.max(20, bbox.width + 16);
+                    d3.select(this.parentNode).select("rect")
+                        .attr("x", -w/2)
+                        .attr("width", w);
+                } catch(e){}
+            });
 
         // EXIT
         nodeSelection.exit().transition().duration(this.duration)
