@@ -1,6 +1,4 @@
 
-
-
 import os
 import json
 import datetime
@@ -27,26 +25,45 @@ DATA_ROOT_DIR = "./data"
 API_DIR = os.path.join(DATA_ROOT_DIR, "nodes")
 OUTPUT_FILE = os.path.join(DATA_ROOT_DIR, "data.json") 
 SEARCH_INDEX_FILE = os.path.join(DATA_ROOT_DIR, "search-index.json")
-ALLOWED_EXTENSIONS = {'.arbor', '.md', '.txt'}
+
+# Standardize on Markdown as the sole format for clarity.
+ALLOWED_EXTENSIONS = {'.md'}
 
 # --- UTILS ---
 
 def parse_frontmatter(content):
-    """Parses standard Jekyll/Hugo style frontmatter."""
+    """Parses standard Jekyll/Hugo style frontmatter and normalizes keys."""
     meta = {}
     clean_content = content
     match = re.match(r'^---\n(.*?)\n---\n(.*)', content, re.DOTALL)
     if match:
         frontmatter_str, clean_content = match.groups()
         clean_content = clean_content.strip()
+        
+        # Map localized keys to internal schema (Consistency with Arbor format)
+        key_map = {
+            'titulo': 'name', 'title': 'name',
+            'icono': 'icon', 'icon': 'icon',
+            'descripcion': 'description', 'description': 'description',
+            'orden': 'order', 'order': 'order',
+            'discusion': 'discussionUrl', 'discussion': 'discussionUrl'
+        }
+
         for line in frontmatter_str.split('\n'):
             if ':' in line:
                 key, val = line.split(':', 1)
-                meta[key.strip()] = val.strip().strip('"\'')
+                raw_key = key.strip().lower()
+                val = val.strip().strip('"\'')
+                
+                if raw_key in key_map:
+                    meta[key_map[raw_key]] = val
+                else:
+                    meta[raw_key] = val
+                    
     return meta, clean_content
 
 def parse_arbor_format(content):
-    """Parses the custom Arbor @tag syntax."""
+    """Parses the custom Arbor @tag syntax (used in .md files)."""
     meta = {}
     content_lines = []
     

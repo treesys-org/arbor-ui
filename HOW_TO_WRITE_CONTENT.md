@@ -22,7 +22,7 @@ All content lives in the `content/` folder. The compiler will generate the inter
 │   ├── EN/                # English Root
 │   │   ├── 01_Science/    # Branch (Folder)
 │   │   │   ├── meta.json  # Branch Metadata
-│   │   │   └── Intro.arbor # Leaf (Lesson)
+│   │   │   └── Intro.md   # Leaf (Lesson)
 │   └── ES/                # Spanish Root
 └── data/                  # 📤 GENERATED OUTPUT (Do not edit manually)
     ├── data.json          # Main API entry point
@@ -44,16 +44,18 @@ After making changes to the `content/` folder, you must compile the graph.
 
 ## 📝 Authoring Guide
 
-Arbor uses a specialized format called **`.arbor`** (or `.txt`). It is essentially Markdown with specific **Metadata Directives**.
+Arbor uses standard **Markdown** (`.md`) files. You can use standard Jekyll-style Frontmatter (YAML) or the simplified Arbor metadata tags.
 
 ### A. The Header (Metadata)
-Every file **must** start with these tags to define how it appears on the tree.
+
+You can define metadata using the `@` syntax at the top of your `.md` file:
 
 ```text
 @title: Introduction to Biology
 @icon: 🧬
 @description: Learn the basics of life.
 @order: 1
+@discussion: https://community.arbor.org/t/biology-intro/101
 ```
 
 | Directive | Description |
@@ -62,6 +64,19 @@ Every file **must** start with these tags to define how it appears on the tree.
 | `@icon` | An emoji (single character) for the node. |
 | `@description` | Brief summary shown in search and previews. |
 | `@order` | (Optional) Number to sort nodes (1, 2, 3...). |
+| `@discussion` | (Optional) URL to a forum thread for discussion. |
+
+Alternatively, standard YAML Frontmatter is also supported:
+
+```yaml
+---
+title: Introduction to Biology
+icon: 🧬
+description: Learn the basics of life.
+order: 1
+discussion: https://community.arbor.org/t/biology-intro/101
+---
+```
 
 ### B. Formatting Text
 Write your lesson content using standard Markdown.
@@ -103,7 +118,16 @@ Insert a quiz anywhere in the text. This acts as a "Gate" that the user must pas
 *   `@correct:` The right answer.
 *   `@option:` A wrong answer.
 
-### E. Folder Metadata
+### E. Structuring Content
+You can break your lesson into clear parts using the `@section` tag.
+
+```text
+@section: The Kreb's Cycle
+
+Here we discuss the details of the Kreb's cycle...
+```
+
+### F. Folder Metadata
 To customize a Folder (Branch), place a `meta.json` file inside it.
 
 ```json
@@ -120,6 +144,6 @@ To customize a Folder (Branch), place a `meta.json` file inside it.
 
 ## ⚠️ Important Rules
 
-1.  **Unique Filenames:** Avoid special characters in filenames. Use `01_Intro.arbor`.
+1.  **Unique Filenames:** Avoid special characters in filenames. Use `01_Intro.md`.
 2.  **Valid URLs:** Ensure all `@image` and `@video` links are HTTPS and publicly accessible.
 3.  **No HTML:** Do not write raw HTML. Use the provided syntax.
