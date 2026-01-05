@@ -86,6 +86,13 @@ class ArborGraph extends HTMLElement {
             </div>`;
         }
 
+        if (state.lastActionMessage) {
+            html += `
+            <div class="absolute top-20 left-1/2 -translate-x-1/2 z-[60] bg-green-500 text-white px-8 py-3 rounded-full shadow-2xl animate-in fade-in zoom-in font-bold pointer-events-none">
+                ${state.lastActionMessage}
+            </div>`;
+        }
+
         if (state.loading) {
             html += `
             <div class="absolute inset-0 flex flex-col items-center justify-center z-10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm pointer-events-auto">
@@ -163,7 +170,6 @@ class ArborGraph extends HTMLElement {
             .scaleExtent([0.1, 4])
             .on("zoom", (e) => {
                 this.g.attr("transform", e.transform);
-                // Parallax could go here, but kept simple for stability
             });
         
         this.svg.call(this.zoom).on("dblclick.zoom", null);
@@ -180,12 +186,8 @@ class ArborGraph extends HTMLElement {
 
     updateZoomExtent() {
         if (!this.zoom) return;
-        
-        // Moderate bounds - enough to pan but not get lost
         const horizontalPadding = this.width * 2;
         const topPadding = this.height * 10;
-        
-        // Prevent panning below the ground (the +150 allows just a little bounce)
         const bottomPadding = this.height + 150;
 
         this.zoom.translateExtent([
@@ -202,11 +204,10 @@ class ArborGraph extends HTMLElement {
 
         const cx = this.width / 2;
         const groundY = this.height;
-        // Finite width: wider than screen but not infinite
         const groundWidth = Math.max(this.width * 1.5, 3000); 
         const groundDepth = 4000;
 
-        // Back Hill (Parallax-ish background layer)
+        // Back Hill
         this.groundGroup.append("path")
             .attr("d", `M${cx - groundWidth},${groundY} 
                         C${cx - 500},${groundY - 180} ${cx + 500},${groundY - 60} ${cx + groundWidth},${groundY} 
@@ -215,7 +216,7 @@ class ArborGraph extends HTMLElement {
             .attr("fill", backColor)
             .style("opacity", 0.7);
 
-        // Front Hill (Main Ground)
+        // Front Hill
         this.groundGroup.append("path")
             .attr("d", `M${cx - groundWidth},${groundY} 
                         Q${cx},${groundY - 120} ${cx + groundWidth},${groundY} 
@@ -238,7 +239,7 @@ class ArborGraph extends HTMLElement {
         const treeLayout = d3.tree().size([dynamicWidth, 1]);
         treeLayout(root);
 
-        // 3. Coordinate Transformation (Invert Y for growing Up)
+        // 3. Coordinate Transformation
         const levelHeight = 180;
         root.descendants().forEach(d => {
             d.y = (this.height - 150) - (d.depth * levelHeight);
@@ -258,19 +259,15 @@ class ArborGraph extends HTMLElement {
             return { x: this.width / 2, y: this.height };
         };
 
-        // Recursive Logic for Destination (Fix for shrinking bug)
         const findDest = (d) => {
             let ancestor = d.parent;
             while (ancestor) {
-                // Check if this ancestor exists in the NEW layout (nodes array)
                 const ancestorInNewLayout = nodes.find(n => n.data.id === ancestor.data.id);
                 if (ancestorInNewLayout) {
                     return { x: ancestorInNewLayout.x, y: ancestorInNewLayout.y };
                 }
-                // If not found (because it's also collapsing), go up one level
                 ancestor = ancestor.parent;
             }
-            // If we run out of ancestors (collapsing root), go to start
             return { x: this.width / 2, y: this.height };
         };
 
@@ -287,15 +284,13 @@ class ArborGraph extends HTMLElement {
             })
             .style("cursor", "pointer")
             .on("click", (e, d) => this.handleNodeClick(e, d))
-            .on("mousedown", (e) => e.stopPropagation()); // Prevents zoom from panning on node click/drag start.
+            .on("mousedown", (e) => e.stopPropagation());
 
-        // Click target for accessibility (e.g. Parkinson's)
         nodeEnter.append("circle")
             .attr("r", 60)
-            .attr("cy", d => d.data.type === 'leaf' ? 30 : 0) // Center on leaf shape
+            .attr("cy", d => d.data.type === 'leaf' || d.data.type === 'exam' ? 30 : 0)
             .attr("fill", "transparent");
 
-        // Visuals
         nodeEnter.append("path")
             .attr("class", "node-body")
             .attr("stroke", "#fff")
@@ -312,7 +307,7 @@ class ArborGraph extends HTMLElement {
         // Labels
         const labelGroup = nodeEnter.append("g")
             .attr("class", "label-group")
-            .attr("transform", d => `translate(0, ${d.data.type === 'leaf' ? 55 : 45})`);
+            .attr("transform", d => `translate(0, ${d.data.type === 'leaf' || d.data.type === 'exam' ? 55 : 45})`);
         
         labelGroup.append("rect")
             .attr("rx", 10).attr("ry", 10).attr("height", 22)
@@ -355,31 +350,34 @@ class ArborGraph extends HTMLElement {
         // UPDATE
         const nodeMerged = nodeSelection.merge(nodeEnter);
         
-        // 1. Visual Transitions
         const nodeUpdate = nodeMerged.transition().duration(this.duration)
             .attr("transform", d => `translate(${d.x},${d.y}) scale(1)`);
 
         nodeUpdate.select(".node-body")
             .attr("fill", d => {
                 if (d.data.type === 'root') return '#8D6E63';
-                if (d.data.type === 'leaf') return store.isCompleted(d.data.id) ? '#22c55e' : '#a855f7'; 
-                return '#F59E0B'; 
+                if (store.isCompleted(d.data.id)) return '#22c55e'; // Completed is always green
+                if (d.data.type === 'exam') return '#ef4444'; // Exam is red
+                if (d.data.type === 'leaf') return '#a855f7'; // Lesson is purple
+                return '#F59E0B'; // Folder is orange
             })
             .attr("d", d => {
                 const r = d.data.type === 'root' ? 45 : 32;
                 if (d.data.type === 'leaf') return "M0,0 C-25,10 -35,35 0,65 C35,35 25,10 0,0";
+                // Diamond shape for Exam
+                if (d.data.type === 'exam') return `M0,${-r*1.2} L${r*1.2},0 L0,${r*1.2} L${-r*1.2},0 Z`;
                 return `M${-r},0 a${r},${r} 0 1,0 ${r*2},0 a${r},${r} 0 1,0 ${-r*2},0`;
             })
-            .style("filter", d => d.data.type === 'leaf' && store.isCompleted(d.data.id) ? "url(#leaf-glow)" : "url(#drop-shadow)");
+            .style("filter", d => (d.data.type === 'leaf' || d.data.type === 'exam') && store.isCompleted(d.data.id) ? "url(#leaf-glow)" : "url(#drop-shadow)");
 
         nodeUpdate.select(".node-icon")
-            .text(d => d.data.type === 'leaf' && store.isCompleted(d.data.id) ? '✓' : (d.data.icon || '🌱'))
-            .attr("fill", d => d.data.type === 'leaf' && store.isCompleted(d.data.id) ? '#fff' : '#1e293b')
-            .attr("dy", d => d.data.type === 'leaf' ? "38px" : "0.35em")
-            .attr("font-weight", d => d.data.type === 'leaf' && store.isCompleted(d.data.id) ? "900" : "normal");
+            .text(d => (d.data.type === 'leaf' || d.data.type === 'exam') && store.isCompleted(d.data.id) ? '✓' : (d.data.icon || (d.data.type === 'exam' ? '⚔️' : '🌱')))
+            .attr("fill", d => (d.data.type === 'leaf' || d.data.type === 'exam') && store.isCompleted(d.data.id) ? '#fff' : '#1e293b')
+            .attr("dy", d => d.data.type === 'leaf' || d.data.type === 'exam' ? (d.data.type === 'exam' ? "0.35em" : "38px") : "0.35em")
+            .attr("font-weight", d => store.isCompleted(d.data.id) ? "900" : "normal");
         
         nodeUpdate.select(".badge-group")
-            .style("display", d => d.data.type === 'leaf' ? 'none' : 'block');
+            .style("display", d => (d.data.type === 'leaf' || d.data.type === 'exam') ? 'none' : 'block');
         
         nodeUpdate.select(".badge-group circle")
             .attr("fill", d => d.data.expanded ? "#ef4444" : "#22c55e");
@@ -390,8 +388,7 @@ class ArborGraph extends HTMLElement {
         nodeUpdate.select(".spinner")
             .style("display", d => d.data.status === 'loading' ? 'block' : 'none');
 
-        // 2. Immediate Label Updates (Fixes sizing issues)
-        // We select from the Merged selection (not transition) to run .each and getBBox immediately
+        // Label Sizing
         nodeMerged.select(".label-group text")
             .text(d => d.data.name)
             .each(function() {
@@ -407,7 +404,7 @@ class ArborGraph extends HTMLElement {
         // EXIT
         nodeSelection.exit().transition().duration(this.duration)
             .attr("transform", d => {
-                 const dest = findDest(d); // Uses the recursive ancestor logic
+                 const dest = findDest(d); 
                  return `translate(${dest.x},${dest.y}) scale(0)`;
             })
             .remove();
@@ -422,7 +419,7 @@ class ArborGraph extends HTMLElement {
             .attr("stroke", "#8D6E63")
             .attr("stroke-width", d => Math.max(2, 12 - d.target.depth * 2))
             .attr("d", d => {
-                const o = findOrigin(d.target); // Start link from parent's old pos
+                const o = findOrigin(d.target);
                 return this.diagonal({source: o, target: o});
             });
 
@@ -431,13 +428,13 @@ class ArborGraph extends HTMLElement {
 
         linkSelection.exit().transition().duration(this.duration)
             .attr("d", d => {
-                const dest = findDest(d.target); // Shrink link to visible ancestor
+                const dest = findDest(d.target); 
                 const o = {x: dest.x, y: dest.y};
                 return this.diagonal({source: o, target: o});
             })
             .remove();
 
-        // --- Cache Positions for Next Render ---
+        // --- Cache Positions ---
         this.nodePositions.clear();
         nodes.forEach(d => {
             this.nodePositions.set(d.data.id, {x: d.x, y: d.y});
@@ -455,10 +452,8 @@ class ArborGraph extends HTMLElement {
         e.stopPropagation();
         if (d.data.status === 'loading') return;
         
-        // 1. Toggle State
         store.toggleNode(d.data.id);
         
-        // 2. Adjust Camera Verticality (Auto-Pan)
         if (!d.data.expanded) { 
             this.adjustVerticalView(d);
         }
@@ -467,15 +462,11 @@ class ArborGraph extends HTMLElement {
     adjustVerticalView(d) {
         if (!this.svg || !this.zoom) return;
         
-        // Logic: Try to keep the clicked node in the lower 3/4 of the screen
-        // to leave room for the tree growing upwards.
-        
         const transform = d3.zoomTransform(this.svg.node());
         const currentScreenY = transform.apply([d.x, d.y])[1];
         const targetScreenY = this.height * 0.75; 
         const dy = targetScreenY - currentScreenY;
         
-        // Only move if significantly far off
         if (Math.abs(dy) > 50) {
             this.svg.transition().duration(1000)
                 .call(this.zoom.transform, transform.translate(0, dy / transform.k));
@@ -483,7 +474,6 @@ class ArborGraph extends HTMLElement {
     }
 
     focusNode(nodeId) {
-        // Search in rendered nodes
         let target = null;
         this.nodeGroup.selectAll(".node").each(d => {
             if(d.data.id === nodeId) target = d;

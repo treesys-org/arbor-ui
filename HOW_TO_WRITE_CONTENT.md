@@ -1,4 +1,5 @@
 
+
 # 🌳 Arbor Knowledge Repository
 
 Welcome to the **Arbor Knowledge Source**. This repository contains the raw educational content that powers the Arbor visual learning interface.
@@ -139,6 +140,22 @@ To customize a Folder (Branch), place a `meta.json` file inside it.
 }
 ```
 *If no `meta.json` is provided, the folder name will be used.*
+
+### G. Special Node Types (Exams)
+You can create a "Challenge" or "Exam" node that allows students to **test out** of a module. If a user passes the quiz in this node, **all other nodes in the same folder will be marked as complete automatically**.
+
+To create an exam node, simply add the **`@exam`** tag to the header (no value needed):
+
+```text
+@title: Biology Final Exam
+@exam
+@icon: ⚔️
+@description: Prove your skills to skip this module.
+
+@quiz: Question 1...
+```
+
+This node will appear as a red diamond in the graph, indicating it is a special challenge.
 
 ---
 

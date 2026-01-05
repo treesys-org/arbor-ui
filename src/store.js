@@ -289,7 +289,7 @@ class Store extends EventTarget {
         
         const leaves = [];
         const traverse = (node) => {
-            if (node.type === 'leaf') leaves.push(node);
+            if (node.type === 'leaf' || node.type === 'exam') leaves.push(node);
             if (node.children) node.children.forEach(traverse);
         };
         traverse(this.state.data);
@@ -344,7 +344,7 @@ class Store extends EventTarget {
             }
 
             // 3. Toggle Target
-            if (node.type === 'leaf') {
+            if (node.type === 'leaf' || node.type === 'exam') {
                 this.update({ previewNode: node, selectedNode: null });
             } else {
                 if (!node.expanded) {
@@ -486,6 +486,38 @@ class Store extends EventTarget {
              this.state.completedNodes.delete(nodeId);
         }
         
+        this.persistProgress();
+    }
+
+    // EXAM LOGIC: recursively mark a branch as complete
+    markBranchComplete(parentId) {
+        if (!parentId) return;
+        
+        const parentNode = this.findNode(parentId);
+        if (!parentNode) return;
+
+        const nodesToMark = [];
+        
+        const collectLeaves = (node) => {
+            if (node.type === 'leaf' || node.type === 'exam') {
+                nodesToMark.push(node.id);
+            }
+            if (node.children) {
+                node.children.forEach(collectLeaves);
+            }
+        };
+
+        collectLeaves(parentNode);
+        
+        // Batch update
+        nodesToMark.forEach(id => this.state.completedNodes.add(id));
+        
+        this.persistProgress();
+        this.update({ lastActionMessage: "Branch Mastered! 🎓" });
+        setTimeout(() => this.update({ lastActionMessage: null }), 3000);
+    }
+
+    persistProgress() {
         localStorage.setItem('arbor-progress', JSON.stringify([...this.state.completedNodes]));
         this.update({}); 
         this.dispatchEvent(new CustomEvent('graph-update'));
@@ -516,7 +548,7 @@ class Store extends EventTarget {
             // 2. Count completed leaves if not available
             if (total === 0) {
                 const countLeaves = (node) => {
-                    if (node.type === 'leaf') {
+                    if (node.type === 'leaf' || node.type === 'exam') {
                         total++;
                     } else if (node.children) {
                         node.children.forEach(countLeaves);

@@ -1,6 +1,10 @@
 
 
 
+
+
+
+
 import os
 import json
 import datetime
@@ -48,7 +52,8 @@ def parse_frontmatter(content):
             'icono': 'icon', 'icon': 'icon',
             'descripcion': 'description', 'description': 'description',
             'orden': 'order', 'order': 'order',
-            'discusion': 'discussionUrl', 'discussion': 'discussionUrl'
+            'discusion': 'discussionUrl', 'discussion': 'discussionUrl',
+            'tipo': 'type', 'type': 'type'
         }
 
         for line in frontmatter_str.split('\n'):
@@ -76,31 +81,43 @@ def parse_arbor_format(content):
         stripped = line.strip()
         
         # Check for Metadata directives at start of file
-        if parsing_metadata and stripped.startswith('@') and ':' in stripped:
-            key_part, val_part = stripped.split(':', 1)
-            raw_key = key_part[1:].strip().lower()
-            val = val_part.strip()
+        if parsing_metadata and stripped.startswith('@'):
             
-            # Map localized keys to internal schema
-            key_map = {
-                'titulo': 'name', 'title': 'name',
-                'icono': 'icon', 'icon': 'icon',
-                'descripcion': 'description', 'description': 'description',
-                'orden': 'order', 'order': 'order',
-                'discusion': 'discussionUrl', 'discussion': 'discussionUrl'
-            }
+            # SPECIAL CASE: Standalone @exam tag
+            if stripped.lower() == '@exam':
+                meta['type'] = 'exam'
+                continue
 
-            # These tags belong to the body content, not metadata
-            content_tags = ['image', 'img', 'video', 'audio', 'quiz', 'section', 'h1', 'h2', 'option', 'correct']
-            
-            if raw_key in content_tags:
+            if ':' in stripped:
+                key_part, val_part = stripped.split(':', 1)
+                raw_key = key_part[1:].strip().lower()
+                val = val_part.strip()
+                
+                # Map localized keys to internal schema
+                key_map = {
+                    'titulo': 'name', 'title': 'name',
+                    'icono': 'icon', 'icon': 'icon',
+                    'descripcion': 'description', 'description': 'description',
+                    'orden': 'order', 'order': 'order',
+                    'discusion': 'discussionUrl', 'discussion': 'discussionUrl',
+                    'tipo': 'type', 'type': 'type'
+                }
+
+                # These tags belong to the body content, not metadata
+                content_tags = ['image', 'img', 'video', 'audio', 'quiz', 'section', 'h1', 'h2', 'option', 'correct']
+                
+                if raw_key in content_tags:
+                     parsing_metadata = False
+                     content_lines.append(line)
+                elif raw_key in key_map:
+                     meta[key_map[raw_key]] = val
+                else:
+                     # Unknown metadata tag, treat as metadata anyway
+                     meta[raw_key] = val
+            else:
+                 # Line starts with @ but no colon and not @exam, likely content or broken tag
                  parsing_metadata = False
                  content_lines.append(line)
-            elif raw_key in key_map:
-                 meta[key_map[raw_key]] = val
-            else:
-                 # Unknown metadata tag, treat as metadata anyway
-                 meta[raw_key] = val
         else:
             parsing_metadata = False
             content_lines.append(line)
@@ -195,7 +212,8 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
                 if child_node:
                     children_for_api_file.append(child_node)
                     # Count leaves for progress tracking
-                    if child_node.get('type') == 'leaf':
+                    # Note: We now treat 'exam' nodes as leaves for counting purposes too
+                    if child_node.get('type') in ['leaf', 'exam']:
                         node["totalLeaves"] += 1
                     else:
                         node["totalLeaves"] += child_node.get('totalLeaves', 0)
