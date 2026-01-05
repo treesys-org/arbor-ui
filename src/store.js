@@ -390,8 +390,15 @@ class Store extends EventTarget {
             
             const res = await fetch(url);
             if (res.ok) {
-                node.children = await res.json();
-                node.hasUnloadedChildren = false;
+                const text = await res.text();
+                try {
+                    node.children = JSON.parse(text);
+                    node.hasUnloadedChildren = false;
+                } catch(e) {
+                    console.error("JSON Error in:", url, text);
+                    // This is the critical change to show YOU which file is broken
+                    throw new Error(`Corrupt Data in file: ${node.apiPath}.json`);
+                }
             } else {
                 const msg = `Failed to load children: Server responded with ${res.status}`;
                 console.error(msg);
@@ -400,8 +407,8 @@ class Store extends EventTarget {
             }
         } catch(e) { 
             console.error(e); 
-            this.update({ lastErrorMessage: "Network error loading node: " + e.message });
-            setTimeout(() => this.update({ lastErrorMessage: null }), 5000);
+            this.update({ lastErrorMessage: e.message }); // Show the specific file error
+            setTimeout(() => this.update({ lastErrorMessage: null }), 10000); // 10s to read
         }
         finally {
             node.status = 'available';

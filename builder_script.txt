@@ -1,4 +1,5 @@
 
+
 import os
 import json
 import datetime
@@ -207,7 +208,8 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
             if api_filepath:
                 os.makedirs(os.path.dirname(api_filepath), exist_ok=True)
                 with open(api_filepath, 'w', encoding='utf-8') as f:
-                    json.dump(children_for_api_file, f, ensure_ascii=False)
+                    # FIX: indent=2 added here to prevent single-line JSON errors
+                    json.dump(children_for_api_file, f, indent=2, ensure_ascii=False)
 
     # --- FILE (LEAF) ---
     else: 
