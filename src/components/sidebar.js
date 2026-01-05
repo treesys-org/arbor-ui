@@ -1,5 +1,7 @@
 
 
+
+
 import { store } from '../store.js';
 import { googleDrive } from '../services/google-drive.js';
 
@@ -59,6 +61,7 @@ class ArborSidebar extends HTMLElement {
                     <button class="js-btn-theme menu-item"><span>${store.value.theme === 'light' ? '🌙' : '☀️'}</span> <span>Toggle Theme</span></button>
                     <button class="js-btn-help menu-item"><span><svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" /></svg></span> <span>${ui.navHelp}</span></button>
                     <div class="h-px bg-slate-100 dark:bg-slate-700 my-1 mx-2"></div>
+                    <button class="js-btn-contrib menu-item"><span>🐙</span> <span>${ui.navContributor}</span></button>
                     <button class="js-btn-about menu-item"><span><svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 15" /></svg></span> <span>${ui.navAbout}</span></button>
                     <button class="js-btn-impressum menu-item"><span>©</span> <span>${ui.impressumTitle}</span></button>
                 </nav>
@@ -149,6 +152,7 @@ class ArborSidebar extends HTMLElement {
 
             <!-- BOTTOM SECTION -->
             <div class="flex flex-col gap-3 items-center w-full">
+                <div class="relative group"><button class="js-btn-contrib w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white">🐙</button><span class="tooltip">${ui.navContributor}</span></div>
                 <div class="relative group"><button class="js-btn-about w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 15" /></svg></button><span class="tooltip">${ui.navAbout}</span></div>
                 <div class="w-8 h-px bg-slate-200 dark:bg-slate-700 my-1"></div>
                 
@@ -201,6 +205,7 @@ class ArborSidebar extends HTMLElement {
         this.querySelectorAll('.js-btn-lang').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('language')));
         this.querySelectorAll('.js-btn-help').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('tutorial')));
         this.querySelectorAll('.js-btn-impressum').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('impressum')));
+        this.querySelectorAll('.js-btn-contrib').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('contributor')));
         
         // Home Button (Mobile)
         const homeBtn = this.querySelector('.js-btn-home');

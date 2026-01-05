@@ -1,7 +1,10 @@
 
 
+
+
 import { UI_LABELS, AVAILABLE_LANGUAGES } from './i18n.js';
 import { googleDrive } from './services/google-drive.js';
+import { github } from './services/github.js';
 
 const OFFICIAL_DOMAINS = [
     'treesys-org.github.io',
@@ -43,12 +46,22 @@ class Store extends EventTarget {
             lastErrorMessage: null, // New error state for toasts
             viewMode: 'explore', 
             modal: null, 
-            lastActionMessage: null
+            lastActionMessage: null,
+            githubUser: null // GitHub User info
         };
         
         this.saveTimer = null;
         this.loadProgress();
         this.loadSources();
+        
+        // Init GitHub State
+        const ghToken = localStorage.getItem('arbor-gh-token');
+        if (ghToken) {
+            github.initialize(ghToken).then(user => {
+                 if (user) this.update({ githubUser: user });
+            });
+        }
+
         document.documentElement.classList.toggle('dark', this.state.theme === 'dark');
 
         // Sync Listener
@@ -451,6 +464,12 @@ class Store extends EventTarget {
     }
     closePreview() { this.update({ previewNode: null }); }
     closeContent() { this.update({ selectedNode: null }); }
+    
+    // --- Editor Actions ---
+    openEditor(node) {
+        if (!node) return;
+        this.update({ modal: { type: 'editor', node: node } });
+    }
 
     search(query) {
         if (!query) return [];

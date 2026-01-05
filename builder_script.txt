@@ -5,6 +5,8 @@
 
 
 
+
+
 import os
 import json
 import datetime
@@ -171,6 +173,10 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
     if relative_slug_path:
         current_slug_path = f"{relative_slug_path}/{name_slug}"
 
+    # Calculate source path relative to repo root (for GitHub editing)
+    # path is like "./content/EN/..." -> we want "content/EN/..."
+    clean_source_path = os.path.relpath(path, ".").replace("\\", "/")
+
     # --- FOLDER (BRANCH) ---
     if os.path.isdir(path):
         meta, node_id = get_or_create_persistent_id(path)
@@ -244,7 +250,8 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
                 "type": "leaf",
                 "namespace": NAMESPACE,
                 "name": os.path.splitext(name)[0].replace('_', ' '),
-                "icon": "📄"
+                "icon": "📄",
+                "sourcePath": clean_source_path # <--- ADDED: Path for GitHub editing
             }
             
             try:

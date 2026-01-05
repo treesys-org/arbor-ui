@@ -1,0 +1,140 @@
+
+================================================================================
+🪖 OPERACIÓN METAMORFOSIS: ARBOR STUDIO (ESPECIFICACIÓN TÉCNICA MAESTRA)
+================================================================================
+
+VISIÓN:
+Convertir Arbor UI en un CMS Descentralizado ("Browser-to-Git").
+- Frontend: Edita y crea Pull Requests.
+- Backend: GitHub API (Maneja usuarios, permisos y versiones).
+- Datos: Arbor Knowledge (Repositorio de contenido estático).
+
+ESTRATEGIA: DIVIDE Y VENCERÁS.
+
+---
+
+FASE 1: PREPARACIÓN DEL CONTENIDO (REPO: ARBOR KNOWLEDGE)
+Modificaciones en el repositorio donde viven los cursos.
+
+1.  **ACTUALIZACIÓN DEL COMPILADOR (`builder_script.txt`)**
+    *   **Objetivo Crítico:** El Frontend necesita saber qué archivo `.md` corresponde a cada nodo del árbol para poder editarlo.
+    *   **Acción:** Modificar el script Python para agregar una nueva propiedad `sourcePath` a cada nodo en el JSON de salida.
+    *   **Ejemplo:**
+        ```json
+        {
+          "id": "intro-biologia",
+          "name": "Introducción",
+          "sourcePath": "content/ES/01_Ciencias/01_Intro.md" // <--- NUEVO CAMPO NECESARIO
+        }
+        ```
+
+2.  **GOBERNANZA (`.github/CODEOWNERS`)**
+    *   **Acción:** Crear este archivo en la raíz del repo de contenido.
+    *   **Lógica:** Define quién aprueba los cambios en cada carpeta.
+    *   **Contenido:**
+        ```text
+        # Sintaxis: [Patrón de carpeta] [Usuario de GitHub]
+        /content/ES/   @profesor-spaniard
+        /content/EN/   @teacher-smith
+        ```
+
+---
+
+FASE 2: INFRAESTRUCTURA FRONTEND (REPO: ARBOR UI)
+Nuevos servicios y configuración en la App Angular/Vanilla.
+
+1.  **DEPENDENCIA OCTOKIT**
+    *   Importar `Octokit` (SDK de GitHub) en `index.html` vía módulo ES para interactuar con la API sin backend.
+
+2.  **SERVICIO DE GITHUB (`src/services/github.js`)**
+    Este servicio debe manejar toda la lógica "sucia" de Git.
+    *   **Configuración:** Debe detectar automáticamente el `owner` y `repo` basándose en la URL del `data.json` cargado, o permitir configuración manual.
+    *   **Auth:** Implementar manejo de **Personal Access Tokens (PAT)**. (Es la forma más simple para un MVP serverless; el usuario pega su token una vez y se guarda en SessionStorage encriptado o memoria).
+    *   **Métodos Clave:**
+        *   `initialize(token, repoUrl)`: Configura la instancia Octokit.
+        *   `getFile(path)`: Obtiene el contenido RAW y el SHA (hash) del archivo (necesario para updates).
+        *   `createPr(filePath, newContent, userMsg)`:
+            1.  Obtener referencia SHA de `main`.
+            2.  Crear rama `feat/edit-{timestamp}`.
+            3.  Hacer commit del archivo en la nueva rama.
+            4.  Crear Pull Request comparando con `main`.
+
+---
+
+FASE 3: INTERFAZ DE EDICIÓN (UI/UX)
+
+1.  **MODAL DE EDICIÓN (`src/components/editor-modal.js`)**
+    Un componente complejo que reemplaza la vista de lectura.
+    *   **Split View:**
+        *   Izquierda: Editor de código (TextArea simple o librería ligera como CodeJar). Debe resaltar sintaxis Markdown básica.
+        *   Derecha: Vista previa en tiempo real (usando el parser existente de Arbor).
+    *   **Toolbar:** Botones rápidos para insertar snippets de Arbor:
+        *   `[IMG]` -> Inserta `@image: url`
+        *   `[QUIZ]` -> Inserta plantilla de Quiz.
+    *   **Footer:**
+        *   Input: "Descripción del cambio" (ej: "Corregí fecha en párrafo 2").
+        *   Botón: "PROPONER CAMBIOS" (Dispara el flujo de PR).
+
+2.  **INTEGRACIÓN EN `content.js`**
+    *   Añadir botón "✏️ EDITAR" junto al título de la lección.
+    *   **Lógica de visibilidad:** El botón solo aparece si el usuario ha configurado su Token de GitHub en los ajustes.
+
+3.  **PANEL DE AJUSTES (Settings)**
+    *   Añadir sección "Modo Contribuidor".
+    *   Input para pegar el GitHub Personal Access Token.
+    *   Selector de Repositorio (si hay múltiples fuentes).
+
+---
+
+FASE 4: FLUJO DE TRABAJO (LA PELÍCULA)
+
+1.  **Configuración (Solo una vez):**
+    *   El Profesor entra a Arbor. Va a Ajustes.
+    *   Pega su Token de GitHub (instrucciones en pantalla de cómo obtenerlo).
+    *   Arbor valida el token y muestra "Conectado como @usuario".
+
+2.  **Detección:**
+    *   El Profesor navega a "Historia Romana".
+    *   Hace clic en "✏️ EDITAR".
+    *   Arbor UI lee el campo `sourcePath` del nodo actual (`content/historia/roma.md`).
+    *   Arbor UI llama a GitHub API para descargar el texto crudo de ese archivo.
+
+3.  **Edición:**
+    *   Se abre el Modal. El profesor cambia el texto.
+    *   Hace clic en "Proponer Cambios".
+
+4.  **Disparo:**
+    *   Arbor UI bloquea la pantalla: "Enviando solicitud a la central...".
+    *   Crea Rama -> Sube Archivo -> Crea Pull Request.
+    *   Muestra mensaje: "¡Éxito! Solicitud de cambio #45 creada. El administrador la revisará".
+
+---
+
+FASE 5: GESTIÓN DE MEDIA (IMÁGENES)
+*Problema:* Los profesores no saben subir fotos a servidores FTP.
+*Solución:*
+1.  En el Editor, permitir "Pegar imagen" (Ctrl+V) o Drag & Drop.
+2.  El script convierte la imagen a Base64.
+3.  Usa la API de GitHub para subir el archivo binario a una carpeta `assets/uploads/` en la *misma rama* que se está creando.
+4.  Inserta automáticamente la URL cruda de GitHub en el markdown: `@image: https://raw.githubusercontent.../assets/uploads/foto1.jpg`.
+
+---
+
+FASE 6: AUTOMATIZACIÓN (EL CEREBRO INVISIBLE)
+*Objetivo:* Que el `data.json` se actualice solo cuando se aprueba un cambio, eliminando la necesidad de correr el script manualmente.
+
+1.  **GITHUB ACTION (`.github/workflows/build.yml`)**
+    *   Crear este archivo en el repositorio `Arbor Knowledge`.
+    *   **Trigger:** `on: push: branches: [ "main" ]`.
+    *   **Pasos del Robot:**
+        1.  Checkout del código.
+        2.  Instalar Python 3.
+        3.  Ejecutar `python builder_script.txt`.
+        4.  Detectar si `data/data.json` ha cambiado.
+        5.  Si cambió, hacer Commit y Push automático a `main` con el usuario "Arbor Bot".
+
+    *Resultado:* 30 segundos después de que el Decano apruebe el cambio de Mariela, el mapa se regenera solo y todos los alumnos del mundo ven la actualización.
+
+================================================================================
+FIN DEL PLAN DE BATALLA
+================================================================================

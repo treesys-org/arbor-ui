@@ -1,6 +1,8 @@
 
 
 
+
+
 export const UI_LABELS = {
     EN: {
       appTitle: 'ARBOR',
@@ -49,6 +51,7 @@ export const UI_LABELS = {
       navCertificates: 'Certificates',
       navSources: 'Trees',
       navHelp: 'Tutorial',
+      navContributor: 'Contributor',
 
       lessonComplete: 'MARK COMPLETE',
       lessonFinished: 'COMPLETED ✓',
@@ -64,6 +67,8 @@ export const UI_LABELS = {
       nextLesson: 'Next Lesson',
       readLater: 'READ LATER',
       completeAndNext: 'FINISH LESSON',
+      editButton: 'EDIT',
+      
       aboutTitle: 'Arbor Manifesto',
       missionTitle: 'Free and Open Knowledge',
       missionText: 'Arbor is a decentralized educational platform built by the community. Its goal is to democratize access to information by allowing anyone to learn, contribute, and improve the global curriculum in a transparent and collaborative way. Education is a human right, not a business.',
@@ -151,7 +156,30 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       exitStay: 'Stay',
       exitLeave: 'Leave',
       languageTitle: 'Language',
-      languageSelect: 'Select your preferred language'
+      languageSelect: 'Select your preferred language',
+      
+      // Contributor & Editor
+      contribTitle: 'Contributor Settings',
+      contribDesc: 'Connect with GitHub to propose changes to the knowledge tree directly from Arbor.',
+      contribToken: 'GitHub Personal Access Token (Classic)',
+      contribTokenPlaceholder: 'ghp_...',
+      contribConnect: 'Connect GitHub',
+      contribDisconnect: 'Disconnect',
+      contribRepoHint: 'Changes will be proposed to:',
+      editorTitle: 'Arbor Studio',
+      editorChanges: 'Propose Changes',
+      editorCommitMsg: 'Describe your changes...',
+      editorCommitBtn: 'Submit Proposal',
+      editorCancel: 'Discard',
+      editorPreview: 'Preview',
+      editorCode: 'Code',
+      editorUpload: 'Upload Image',
+      editorUploading: 'Uploading...',
+      prSuccessTitle: 'Proposal Sent!',
+      prSuccessBody: 'A Pull Request has been created successfully. The community will review your contribution.',
+      prLink: 'View Pull Request',
+      prError: 'Error creating proposal',
+      editorLoading: 'Fetching content from GitHub...'
     },
     ES: {
       appTitle: 'ARBOR',
@@ -200,6 +228,7 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       navCertificates: 'Certificados',
       navSources: 'Árboles',
       navHelp: 'Tutorial',
+      navContributor: 'Contribuidor',
       
       lessonComplete: 'MARCAR COMO VISTO',
       lessonFinished: 'COMPLETADO ✓',
@@ -215,6 +244,7 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       nextLesson: 'Siguiente Lección',
       readLater: 'LEER DESPUÉS',
       completeAndNext: 'FINALIZAR LECCIÓN',
+      editButton: 'EDITAR',
       
       aboutTitle: 'Manifiesto de Arbor',
       missionTitle: 'Conocimiento Libre y Abierto',
@@ -308,7 +338,30 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       exitStay: 'Quedarme',
       exitLeave: 'Salir',
       languageTitle: 'Idioma',
-      languageSelect: 'Selecciona tu idioma preferido'
+      languageSelect: 'Selecciona tu idioma preferido',
+
+      // Contributor & Editor
+      contribTitle: 'Configuración de Contribuidor',
+      contribDesc: 'Conecta con GitHub para proponer cambios al árbol de conocimiento directamente desde Arbor.',
+      contribToken: 'GitHub Personal Access Token (Classic)',
+      contribTokenPlaceholder: 'ghp_...',
+      contribConnect: 'Conectar GitHub',
+      contribDisconnect: 'Desconectar',
+      contribRepoHint: 'Los cambios se propondrán en:',
+      editorTitle: 'Arbor Studio',
+      editorChanges: 'Proponer Cambios',
+      editorCommitMsg: 'Describe tus cambios...',
+      editorCommitBtn: 'Enviar Propuesta',
+      editorCancel: 'Descartar',
+      editorPreview: 'Vista Previa',
+      editorCode: 'Código',
+      editorUpload: 'Subir Imagen',
+      editorUploading: 'Subiendo...',
+      prSuccessTitle: '¡Propuesta Enviada!',
+      prSuccessBody: 'Se ha creado un Pull Request con éxito. La comunidad revisará tu contribución.',
+      prLink: 'Ver Pull Request',
+      prError: 'Error creando propuesta',
+      editorLoading: 'Obteniendo contenido de GitHub...'
     }
 };
 

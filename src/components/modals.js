@@ -1,6 +1,9 @@
 
 
+
+
 import { store } from '../store.js';
+import { github } from '../services/github.js';
 
 class ArborModals extends HTMLElement {
     constructor() {
@@ -45,6 +48,9 @@ class ArborModals extends HTMLElement {
         const type = typeof modal === 'string' ? modal : modal.type;
         const ui = store.ui;
         
+        // Editor is handled by arbor-editor component
+        if (type === 'editor') return;
+
         if (type === 'search') {
             this.renderSearch(ui);
             return;
@@ -57,6 +63,7 @@ class ArborModals extends HTMLElement {
         else if (type === 'about') content = this.renderAbout(ui);
         else if (type === 'language') content = this.renderLanguage(ui);
         else if (type === 'impressum') content = this.renderImpressum(ui);
+        else if (type === 'contributor') content = this.renderContributor(ui);
         else if (type === 'certificate') {
             this.renderSingleCertificate(ui, modal.moduleId); 
             return; 
@@ -77,6 +84,7 @@ class ArborModals extends HTMLElement {
         
         if (type === 'tutorial') this.bindTutorialEvents();
         if (type === 'sources') this.bindSourcesEvents();
+        if (type === 'contributor') this.bindContributorEvents();
         if (type === 'impressum') {
             const btnImp = this.querySelector('#btn-show-impressum');
             if(btnImp) btnImp.onclick = () => {
@@ -208,6 +216,70 @@ class ArborModals extends HTMLElement {
         if(btnPrev) btnPrev.onclick = () => { this.tutorialStep--; this.render(); };
         const btnFin = this.querySelector('#btn-tut-finish');
         if(btnFin) btnFin.onclick = () => this.close();
+    }
+
+    // --- CONTRIBUTOR ---
+    renderContributor(ui) {
+        const user = store.value.githubUser;
+        return `
+        <div class="p-8">
+            <div class="w-16 h-16 bg-slate-800 text-white rounded-full flex items-center justify-center text-3xl mb-6 shadow-lg shadow-slate-500/30">🐙</div>
+            <h2 class="text-2xl font-black text-slate-800 dark:text-white mb-2">${ui.contribTitle}</h2>
+            <p class="text-slate-500 dark:text-slate-400 mb-6 text-sm leading-relaxed">${ui.contribDesc}</p>
+
+            ${!user ? `
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">${ui.contribToken}</label>
+                    <input id="inp-gh-token" type="password" placeholder="${ui.contribTokenPlaceholder}" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-slate-500">
+                </div>
+                <button id="btn-gh-connect" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl shadow-lg transition-transform active:scale-95">${ui.contribConnect}</button>
+            </div>
+            ` : `
+            <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-4 rounded-xl flex items-center gap-4 mb-6">
+                <img src="${user.avatar_url}" class="w-12 h-12 rounded-full border-2 border-white dark:border-slate-900">
+                <div class="flex-1 min-w-0">
+                    <p class="font-black text-slate-800 dark:text-white truncate">${user.name || user.login}</p>
+                    <p class="text-xs text-green-600 dark:text-green-400 font-bold">Connected via GitHub</p>
+                </div>
+            </div>
+            <button id="btn-gh-disconnect" class="w-full py-3 border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 font-bold rounded-xl transition-colors">${ui.contribDisconnect}</button>
+            `}
+        </div>`;
+    }
+
+    bindContributorEvents() {
+        const btnConnect = this.querySelector('#btn-gh-connect');
+        if (btnConnect) {
+            btnConnect.onclick = async () => {
+                const token = this.querySelector('#inp-gh-token').value.trim();
+                if (!token) return;
+                
+                btnConnect.disabled = true;
+                btnConnect.textContent = "...";
+                
+                const user = await github.initialize(token);
+                if (user) {
+                    store.update({ githubUser: user });
+                    localStorage.setItem('arbor-gh-token', token);
+                    this.render();
+                } else {
+                    alert('Authentication failed. Check your token.');
+                    btnConnect.disabled = false;
+                    btnConnect.textContent = store.ui.contribConnect;
+                }
+            };
+        }
+
+        const btnDisconnect = this.querySelector('#btn-gh-disconnect');
+        if (btnDisconnect) {
+            btnDisconnect.onclick = () => {
+                github.disconnect();
+                store.update({ githubUser: null });
+                localStorage.removeItem('arbor-gh-token');
+                this.render();
+            };
+        }
     }
 
     // --- SOURCES ---

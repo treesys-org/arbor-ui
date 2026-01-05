@@ -1,5 +1,7 @@
 
 
+
+
 import { store } from '../store.js';
 import { parseContent } from '../utils/parser.js';
 
@@ -201,6 +203,9 @@ class ArborContent extends HTMLElement {
         // Progress Calc (Visual only based on index, not completed state)
         const progress = Math.round(((this.activeSectionIndex + 1) / toc.length) * 100);
 
+        // Edit permission check
+        const canEdit = store.value.githubUser && this.currentNode.sourcePath;
+
         const containerClasses = [
             "fixed", "z-[60]", "bg-white", "dark:bg-slate-900", "shadow-2xl", "flex", "flex-col",
             "transition-all", "duration-500", "ease-[cubic-bezier(0.25,0.8,0.25,1)]",
@@ -245,6 +250,13 @@ class ArborContent extends HTMLElement {
                 </div>
 
                 <div class="flex items-center gap-2 flex-shrink-0">
+                   ${canEdit ? `
+                   <button id="btn-edit-content" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-xs flex items-center gap-2">
+                      ✏️ <span class="hidden sm:inline">${ui.editButton}</span>
+                   </button>
+                   <div class="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+                   ` : ''}
+
                    <button id="btn-close-content" class="p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 transition-colors">
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                    </button>
@@ -351,6 +363,7 @@ class ArborContent extends HTMLElement {
 
         safeBind('#backdrop-overlay', () => store.closeContent());
         safeBind('#btn-close-content', () => store.closeContent());
+        safeBind('#btn-edit-content', () => store.openEditor(this.currentNode));
         
         safeBind('#btn-toggle-toc', () => this.toggleToc());
         safeBind('#toc-mobile-backdrop', () => this.toggleToc());
