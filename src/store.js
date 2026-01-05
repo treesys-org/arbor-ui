@@ -5,7 +5,8 @@ import { googleDrive } from './services/google-drive.js';
 const OFFICIAL_DOMAINS = [
     'treesys-org.github.io',
     'localhost',
-    '127.0.0.1'
+    '127.0.0.1',
+    'raw.githubusercontent.com'
 ];
 
 // REFACTOR: The philosophy is that Arbor is a browser for external repos.
@@ -14,7 +15,8 @@ const DEFAULT_SOURCES = [
     {
         id: 'default-arbor',
         name: 'Arbor Knowledge (Official)',
-        url: 'https://treesys-org.github.io/arbor-knowledge/data.json',
+        // FIX: The builder script outputs to a 'data' folder, so the URL must include /data/
+        url: 'https://treesys-org.github.io/arbor-knowledge/data/data.json',
         isDefault: true,
         isTrusted: true
     }
@@ -379,8 +381,7 @@ class Store extends EventTarget {
         try {
             // Robust URL construction
             const sourceUrl = this.state.activeSource.url;
-            // Get base dir: "https://site.com/repo/" from "https://site.com/repo/data.json"
-            // If local "./data/data.json", baseDir is "./data/"
+            // Get base dir: "https://site.com/repo/data/" from "https://site.com/repo/data/data.json"
             const baseDir = sourceUrl.substring(0, sourceUrl.lastIndexOf('/') + 1);
             
             // This works for both local and remote if structure is maintained (data.json + nodes/)
