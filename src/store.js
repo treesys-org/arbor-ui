@@ -367,6 +367,15 @@ class Store extends EventTarget {
 
     // --- UI Actions (Content) ---
 
+    goHome() {
+        this.update({
+            viewMode: 'explore',
+            selectedNode: null,
+            previewNode: null,
+            modal: null
+        });
+    }
+
     enterLesson() {
         if (this.state.previewNode) {
             this.update({ selectedNode: this.state.previewNode, previewNode: null });

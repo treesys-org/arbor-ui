@@ -1,6 +1,3 @@
-
-const CLIENT_ID = 'YOUR_CLIENT_ID.apps.googleusercontent.com'; // Replace with real ID
-
 // Safety check for process.env to prevent "ReferenceError: process is not defined" in browser
 const getEnvVar = (key) => {
     if (typeof process !== 'undefined' && process.env) {
@@ -8,6 +5,9 @@ const getEnvVar = (key) => {
     }
     return '';
 };
+
+// FIX: The CLIENT_ID was a placeholder value. It's now sourced from a GOOGLE_CLIENT_ID environment variable for proper functionality.
+const CLIENT_ID = getEnvVar('GOOGLE_CLIENT_ID') || 'YOUR_CLIENT_ID.apps.googleusercontent.com'; // Replace with real ID
 
 const API_KEY = getEnvVar('API_KEY') || ''; 
 const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"];

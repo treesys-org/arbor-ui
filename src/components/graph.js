@@ -1,4 +1,5 @@
 
+
 import { store } from '../store.js';
 
 class ArborGraph extends HTMLElement {
@@ -37,7 +38,10 @@ class ArborGraph extends HTMLElement {
         });
         
         // External focus request (search, deep link)
-        store.addEventListener('focus-node', (e) => this.focusNode(e.detail));
+        store.addEventListener('focus-node', (e) => {
+             // Wait for D3 render cycle to populate DOM
+             setTimeout(() => this.focusNode(e.detail), 250);
+        });
         
         window.addEventListener('resize', () => {
             const container = this.querySelector('#chart');
@@ -275,7 +279,14 @@ class ArborGraph extends HTMLElement {
                 return `translate(${o.x},${o.y}) scale(0)`;
             })
             .style("cursor", "pointer")
-            .on("click", (e, d) => this.handleNodeClick(e, d));
+            .on("click", (e, d) => this.handleNodeClick(e, d))
+            .on("mousedown", (e) => e.stopPropagation()); // Prevents zoom from panning on node click/drag start.
+
+        // Click target for accessibility (e.g. Parkinson's)
+        nodeEnter.append("circle")
+            .attr("r", 60)
+            .attr("cy", d => d.data.type === 'leaf' ? 30 : 0) // Center on leaf shape
+            .attr("fill", "transparent");
 
         // Visuals
         nodeEnter.append("path")
