@@ -194,15 +194,10 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
                 child_node = build_tree_recursive(item_path, lang_folder, node_id, node_collector, current_breadcrumb, current_slug_path)
                 if child_node:
                     children_for_api_file.append(child_node)
-                    
-                    # --- Arbor Certification Logic ---
-                    # Recursively count all .md files (leaves) inside this branch.
-                    # This total is used by the frontend to determine when a module
-                    # is complete and a certificate can be awarded.
+                    # Count leaves for progress tracking
                     if child_node.get('type') == 'leaf':
                         node["totalLeaves"] += 1
                     else:
-                        # Add leaves from sub-branches
                         node["totalLeaves"] += child_node.get('totalLeaves', 0)
             
             # Sort children by @order, then by Name
@@ -343,10 +338,6 @@ def main():
             top_node = build_tree_recursive(item_path, lang_folder, root_node['id'], branch_search_nodes, root_name)
             
             if top_node:
-                # Provide feedback on how many leaves were found for this top-level module
-                if top_node.get('type') == 'branch':
-                    print(f"    - Module '{top_node['name']}' contains {top_node.get('totalLeaves', 0)} lessons (leaves).")
-                
                 root_children_nodes.append(top_node)
                 full_search_index.extend(branch_search_nodes)
 

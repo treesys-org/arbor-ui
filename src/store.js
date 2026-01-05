@@ -1,6 +1,5 @@
 
 
-
 import { UI_LABELS, AVAILABLE_LANGUAGES } from './i18n.js';
 import { googleDrive } from './services/google-drive.js';
 
@@ -12,15 +11,14 @@ const OFFICIAL_DOMAINS = [
 ];
 
 // REFACTOR: The philosophy is that Arbor is a browser for external repos.
-// However, for the standalone distribution, we default to the LOCAL data.
-// This ensures that when a user runs the builder, they see their changes immediately.
+// Only the official cloud curriculum is loaded by default.
 const DEFAULT_SOURCES = [
     {
-        id: 'local-arbor',
-        name: 'Local Curriculum',
-        // FIX: Point to local data folder by default.
-        // This requires the user to run a local server (python -m http.server) as per README.
-        url: './data/data.json',
+        id: 'default-arbor',
+        name: 'Arbor Knowledge (Official)',
+        // FIX: Use raw.githubusercontent.com to ensure reliable data fetching
+        // This bypasses GitHub Pages configuration issues.
+        url: 'https://raw.githubusercontent.com/treesys-org/arbor-knowledge/main/data/data.json',
         isDefault: true,
         isTrusted: true
     }
@@ -135,9 +133,9 @@ class Store extends EventTarget {
         const savedActiveId = localStorage.getItem('arbor-active-source-id');
         let activeSource = mergedSources.find(s => s.id === savedActiveId);
         
-        // Fallback: Default Arbor Local
+        // Fallback: Default Arbor Official
         if (!activeSource) {
-            activeSource = mergedSources.find(s => s.id === 'local-arbor');
+            activeSource = mergedSources.find(s => s.id === 'default-arbor');
         }
 
         this.update({ sources: mergedSources, activeSource });
@@ -171,7 +169,7 @@ class Store extends EventTarget {
         
         if (this.state.activeSource.id === id) {
             // Fallback to official if current was deleted
-            const fallback = newSources.find(s => s.id === 'local-arbor') || newSources[0];
+            const fallback = newSources.find(s => s.id === 'default-arbor') || newSources[0];
             this.loadAndSmartMerge(fallback.id);
         }
     }
@@ -189,15 +187,11 @@ class Store extends EventTarget {
         localStorage.setItem('arbor-active-source-id', source.id);
 
         try {
-            // Cache busting for main data file to ensure local updates are seen
+            // Cache busting for main data file
             const url = `${source.url}?t=${Date.now()}`;
             const res = await fetch(url);
             
             if (!res.ok) {
-                // Friendly error for local dev
-                if (source.id === 'local-arbor' && (res.status === 404 || res.status === 0)) {
-                    throw new Error(`Could not load local data (data.json). Make sure you ran 'python builder_script.txt' and are running a local server.`);
-                }
                 throw new Error(`Failed to fetch data from ${source.name} (Status ${res.status}).`);
             }
 
@@ -509,30 +503,35 @@ class Store extends EventTarget {
         const modules = [];
         
         this.state.data.children.forEach(topLevelNode => {
-            // Ignore loose files at root, only folders are modules
-            if (topLevelNode.type !== 'branch') return; 
+            if (topLevelNode.type !== 'branch') return; // Ignore loose files at root
 
             let total = 0;
             let completed = 0;
 
-            // 1. Use totalLeaves calculated by Builder (The Robust Way)
-            if (typeof topLevelNode.totalLeaves === 'number') {
+            // 1. Try to use pre-calculated Total from data.json (Metadata)
+            if (typeof topLevelNode.totalLeaves === 'number' && topLevelNode.totalLeaves > 0) {
                  total = topLevelNode.totalLeaves;
-            } else {
-                // Fallback (Only works if children are loaded in memory, which is rare for fresh load)
-                console.warn(`Module ${topLevelNode.name} has no totalLeaves. Re-run builder.`);
-                // We leave total at 0. If total is 0, percentage is 0 unless we fix it.
             }
 
-            // 2. Count Completed Leaves for this Module ID
-            // We check if the ID string starts with the module ID.
+            // 2. Count completed leaves if not available
+            if (total === 0) {
+                const countLeaves = (node) => {
+                    if (node.type === 'leaf') {
+                        total++;
+                    } else if (node.children) {
+                        node.children.forEach(countLeaves);
+                    }
+                };
+                countLeaves(topLevelNode);
+            }
+
+            // Calculate Completed
             this.state.completedNodes.forEach(id => {
                 if (id.startsWith(topLevelNode.id + '__')) {
                     completed++;
                 }
             });
 
-            // Only add if it's a valid module with content
             if (total > 0) {
                 modules.push({
                     id: topLevelNode.id,
@@ -541,7 +540,7 @@ class Store extends EventTarget {
                     description: topLevelNode.description,
                     totalLeaves: total,
                     completedLeaves: completed,
-                    isComplete: completed >= total,
+                    isComplete: completed >= total, // >= just in case of weird sync states
                     path: topLevelNode.name
                 });
             }
