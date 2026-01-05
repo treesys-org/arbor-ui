@@ -263,6 +263,30 @@ class Store extends EventTarget {
         this.dispatchEvent(new CustomEvent('focus-node', { detail: nodeId }));
     }
 
+    async navigateToNextLeaf() {
+        if (!this.state.selectedNode || !this.state.data) return;
+        
+        const leaves = [];
+        const traverse = (node) => {
+            if (node.type === 'leaf') leaves.push(node);
+            if (node.children) node.children.forEach(traverse);
+        };
+        traverse(this.state.data);
+
+        const currentIndex = leaves.findIndex(n => n.id === this.state.selectedNode.id);
+        
+        if (currentIndex !== -1 && currentIndex < leaves.length - 1) {
+            const nextNode = leaves[currentIndex + 1];
+            // Wait for navigation (which handles opening parents)
+            await this.navigateTo(nextNode.id);
+            // Directly set to content view, bypassing preview
+            this.update({ selectedNode: nextNode, previewNode: null });
+        } else {
+            // End of content
+            this.closeContent();
+        }
+    }
+
     async toggleNode(nodeId) {
         console.log('Toggling Node:', nodeId);
         const node = this.findNode(nodeId);
@@ -402,11 +426,20 @@ class Store extends EventTarget {
         } catch(e) {}
     }
 
-    markComplete(nodeId) {
-        if (this.state.completedNodes.has(nodeId)) {
-             this.state.completedNodes.delete(nodeId);
+    markComplete(nodeId, forceState = null) {
+        let isComplete = this.state.completedNodes.has(nodeId);
+        let shouldAdd = false;
+        
+        if (forceState !== null) {
+            shouldAdd = forceState;
         } else {
+            shouldAdd = !isComplete; // Toggle default
+        }
+
+        if (shouldAdd) {
              this.state.completedNodes.add(nodeId);
+        } else {
+             this.state.completedNodes.delete(nodeId);
         }
         
         localStorage.setItem('arbor-progress', JSON.stringify([...this.state.completedNodes]));
@@ -422,38 +455,66 @@ class Store extends EventTarget {
     isCompleted(id) { return this.state.completedNodes.has(id); }
 
     getModulesStatus() {
-        if (!this.state.data) return [];
+        if (!this.state.data || !this.state.data.children) return [];
         const modules = [];
         
-        const traverse = (node, pathName) => {
-            let total = 0, completed = 0;
-            if (node.type === 'leaf') {
-                total = 1;
-                completed = this.isCompleted(node.id) ? 1 : 0;
-            } else if (node.children) {
-                node.children.forEach(child => {
-                    const res = traverse(child, pathName ? `${pathName} > ${node.name}` : node.name);
-                    total += res.total;
-                    completed += res.completed;
-                });
-                
-                if (total > 0 && node.type === 'branch') {
-                    modules.push({
-                        id: node.id,
-                        name: node.name,
-                        icon: node.icon,
-                        description: node.description,
-                        totalLeaves: total,
-                        completedLeaves: completed,
-                        isComplete: total === completed,
-                        path: pathName
-                    });
-                }
+        // --- LOGIC CHANGE ---
+        // Instead of traversing everything, we ONLY look at the direct children
+        // of the Language Root. This defines a "Module" as a top-level course.
+        // Nested folders are just organization within that module.
+
+        this.state.data.children.forEach(topLevelNode => {
+            if (topLevelNode.type !== 'branch') return; // Ignore loose files at root
+
+            let total = 0;
+            let completed = 0;
+
+            // 1. Try to use pre-calculated Total from data.json (Metadata)
+            if (typeof topLevelNode.totalLeaves === 'number' && topLevelNode.totalLeaves > 0) {
+                 total = topLevelNode.totalLeaves;
             }
-            return { total, completed };
-        };
+
+            // 2. Count completed leaves by checking the Search Index or Recursive Walk
+            // Since we might not have all children loaded, we must rely on the completedNodes Set 
+            // matched against the ID namespace.
+            // Assumption: IDs are hierarchical (root__module__chapter...).
+            // We can iterate the completedNodes Set and count how many start with this module ID.
+            
+            // However, to be perfectly accurate with Total (if metadata missing), we fallback to count.
+            if (total === 0) {
+                const countLeaves = (node) => {
+                    if (node.type === 'leaf') {
+                        total++;
+                    } else if (node.children) {
+                        node.children.forEach(countLeaves);
+                    }
+                };
+                countLeaves(topLevelNode);
+            }
+
+            // Calculate Completed
+            // Efficient approach: Filter the completed Set for IDs starting with this module
+            this.state.completedNodes.forEach(id => {
+                // Strict check: id starts with "moduleID" AND followed by "__" to prevent partial matches
+                if (id.startsWith(topLevelNode.id + '__')) {
+                    completed++;
+                }
+            });
+
+            if (total > 0) {
+                modules.push({
+                    id: topLevelNode.id,
+                    name: topLevelNode.name,
+                    icon: topLevelNode.icon,
+                    description: topLevelNode.description,
+                    totalLeaves: total,
+                    completedLeaves: completed,
+                    isComplete: completed >= total, // >= just in case of weird sync states
+                    path: topLevelNode.name
+                });
+            }
+        });
         
-        traverse(this.state.data, '');
         return modules.sort((a,b) => b.isComplete === a.isComplete ? 0 : (b.isComplete ? 1 : -1));
     }
 }

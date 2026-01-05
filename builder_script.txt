@@ -137,7 +137,8 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
             "status": "available",
             "type": "branch",
             "namespace": NAMESPACE,
-            "apiPath": f"{lang_folder.lower()}/{current_slug_path}" 
+            "apiPath": f"{lang_folder.lower()}/{current_slug_path}",
+            "totalLeaves": 0 # Initialize counter
         }
         node.update(meta)
         if 'uuid' in node: del node['uuid']
@@ -156,6 +157,11 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
                 child_node = build_tree_recursive(item_path, lang_folder, node_id, node_collector, api_files_collector, current_breadcrumb, current_slug_path)
                 if child_node:
                     children_for_api_file.append(child_node)
+                    # Accumulate leaves from children
+                    if child_node.get('type') == 'leaf':
+                        node["totalLeaves"] += 1
+                    else:
+                        node["totalLeaves"] += child_node.get('totalLeaves', 0)
             
             children_for_api_file.sort(key=lambda x: (int(x.get('order', 999)), x.get('name', '')))
 
@@ -207,6 +213,8 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
     }
     node_collector.append(search_node)
     
+    # Children are stripped for the parent's payload (since we lazy load), 
+    # BUT we keep totalLeaves which we calculated before stripping.
     if 'children' in node:
         del node['children']
 

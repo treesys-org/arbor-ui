@@ -1,4 +1,5 @@
 
+
 import { store } from '../store.js';
 import { googleDrive } from '../services/google-drive.js';
 
@@ -30,7 +31,7 @@ class ArborSidebar extends HTMLElement {
         if (this.isMobileMenuOpen) {
             mobileMenuHtml = `
             <div id="mobile-menu-backdrop" class="md:hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[80]"></div>
-            <div id="mobile-menu" class="md:hidden fixed top-[72px] right-4 w-[280px] bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 z-[90] p-2 animate-in fade-in slide-in-from-top-4 duration-200">
+            <div id="mobile-menu" class="md:hidden fixed top-16 right-4 w-[280px] bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 z-[90] p-2 animate-in fade-in slide-in-from-top-4 duration-200">
                 <!-- User Profile -->
                 ${isLoggedIn ? `
                     <div class="p-2 border-b border-slate-100 dark:border-slate-700 mb-2">

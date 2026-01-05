@@ -52,7 +52,7 @@ class ArborProgressWidget extends HTMLElement {
         const offset = circumference * (1 - stats.percentage / 100);
 
         this.innerHTML = `
-        <div class="fixed top-4 right-4 z-30 flex flex-col items-end">
+        <div class="fixed top-4 right-4 z-30 flex-col items-end hidden md:flex">
             
             <!-- Trigger Button -->
             <button id="btn-toggle" class="flex items-center gap-2 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200 dark:border-slate-700 px-4 py-2 rounded-full shadow-sm hover:border-green-400 dark:hover:border-green-600 transition-colors">
@@ -100,7 +100,7 @@ class ArborProgressWidget extends HTMLElement {
                 </div>
 
                 <button id="btn-view-certs" class="w-full py-3 bg-yellow-500 hover:bg-yellow-400 text-white font-bold rounded-xl shadow-lg shadow-yellow-500/30 transition-all active:scale-95 flex items-center justify-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0V5.625a2.25 2.25 0 00-2.25-2.25h-1.5a2.25 2.25 0 00-2.25 2.25v7.875" /></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0V5.625a2.25 2.25 0 00-2.25-2.25h-1.5a2.25 2.25 0 00-2.25-2.25v7.875" /></svg>
                     ${ui.progressViewCerts}
                 </button>
             </div>
@@ -114,11 +114,14 @@ class ArborProgressWidget extends HTMLElement {
         };
 
         if(this.isOpen) {
-            this.querySelector('#btn-view-certs').onclick = () => {
-                store.setViewMode('certificates');
-                this.isOpen = false;
-                this.render();
-            };
+            const btnCerts = this.querySelector('#btn-view-certs');
+            if(btnCerts) {
+                btnCerts.onclick = () => {
+                    store.setViewMode('certificates');
+                    this.isOpen = false;
+                    this.render();
+                };
+            }
         }
     }
 }

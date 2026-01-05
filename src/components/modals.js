@@ -62,8 +62,9 @@ class ArborModals extends HTMLElement {
             return; 
         }
 
+        // FIX: Increased Z-Index to z-[70] to cover everything including content panel
         this.innerHTML = `
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
+        <div class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
             <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full relative overflow-hidden flex flex-col max-h-[90vh]">
                 <button class="btn-close absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors z-20">✕</button>
                 ${content}
@@ -93,6 +94,7 @@ class ArborModals extends HTMLElement {
 
     // --- SEARCH MODAL ---
     renderSearch(ui) {
+         // FIX: Z-Index z-[70]
          this.innerHTML = `
          <div class="fixed inset-0 z-[70] flex items-start justify-center pt-[15vh] bg-slate-900/60 backdrop-blur-sm p-4 animate-in" id="search-overlay">
             <div class="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700 flex flex-col max-h-[60vh]">
@@ -141,8 +143,9 @@ class ArborModals extends HTMLElement {
         const ui = store.ui;
         const isDone = store.isCompleted(node.id);
         
+        // FIX: Z-Index z-[70]
         this.innerHTML = `
-        <div id="preview-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in">
+        <div id="preview-overlay" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in">
             <div class="bg-white dark:bg-slate-900 rounded-3xl p-8 max-w-sm w-full shadow-2xl relative text-center">
                  <div class="absolute -top-10 left-1/2 -translate-x-1/2 w-20 h-20 bg-white dark:bg-slate-800 rounded-2xl shadow-xl flex items-center justify-center text-4xl border-4 border-slate-50 dark:border-slate-700">
                     ${node.icon || '📄'}
@@ -363,6 +366,7 @@ class ArborModals extends HTMLElement {
         const module = store.getModulesStatus().find(m => m.id === moduleId);
         if(!module) return;
 
+        // FIX: Z-Index z-[100]
         this.innerHTML = `
         <div id="cert-overlay" class="fixed inset-0 z-[100] flex items-center justify-center bg-white dark:bg-slate-950 p-6 overflow-y-auto animate-in">
           
@@ -428,8 +432,9 @@ class ArborModals extends HTMLElement {
             return true;
         });
 
+        // FIX: Z-Index z-[70]
         this.innerHTML = `
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-md p-0 md:p-10 animate-in fade-in duration-300">
+        <div class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/80 backdrop-blur-md p-0 md:p-10 animate-in fade-in duration-300">
           
           <div class="bg-white dark:bg-slate-950 rounded-none md:rounded-3xl w-full max-w-6xl h-full md:max-h-[90vh] shadow-2xl relative border-0 md:border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden">
             

@@ -7,7 +7,7 @@ class ArborContent extends HTMLElement {
     constructor() {
         super();
         this.currentNode = null;
-        // Estado interno de UI
+        // Internal UI State
         this.isExpanded = true;
         this.isTocVisible = window.innerWidth >= 768;
         
@@ -18,16 +18,16 @@ class ArborContent extends HTMLElement {
         store.addEventListener('state-change', (e) => {
             const newNode = e.detail.selectedNode;
             
-            // Si cambiamos de nodo, reseteamos el scroll y estado de quiz
+            // If node changes, reset state
             if (newNode && (!this.currentNode || newNode.id !== this.currentNode.id)) {
                 this.currentNode = newNode;
                 this.resetState();
-                // Por defecto abrimos expandido
+                // Default to expanded
                 this.isExpanded = true;
                 this.isTocVisible = window.innerWidth >= 768;
             }
             
-            // Si se deselecciona, limpiamos
+            // If deselected, clear
             if (!newNode) {
                 this.currentNode = null;
             }
@@ -35,7 +35,7 @@ class ArborContent extends HTMLElement {
             this.render();
         });
         
-        // Carga inicial
+        // Initial Load
         this.currentNode = store.value.selectedNode;
         this.render();
     }
@@ -47,7 +47,7 @@ class ArborContent extends HTMLElement {
         this.tocFilter = '';
     }
 
-    // --- Lógica de Negocio ---
+    // --- Business Logic ---
     
     toggleExpanded() {
         this.isExpanded = !this.isExpanded;
@@ -80,26 +80,34 @@ class ArborContent extends HTMLElement {
         this.render();
     }
 
-    completeAndNext() {
+    async completeAndNext() {
         const toc = this.getToc();
         if (this.activeSectionIndex < toc.length - 1) {
             this.scrollToSection(this.activeSectionIndex + 1);
         } else {
-            // Terminar lección
-            if (this.currentNode) store.markComplete(this.currentNode.id);
-            
-            // Chequear certificado del módulo padre
-            if (this.currentNode.parentId) {
+            // Finish lesson: Mark as complete (green)
+            if (this.currentNode) {
+                store.markComplete(this.currentNode.id, true);
+
+                // CHECK FOR MODULE COMPLETION (Certificate Trigger)
+                // New Logic: Check if the Top-Level Module (Ancestor) is complete.
                 const modules = store.getModulesStatus();
-                const mod = modules.find(m => m.id === this.currentNode.parentId);
-                if (mod && mod.isComplete) {
-                     store.setModal({ type: 'certificate', moduleId: mod.id });
-                } else {
-                    store.navigateToNextLeaf(); // Navegar a la siguiente lección automáticamente
+                // Find which top-level module owns this node.
+                // ID hierarchy: root__module__chapter__lesson
+                const parentModule = modules.find(m => this.currentNode.id.startsWith(m.id + '__'));
+
+                if (parentModule && parentModule.isComplete) {
+                     store.closeContent();
+                     // Small delay to allow the close animation to start/finish before showing the modal
+                     setTimeout(() => {
+                         store.setModal({ type: 'certificate', moduleId: parentModule.id });
+                     }, 400);
+                     return;
                 }
-            } else {
-                store.closeContent();
             }
+            
+            // Normal behavior: Close content to show tree with green leaf
+            store.closeContent();
         }
     }
     
@@ -151,7 +159,7 @@ class ArborContent extends HTMLElement {
             const nextIndex = blocks.findIndex(b => b.id === nextItem.id);
             if (nextIndex !== -1) endIndex = nextIndex;
         } else {
-             // Si es la intro, termina en el primer header o quiz
+             // If it's intro, it ends at the first header or quiz
              if (activeItem.id === 'intro') {
                  const firstH = blocks.findIndex(b => b.type.startsWith('h') || b.type === 'quiz');
                  if (firstH !== -1) endIndex = firstH;
@@ -161,7 +169,7 @@ class ArborContent extends HTMLElement {
         return blocks.slice(startIndex, endIndex);
     }
 
-    // --- Renderizado ---
+    // --- Render ---
 
     render() {
         if (!this.currentNode) {
@@ -179,32 +187,32 @@ class ArborContent extends HTMLElement {
 
         const activeBlocks = this.getActiveBlocks(allBlocks, toc);
         
-        // Cálculo de progreso
+        // Progress Calc
         const progress = Math.round(((this.activeSectionIndex + 1) / toc.length) * 100);
 
-        // Clases dinámicas para el contenedor principal (Efecto Modal vs Panel Lateral)
+        // Dynamic Classes
         const containerClasses = [
-            "fixed", "z-40", "bg-white", "dark:bg-slate-900", "shadow-2xl", "flex", "flex-col",
+            "fixed", "z-[60]", "bg-white", "dark:bg-slate-900", "shadow-2xl", "flex", "flex-col",
             "transition-all", "duration-500", "ease-[cubic-bezier(0.25,0.8,0.25,1)]",
             "border-l", "border-transparent", "dark:border-slate-800", "no-print",
             "top-0", "bottom-0", "right-0", "w-full", "max-w-full"
         ];
 
         if (!this.isExpanded) {
-            // Modo Panel Lateral
+            // Sidebar Mode (Desktop not expanded)
             containerClasses.push("md:w-[80vw]", "md:max-w-[900px]", "md:top-4", "md:bottom-4", "md:rounded-l-3xl");
         } else {
-            // Modo Pantalla Completa
+            // Fullscreen Mode
             containerClasses.push("md:w-full", "md:max-w-full");
         }
 
         // --- TEMPLATE ---
-        this.className = ""; // Limpiamos clases del host element para usar el inner wrapper
+        this.className = ""; 
         this.innerHTML = `
-        <!-- Backdrop para modo panel (click fuera cierra) -->
-        ${!this.isExpanded ? `<div id="backdrop-overlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-30 animate-in fade-in duration-200"></div>` : ''}
+        <!-- Backdrop -->
+        ${!this.isExpanded ? `<div id="backdrop-overlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[55] animate-in fade-in duration-200"></div>` : ''}
 
-        <!-- Panel Principal -->
+        <!-- Main Panel -->
         <aside class="${containerClasses.join(' ')} transform translate-x-0">
             
             <!-- Header -->
@@ -239,14 +247,14 @@ class ArborContent extends HTMLElement {
                 </div>
 
                 <div class="flex items-center gap-2 flex-shrink-0">
-                   <!-- Botón Cerrar -->
+                   <!-- Close Button -->
                    <button id="btn-close-content" class="p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 transition-colors">
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                    </button>
                 </div>
             </div>
 
-            <!-- Barra de Progreso -->
+            <!-- Progress Bar -->
             ${toc.length > 1 ? `
                 <div class="px-4 md:px-6 py-3 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm flex-none">
                     <div class="flex justify-between items-center mb-1">
@@ -259,7 +267,7 @@ class ArborContent extends HTMLElement {
                 </div>
             ` : ''}
 
-            <!-- Cuerpo Principal -->
+            <!-- Main Body -->
             <div class="flex-1 flex overflow-hidden bg-slate-50/50 dark:bg-slate-950/30 relative">
                 
                 <!-- SIDEBAR TOC -->
@@ -304,12 +312,12 @@ class ArborContent extends HTMLElement {
                 <div id="content-area" class="flex-1 overflow-y-auto custom-scrollbar p-5 md:p-12 scroll-smooth pb-24 md:pb-12">
                     <div class="max-w-3xl mx-auto w-full pb-32 animate-in fade-in duration-300">
                         
-                        <!-- Bloques de Contenido -->
+                        <!-- Content Blocks -->
                         <div class="prose prose-slate dark:prose-invert prose-lg max-w-none">
                             ${activeBlocks.map(b => this.renderBlock(b, ui)).join('')}
                         </div>
 
-                        <!-- Footer Navegación (Desktop) -->
+                        <!-- Footer Navigation (Desktop) -->
                         ${toc.length > 0 ? `
                         <div class="mt-8 pt-8 border-t border-slate-200 dark:border-slate-800 hidden md:flex flex-col-reverse md:flex-row gap-4 justify-between items-center">
                             <button id="btn-prev" class="w-full md:w-auto px-5 py-4 md:py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300" ${this.activeSectionIndex === 0 ? 'disabled' : ''}>
@@ -357,7 +365,7 @@ class ArborContent extends HTMLElement {
         </aside>
         `;
 
-        // --- Bindings de Eventos ---
+        // --- Event Bindings ---
         
         const safeBind = (selector, fn) => {
             const el = this.querySelector(selector);
@@ -373,9 +381,22 @@ class ArborContent extends HTMLElement {
 
         safeBind('#btn-prev', () => this.scrollToSection(this.activeSectionIndex - 1));
         safeBind('#btn-prev-mobile', () => this.scrollToSection(this.activeSectionIndex - 1));
+        
         safeBind('#btn-complete', () => this.completeAndNext());
         safeBind('#btn-complete-mobile', () => this.completeAndNext());
-        safeBind('#btn-later', () => store.closeContent());
+        
+        safeBind('#btn-later', () => {
+             // Mark as incomplete explicitly (pendiente)
+             if(this.currentNode) store.markComplete(this.currentNode.id, false);
+             
+             // NEW LOGIC: Advance TOC instead of closing (unless at end)
+             const toc = this.getToc();
+             if (this.activeSectionIndex < toc.length - 1) {
+                this.scrollToSection(this.activeSectionIndex + 1);
+             } else {
+                store.closeContent();
+             }
+        });
 
         const tocFilterInput = this.querySelector('#toc-filter');
         if (tocFilterInput) {
@@ -411,7 +432,7 @@ class ArborContent extends HTMLElement {
         });
     }
 
-    // --- Renderizado de Bloques ---
+    // --- Render Blocks ---
     
     renderBlock(b, ui) {
         if (b.type === 'h1') return `<h1 id="${b.id}" class="text-3xl md:text-5xl font-black text-slate-900 dark:text-white mb-6 md:mb-8 pb-4 border-b border-slate-200 dark:border-slate-800 tracking-tight">${b.text}</h1>`;

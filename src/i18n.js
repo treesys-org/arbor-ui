@@ -1,4 +1,5 @@
 
+
 export const UI_LABELS = {
     ES: {
       appTitle: 'ARBOR',
@@ -61,7 +62,7 @@ export const UI_LABELS = {
       previousSection: 'Anterior',
       nextLesson: 'Siguiente Lección',
       readLater: 'LEER DESPUÉS',
-      completeAndNext: 'COMPLETAR Y SEGUIR',
+      completeAndNext: 'FINALIZAR LECCIÓN',
       
       aboutTitle: 'Manifiesto de Arbor',
       missionTitle: 'Conocimiento Libre y Abierto',
@@ -218,7 +219,7 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       previousSection: 'Previous',
       nextLesson: 'Next Lesson',
       readLater: 'READ LATER',
-      completeAndNext: 'COMPLETE & CONTINUE',
+      completeAndNext: 'FINISH LESSON',
       aboutTitle: 'Arbor Manifesto',
       missionTitle: 'Free and Open Knowledge',
       missionText: 'Arbor is a decentralized educational platform built by the community. Its goal is to democratize access to information by allowing anyone to learn, contribute, and improve the global curriculum in a transparent and collaborative way. Education is a human right, not a business.',
