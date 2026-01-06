@@ -11,6 +11,7 @@ class ArborSage extends HTMLElement {
         
         // Historial de chat local (efímero, se borra al recargar)
         this.localMessages = []; 
+        this.currentModalRef = null;
     }
 
     connectedCallback() {
@@ -20,30 +21,36 @@ class ArborSage extends HTMLElement {
     checkState() {
         const modal = store.value.modal;
         
+        // Check if this is a NEW request via reference equality
+        const isNewRequest = modal !== this.currentModalRef;
+        this.currentModalRef = modal;
+
         // El modal ahora puede ser un objeto { type: 'sage', mode: 'settings' }
-        if (modal === 'sage' || (modal && modal.type === 'sage')) {
+        if (modal && (modal === 'sage' || modal.type === 'sage')) {
             const requestedMode = modal.mode || 'chat';
             
-            // Si no estaba visible o cambió el modo
-            if (!this.isVisible || this.mode !== requestedMode) {
-                this.isVisible = true;
-                this.mode = requestedMode;
-                
-                // Si piden chat y no hay key, forzar settings
-                if (this.mode === 'chat' && !aiService.isSmartMode()) {
-                    this.mode = 'settings';
-                    // Pequeña alerta o mensaje
-                    this.localMessages.push({ role: 'assistant', content: "🦉 Para chatear conmigo sobre las lecciones, necesito que configures tu llave de Gemini primero." });
-                }
+            if (isNewRequest) {
+                // If the same mode is requested while visible, toggle close
+                if (this.isVisible && this.mode === requestedMode) {
+                    this.close();
+                } else {
+                    // Open or switch mode
+                    this.isVisible = true;
+                    this.mode = requestedMode;
+                    
+                    // Si piden chat y no hay key, forzar settings
+                    if (this.mode === 'chat' && !aiService.isSmartMode()) {
+                        this.mode = 'settings';
+                        this.localMessages.push({ role: 'assistant', content: "🦉 Para chatear conmigo sobre las lecciones, necesito que configures tu llave de Gemini primero." });
+                    }
 
-                store.setModal(null); // Limpiar estado global
-                this.render();
-            } else {
-                 // Si es el mismo modo y ya es visible, cerrar (toggle)
-                 this.close();
+                    // NOTE: Do NOT clear global state here, or it will cause recursive closing issues.
+                    this.render();
+                }
             }
+            // If it's not a new request (unrelated state change), do nothing, keep current state
         } else if (this.isVisible) {
-             // Si el modal global cambió a otra cosa, cerrar Sage
+             // Si el modal global cambió a otra cosa (null o otro tipo), cerrar Sage
              this.close();
         }
     }
@@ -51,6 +58,7 @@ class ArborSage extends HTMLElement {
     close() {
         this.isVisible = false;
         this.innerHTML = '';
+        // Explicitly clear global state on close
         store.setModal(null);
     }
 

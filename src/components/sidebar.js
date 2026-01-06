@@ -40,7 +40,7 @@ class ArborSidebar extends HTMLElement {
 
                 <!-- Menu Items -->
                 <nav class="flex flex-col">
-                    <button class="js-btn-sage menu-item text-purple-600 dark:text-purple-400"><span>⚙️</span> <span>Configurar IA</span></button>
+                    <button class="js-btn-sage menu-item text-purple-600 dark:text-purple-400"><span>🦉</span> <span>Configurar IA</span></button>
                     <button class="js-btn-lang menu-item"><span>${store.currentLangInfo.flag}</span> <span>${ui.languageTitle}</span></button>
                     <button class="js-btn-theme menu-item"><span>${store.value.theme === 'light' ? '🌙' : '☀️'}</span> <span>Toggle Theme</span></button>
                     <button class="js-btn-help menu-item"><span>?</span> <span>${ui.navHelp}</span></button>
@@ -104,7 +104,7 @@ class ArborSidebar extends HTMLElement {
                 </div>
 
                 <!-- Sage Config Mobile -->
-                <button class="js-btn-sage w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 active:scale-95 transition-transform">⚙️</button>
+                <button class="js-btn-sage w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 active:scale-95 transition-transform">🦉</button>
                 
                 <button class="js-btn-search w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 active:scale-95 transition-transform">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
@@ -134,11 +134,11 @@ class ArborSidebar extends HTMLElement {
                     <span class="tooltip">${ui.navCertificates}</span>
                 </div>
 
-                <div class="relative group"><button class="js-btn-sources w-10 h-10 rounded-xl flex items-center justify-center bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-600 hover:text-white transition-colors"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h6M9 11.25h6M9 15.75h6" /></svg></button><span class="tooltip">${ui.navSources}</span></div>
+                <div class="relative group"><button class="js-btn-sources w-10 h-10 rounded-xl flex items-center justify-center bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-600 hover:text-white transition-colors"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18M13.5-18v18M9 6.75h6M9 11.25h6M9 15.75h6" /></svg></button><span class="tooltip">${ui.navSources}</span></div>
                 
                 <!-- THE SAGE CONFIG BUTTON (NOW SPECIFICALLY FOR SETTINGS) -->
                 <div class="relative group">
-                     <button class="js-btn-sage w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-purple-500 hover:text-white transition-all">⚙️</button>
+                     <button class="js-btn-sage w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-purple-500 hover:text-white transition-all">🦉</button>
                      <span class="tooltip">Configurar IA</span>
                 </div>
             </div>
