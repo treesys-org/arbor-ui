@@ -1,3 +1,4 @@
+
 import { store } from '../store.js';
 import { parseContent } from '../utils/parser.js';
 
@@ -135,19 +136,34 @@ class ArborContent extends HTMLElement {
     getToc() {
         if (!this.currentNode?.content) return [];
         const blocks = parseContent(this.currentNode.content);
-        const items = [{ text: store.ui.introLabel, level: 1, id: 'intro', isQuiz: false }];
+        const items = [];
+        
+        // Only add generic Intro if the content does NOT start with a Header
+        if (blocks.length > 0 && blocks[0].type !== 'h1' && blocks[0].type !== 'h2') {
+             items.push({ text: store.ui.introLabel, level: 1, id: 'intro', isQuiz: false });
+        }
         
         blocks.forEach((b) => {
             if (b.type === 'h1') items.push({ text: b.text, level: 1, id: b.id, isQuiz: false });
             if (b.type === 'h2') items.push({ text: b.text, level: 2, id: b.id, isQuiz: false });
             if (b.type === 'quiz') items.push({ text: store.ui.quizLabel, level: 1, id: b.id, isQuiz: true });
         });
+        
+        // Fallback if empty
+        if (items.length === 0) {
+             items.push({ text: store.ui.introLabel, level: 1, id: 'intro', isQuiz: false });
+        }
+
         return items;
     }
 
     getActiveBlocks(blocks, toc) {
         if (!blocks.length) return [];
         const activeItem = toc[this.activeSectionIndex];
+        
+        // If there's only one section (Intro fallback or single header), show everything
+        if (toc.length === 1) return blocks;
+
         const nextItem = toc[this.activeSectionIndex + 1];
 
         let startIndex = 0;
@@ -161,6 +177,7 @@ class ArborContent extends HTMLElement {
             const nextIndex = blocks.findIndex(b => b.id === nextItem.id);
             if (nextIndex !== -1) endIndex = nextIndex;
         } else {
+             // If we are in 'intro', end before the first H1/H2
              if (activeItem.id === 'intro') {
                  const firstH = blocks.findIndex(b => b.type.startsWith('h') || b.type === 'quiz');
                  if (firstH !== -1) endIndex = firstH;

@@ -5,8 +5,13 @@ import { aiService } from '../services/ai.js';
 class ArborSage extends HTMLElement {
     constructor() {
         super();
-        this.showUpgradeUI = false;
+        this.isVisible = false;
+        this.isExpanded = false;
+        this.showSettings = false;
         this.currentTip = '';
+        
+        // Local Chat History (Ephemeral)
+        this.localMessages = []; 
     }
 
     connectedCallback() {
@@ -15,21 +20,41 @@ class ArborSage extends HTMLElement {
 
     checkState() {
         const modal = store.value.modal;
+        
         if (modal === 'sage' || (modal && modal.type === 'sage')) {
-            // Refresh tip when opening in local mode
-            if (!aiService.isSmartMode() && !this.currentTip) {
-                this.currentTip = aiService.getContextTip(store.value);
+            if (!this.isVisible) {
+                this.isVisible = true;
+                this.isExpanded = true;
+                store.setModal(null);
+                
+                // Init local tip if needed
+                if (!aiService.isSmartMode()) {
+                     this.currentTip = aiService.getContextTip(store.value);
+                     // Add welcome message to local chat if empty
+                     if (this.localMessages.length === 0) {
+                         this.localMessages.push({ role: 'assistant', content: "🦉 ¡Huu huu! Soy el Búho Local. No tengo internet, pero puedo leer tus lecciones y resumirlas." });
+                     }
+                }
+            } else {
+                this.isVisible = false;
+                store.setModal(null);
             }
+        }
+        
+        if (this.isVisible) {
             this.render();
         } else {
             this.innerHTML = '';
-            this.showUpgradeUI = false;
-            this.currentTip = '';
         }
     }
 
-    toggleUpgradeUI() {
-        this.showUpgradeUI = !this.showUpgradeUI;
+    toggleExpand() {
+        this.isExpanded = !this.isExpanded;
+        this.render();
+    }
+
+    toggleSettings() {
+        this.showSettings = !this.showSettings;
         this.render();
     }
 
@@ -37,251 +62,261 @@ class ArborSage extends HTMLElement {
         const inp = this.querySelector('#inp-api-key');
         if (inp && inp.value.trim()) {
             aiService.setApiKey(inp.value.trim());
-            this.showUpgradeUI = false;
-            store.initSage(); // Re-init to use new key
+            this.showSettings = false;
+            store.initSage(); // Re-init store AI state
         }
     }
 
     clearApiKey() {
         aiService.setApiKey(null);
-        this.showUpgradeUI = false;
-        this.currentTip = aiService.getContextTip(store.value);
-        store.initSage();
+        this.showSettings = false;
+        this.localMessages = [{ role: 'assistant', content: "🦉 He vuelto al modo Local (Sin Internet)." }];
+        this.render();
+    }
+    
+    async runQuickAction(action) {
+        if (aiService.isSmartMode()) {
+            // Smart Mode logic (Gemini)
+            let prompt = '';
+            if (action === 'summarize') prompt = "Summarize this lesson in 3 bullet points.";
+            if (action === 'explain') prompt = "Explain the main concept simply.";
+            if (action === 'quiz') prompt = "Give me a test question about this.";
+            if (prompt) store.chatWithSage(prompt);
+        } else {
+            // Local Mode logic (Regex/Math)
+            let cmd = '';
+            if (action === 'summarize') cmd = "LOCAL_ACTION:SUMMARIZE";
+            if (action === 'stats') cmd = "LOCAL_ACTION:STATS";
+            if (action === 'nav') cmd = "LOCAL_ACTION:NAV";
+            
+            if (cmd) {
+                // Manually push user intent
+                let userLabel = action === 'summarize' ? "Resumir" : (action === 'stats' ? "Estadísticas" : "Ubicación");
+                this.localMessages.push({ role: 'user', content: userLabel });
+                this.render(); // Update UI immediately
+
+                // Simulate delay
+                await new Promise(r => setTimeout(r, 600));
+
+                const reply = await aiService.chat([{ role: 'user', content: cmd }]);
+                this.localMessages.push({ role: 'assistant', content: reply });
+                this.render();
+            }
+        }
     }
 
     render() {
+        if (!this.isVisible) {
+            this.innerHTML = '';
+            return;
+        }
+
         const ui = store.ui;
         const aiState = store.value.ai;
         const isSmart = aiService.isSmartMode();
+        
+        // Decide which messages to show (Store/Cloud or Local/Ephemeral)
+        const displayMessages = isSmart ? aiState.messages : this.localMessages;
+        const displayStatus = isSmart ? aiState.status : 'idle';
 
-        let content = '';
+        let bubbleContent = '';
 
-        if (this.showUpgradeUI) {
-            // --- SCREEN: UPGRADE / API KEY ---
-            content = `
-            <div class="flex flex-col h-full p-8 bg-slate-50 dark:bg-slate-900">
-                <div class="flex items-center justify-between mb-8">
-                    <h2 class="text-xl font-black text-slate-800 dark:text-white">🧠 Super Brain Setup</h2>
-                    <button class="btn-cancel-upgrade text-slate-400 hover:text-slate-600">✕</button>
-                </div>
-                
-                <div class="flex-1 flex flex-col items-center justify-center text-center">
-                    <div class="text-6xl mb-6">💎</div>
-                    <p class="text-slate-600 dark:text-slate-300 mb-6 font-medium leading-relaxed">${ui.sageUpgradeDesc}</p>
-                    
-                    <div class="w-full max-w-sm">
-                        <label class="block text-left text-xs font-bold text-slate-400 uppercase mb-2">${ui.sageApiKeyLabel}</label>
-                        <input id="inp-api-key" type="password" placeholder="AIzaSy..." class="w-full bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 font-mono text-sm outline-none focus:border-purple-500 transition-colors mb-4">
-                        
-                        <button id="btn-save-key" class="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl shadow-lg transition-transform active:scale-95 mb-4">
-                            ${ui.sageSaveKey}
-                        </button>
-                        
-                        ${isSmart ? `
-                        <button id="btn-clear-key" class="text-xs text-red-500 hover:text-red-600 font-bold underline">
-                            ${ui.sageBackToLocal}
-                        </button>
-                        ` : ''}
+        if (this.showSettings) {
+            // --- ULTRA EASY SETTINGS MODE ---
+            bubbleContent = `
+                <div class="p-6 bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-200 dark:border-slate-800 w-[340px] shadow-2xl animate-in zoom-in duration-200">
+                    <div class="flex justify-between items-start mb-6">
+                        <div>
+                            <h3 class="font-black text-xl text-slate-800 dark:text-white">🧠 Activar Super Cerebro</h3>
+                            <p class="text-xs text-slate-500 mt-1">Conectar con Google Gemini</p>
+                        </div>
+                        <button class="btn-close-settings text-slate-400 hover:text-slate-800 bg-slate-100 dark:bg-slate-800 rounded-full w-8 h-8 font-bold">✕</button>
                     </div>
-                </div>
-                
-                <p class="text-[10px] text-slate-400 text-center mt-4">
-                    The key is stored in your browser's LocalStorage. It is never sent to our servers.
-                </p>
-            </div>
-            `;
-        } else if (aiState.status === 'idle') {
-            // --- SCREEN: IDLE / WAKE ---
-            content = `
-            <div class="flex flex-col items-center justify-center text-center p-8 h-full relative">
-                <div class="w-32 h-32 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-7xl mb-6 shadow-xl animate-bounce cursor-pointer hover:scale-110 transition-transform" id="btn-wake-icon" style="animation-duration: 3s">
-                    ${isSmart ? '🤖' : '🦉'}
-                </div>
-                <h2 class="text-2xl font-black text-slate-800 dark:text-white mb-4">${ui.sageWakeTitle}</h2>
-                <p class="text-slate-600 dark:text-slate-300 mb-8 max-w-sm leading-relaxed">${ui.sageWakeDesc}</p>
-                
-                <button id="btn-wake" class="px-8 py-4 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl shadow-lg shadow-purple-600/30 transition-transform active:scale-95 flex items-center gap-3">
-                    <span>⚡</span> ${ui.sageWakeBtn}
-                </button>
+                    
+                    <div class="space-y-6">
+                        <!-- STEP 1 -->
+                        <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800 relative">
+                            <div class="absolute -left-3 -top-3 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold border-4 border-white dark:border-slate-900">1</div>
+                            <p class="text-sm font-bold text-slate-700 dark:text-blue-100 mb-3 ml-2">Obtén tu Llave Maestra (Gratis)</p>
+                            <a href="https://aistudio.google.com/app/apikey" target="_blank" class="flex items-center justify-center gap-2 w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg transition-transform active:scale-95 text-sm no-underline">
+                                <span>🔑</span> OBTENER LLAVE
+                            </a>
+                            <p class="text-[10px] text-center mt-2 text-slate-500">Se abrirá Google AI Studio. Copia el código que te den.</p>
+                        </div>
 
-                <div class="absolute bottom-6 left-0 right-0 flex justify-center">
-                    <button id="btn-upgrade-toggle" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-500 hover:bg-purple-100 hover:text-purple-600 transition-colors">
-                        <span>${isSmart ? '🧠 Smart Mode Active' : '✨ ' + ui.sageUpgrade}</span>
-                    </button>
-                </div>
-            </div>
-            `;
-        } else if (aiState.status === 'loading') {
-            // --- SCREEN: LOADING ---
-            content = `
-            <div class="flex flex-col items-center justify-center text-center p-8 h-full">
-                <div class="w-24 h-24 border-4 border-slate-200 dark:border-slate-700 border-t-purple-500 rounded-full animate-spin mb-6"></div>
-                <h2 class="text-xl font-bold text-slate-800 dark:text-white mb-2 animate-pulse">${ui.sageDownloading}</h2>
-                <p class="text-slate-500 font-mono text-xs max-w-xs break-words">${aiState.progress}</p>
-            </div>
-            `;
-        } else if (!isSmart) {
-            // --- SCREEN: LOCAL MODE ("CLIPPY") ---
-            // This replaces the Chat UI when no API key is set.
-            content = `
-            <div class="flex flex-col h-full bg-slate-50 dark:bg-slate-950/50 p-6 items-center justify-center relative overflow-hidden">
-                <!-- Background Decoration -->
-                <div class="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-purple-100/50 to-transparent dark:from-purple-900/10 pointer-events-none"></div>
+                        <!-- STEP 2 -->
+                        <div class="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700 relative">
+                            <div class="absolute -left-3 -top-3 w-8 h-8 bg-slate-600 text-white rounded-full flex items-center justify-center font-bold border-4 border-white dark:border-slate-900">2</div>
+                            <p class="text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 ml-2">Pega el código aquí:</p>
+                            <input id="inp-api-key" type="text" placeholder="AIzaSy..." class="w-full text-lg p-3 border-2 border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-900 focus:ring-4 focus:ring-purple-200 outline-none transition-all font-mono text-slate-800 dark:text-white">
+                        </div>
 
-                <!-- Header Actions -->
-                <button class="absolute top-4 right-4 btn-close p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors z-20">✕</button>
-                <button id="btn-upgrade-toggle-local" class="absolute top-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-full bg-white dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-500 hover:text-purple-600 transition-colors z-20">
-                    ✨ Upgrade Brain
-                </button>
+                        <button id="btn-save-key" class="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white font-black text-lg rounded-xl shadow-xl shadow-purple-600/20 transition-transform active:scale-95 flex items-center justify-center gap-2">
+                            <span>🚀</span> CONECTAR
+                        </button>
+                    </div>
 
-                <!-- Avatar -->
-                <div class="w-32 h-32 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center text-7xl mb-8 shadow-2xl border-4 border-white dark:border-slate-700 relative z-10 animate-in zoom-in duration-300">
-                    🦉
-                    <div class="absolute -bottom-2 bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm">Local</div>
+                    ${isSmart ? `<button id="btn-clear-key" class="mt-4 w-full py-2 text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg">Desconectar y Borrar Datos</button>` : ''}
                 </div>
-
-                <!-- Speech Bubble -->
-                <div class="relative bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-xl max-w-xs text-center border border-slate-200 dark:border-slate-700 animate-in slide-in-from-bottom-4 duration-500">
-                    <div class="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-white dark:bg-slate-800 border-t border-l border-slate-200 dark:border-slate-700 transform rotate-45"></div>
-                    <p class="text-slate-700 dark:text-slate-200 font-medium leading-relaxed text-lg">
-                        "${this.currentTip || 'Huu huu!'}"
-                    </p>
-                </div>
-
-                <!-- Actions -->
-                <div class="mt-8 flex gap-3">
-                    <button id="btn-next-tip" class="px-6 py-3 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl transition-colors">
-                        Another Tip
-                    </button>
-                </div>
-                
-                <p class="mt-6 text-xs text-slate-400 max-w-xs text-center">
-                    I am currently in <b>Offline Mode</b>. I can only give you basic tips. Connect a Google Gemini API Key to chat with me properly.
-                </p>
-            </div>
             `;
         } else {
-            // --- SCREEN: SMART CHAT MODE ---
-            content = `
-            <div class="flex flex-col h-full bg-slate-50 dark:bg-slate-950/50">
-                <!-- Header -->
-                <div class="flex-shrink-0 p-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between shadow-sm z-10">
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center text-2xl cursor-pointer hover:scale-110 transition-transform" id="btn-upgrade-toggle-header">
-                            🤖
-                        </div>
-                        <div>
-                            <h3 class="font-black text-slate-800 dark:text-white text-sm">The Sage</h3>
-                            <div class="flex items-center gap-1.5">
-                                <span class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-                                <span class="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Gemini AI</span>
+            // --- CHAT INTERFACE (Shared Local & Smart) ---
+            bubbleContent = `
+                <div class="flex flex-col h-[450px] w-[340px] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden ring-4 ring-slate-100 dark:ring-slate-800">
+                    <!-- Header -->
+                    <div class="p-4 ${isSmart ? 'bg-gradient-to-r from-purple-600 to-indigo-600' : 'bg-slate-100 dark:bg-slate-800'} ${isSmart ? 'text-white' : 'text-slate-800 dark:text-white'} flex justify-between items-center shadow-md z-10">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-xl backdrop-blur-sm shadow-inner">
+                                ${isSmart ? '🤖' : '🦉'}
                             </div>
+                            <div>
+                                <h3 class="font-black text-sm leading-none">${isSmart ? 'Super Búho' : 'Búho Local'}</h3>
+                                <p class="text-[10px] opacity-80 font-medium mt-0.5">${isSmart ? 'Online (Gemini)' : 'Offline (Básico)'}</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-1">
+                             <button id="btn-settings-chat" class="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 transition-colors" title="Configuración">⚙️</button>
+                             <button class="btn-minimize w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 transition-colors" title="Minimizar">_</button>
                         </div>
                     </div>
-                    <button class="btn-close p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">✕</button>
-                </div>
-
-                <!-- Messages Area -->
-                <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-                    ${aiState.messages.map(msg => `
-                        <div class="flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}">
-                            <div class="max-w-[85%] rounded-2xl p-4 text-sm leading-relaxed shadow-sm animate-in fade-in slide-in-from-bottom-2
-                                ${msg.role === 'user' 
-                                    ? 'bg-purple-600 text-white rounded-br-none' 
-                                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-bl-none border border-slate-200 dark:border-slate-700'}">
-                                ${msg.content}
+                    
+                    <!-- Messages Area -->
+                    <div id="sage-chat-area" class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 dark:bg-slate-950/30 custom-scrollbar scroll-smooth">
+                         ${displayMessages.map(m => `
+                            <div class="flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 fade-in duration-300">
+                                <div class="max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed shadow-sm relative group
+                                    ${m.role === 'user' 
+                                        ? 'bg-purple-600 text-white rounded-br-none' 
+                                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-bl-none'
+                                    }">
+                                    ${this.formatMessage(m.content)}
+                                </div>
                             </div>
-                        </div>
-                    `).join('')}
-                    ${aiState.status === 'thinking' ? `
-                         <div class="flex justify-start">
-                            <div class="bg-white dark:bg-slate-800 rounded-2xl rounded-bl-none p-4 border border-slate-200 dark:border-slate-700 shadow-sm flex gap-1">
-                                <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
-                                <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
-                                <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                         `).join('')}
+                         
+                         ${displayStatus === 'thinking' ? `
+                            <div class="flex justify-start">
+                                <div class="bg-white dark:bg-slate-800 p-3 rounded-2xl rounded-bl-none border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-1.5 w-16 justify-center">
+                                    <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
+                                    <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay:0.1s"></div>
+                                    <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay:0.2s"></div>
+                                </div>
                             </div>
-                        </div>
-                    ` : ''}
-                </div>
+                         ` : ''}
+                    </div>
 
-                <!-- Input Area -->
-                <div class="flex-shrink-0 p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
-                    <form id="chat-form" class="relative">
-                        <input id="chat-input" type="text" placeholder="${ui.sagePlaceholder}" class="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-xl py-3 pl-4 pr-12 text-slate-800 dark:text-white font-medium focus:ring-2 focus:ring-purple-500 outline-none transition-all" autocomplete="off" ${aiState.status === 'thinking' ? 'disabled' : ''}>
-                        <button type="submit" class="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-500 disabled:opacity-50 transition-colors" ${aiState.status === 'thinking' ? 'disabled' : ''}>
-                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>
+                    <!-- Quick Actions (Contextual) -->
+                    <div class="px-3 py-2 flex gap-2 overflow-x-auto custom-scrollbar bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0">
+                        ${isSmart ? `
+                            <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 rounded-lg text-xs font-bold hover:bg-purple-100 transition-colors border border-purple-100 dark:border-purple-800" data-action="summarize">📝 Resumir</button>
+                            <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-100 dark:border-blue-800" data-action="explain">🎓 Explicar</button>
+                            <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-lg text-xs font-bold hover:bg-green-100 transition-colors border border-green-100 dark:border-green-800" data-action="quiz">❓ Preguntar</button>
+                        ` : `
+                            <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors" data-action="summarize">📄 Resumir (Local)</button>
+                            <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors" data-action="stats">📊 Datos</button>
+                            <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors" data-action="nav">📍 ¿Dónde estoy?</button>
+                        `}
+                    </div>
+
+                    <!-- Input Area -->
+                    ${isSmart ? `
+                    <form id="sage-form" class="p-3 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex gap-2 shrink-0">
+                        <input id="sage-input" type="text" class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500 dark:text-white placeholder:text-slate-400" placeholder="Pregunta algo..." autocomplete="off">
+                        <button type="submit" class="w-11 h-11 bg-purple-600 text-white rounded-xl hover:bg-purple-500 transition-all flex items-center justify-center shadow-lg active:scale-95">
+                            <svg class="w-5 h-5 translate-x-0.5 -translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>
                         </button>
                     </form>
+                    ` : `
+                    <div class="p-3 bg-slate-50 dark:bg-slate-950/30 text-center border-t border-slate-100 dark:border-slate-800">
+                        <button id="btn-upgrade-local" class="w-full py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-xl text-xs shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2">
+                            <span>✨</span> CONECTAR INTELIGENCIA REAL
+                        </button>
+                    </div>
+                    `}
                 </div>
-            </div>
             `;
         }
 
+        this.className = "fixed bottom-6 right-6 z-[100] flex flex-col items-end gap-4 pointer-events-none"; 
         this.innerHTML = `
-        <div class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
-            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full h-[600px] max-h-[90vh] relative overflow-hidden flex flex-col">
-                ${content}
+            <!-- Chat Window -->
+            <div class="pointer-events-auto transition-all duration-300 origin-bottom-right ${this.isExpanded ? 'scale-100 opacity-100' : 'scale-0 opacity-0 absolute bottom-0 right-0'}">
+                ${bubbleContent}
             </div>
-        </div>`;
 
-        this.bindEvents();
+            <!-- Avatar Button -->
+            <button id="btn-sage-toggle" class="pointer-events-auto w-16 h-16 rounded-full bg-white dark:bg-slate-800 border-4 border-slate-50 dark:border-slate-700 shadow-2xl flex items-center justify-center text-4xl hover:scale-110 active:scale-95 transition-transform group relative">
+                ${isSmart ? '🤖' : '🦉'}
+                ${this.isExpanded ? 
+                    `<div class="absolute -top-1 -right-1 w-6 h-6 bg-slate-200 dark:bg-slate-600 rounded-full flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300 shadow-sm border border-white dark:border-slate-800">✕</div>` 
+                    : ''}
+                ${!this.isExpanded && !isSmart ? `<div class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full animate-pulse border-2 border-white dark:border-slate-800"></div>` : ''}
+            </button>
+        `;
+
+        this.bindEvents(isSmart);
         
-        // Auto scroll for chat mode
-        if (isSmart && (aiState.status === 'ready' || aiState.status === 'thinking')) {
-             const chatContainer = this.querySelector('#chat-messages');
-             if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
-             if (aiState.status === 'ready') setTimeout(() => this.querySelector('#chat-input')?.focus(), 100);
+        // Auto-scroll logic
+        if(this.isExpanded) {
+            const area = this.querySelector('#sage-chat-area');
+            if(area) area.scrollTop = area.scrollHeight;
         }
     }
 
-    bindEvents() {
-        this.querySelectorAll('.btn-close').forEach(b => b.onclick = () => store.setModal(null));
-        
-        const btnWake = this.querySelector('#btn-wake');
-        if (btnWake) btnWake.onclick = () => store.initSage();
-        
-        const btnWakeIcon = this.querySelector('#btn-wake-icon');
-        if (btnWakeIcon) btnWakeIcon.onclick = () => store.initSage();
+    formatMessage(text) {
+        // Basic Markdown-ish formatting for chat
+        return text
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\n/g, '<br>');
+    }
 
-        const form = this.querySelector('#chat-form');
-        if (form) {
-            form.onsubmit = (e) => {
-                e.preventDefault();
-                const input = this.querySelector('#chat-input');
-                const val = input.value.trim();
-                if (val) {
-                    store.chatWithSage(val);
-                    input.value = '';
-                }
-            };
+    bindEvents(isSmart) {
+        this.querySelector('#btn-sage-toggle').onclick = () => this.toggleExpand();
+
+        if (this.showSettings) {
+            this.querySelector('.btn-close-settings').onclick = () => this.toggleSettings();
+            this.querySelector('#btn-save-key').onclick = () => this.saveApiKey();
+            const btnClear = this.querySelector('#btn-clear-key');
+            if (btnClear) btnClear.onclick = () => this.clearApiKey();
+            
+            // Validate input visual
+            const inp = this.querySelector('#inp-api-key');
+            if(inp) {
+                inp.oninput = (e) => {
+                    const val = e.target.value.trim();
+                    if(val.startsWith('AIza')) {
+                        inp.classList.add('border-green-500', 'ring-2', 'ring-green-200');
+                        inp.classList.remove('border-slate-300');
+                    }
+                };
+            }
+            return;
         }
 
-        // Upgrade UI Handlers
-        const toggleUpgrade = () => this.toggleUpgradeUI();
+        this.querySelector('.btn-minimize').onclick = () => this.toggleExpand();
+        this.querySelector('#btn-settings-chat').onclick = () => this.toggleSettings();
         
-        const btnUpgrade = this.querySelector('#btn-upgrade-toggle');
-        if (btnUpgrade) btnUpgrade.onclick = toggleUpgrade;
-        
-        const btnUpgradeHeader = this.querySelector('#btn-upgrade-toggle-header');
-        if (btnUpgradeHeader) btnUpgradeHeader.onclick = toggleUpgrade;
-        
-        const btnUpgradeLocal = this.querySelector('#btn-upgrade-toggle-local');
-        if (btnUpgradeLocal) btnUpgradeLocal.onclick = toggleUpgrade;
+        // Quick Actions
+        this.querySelectorAll('.btn-qa').forEach(btn => {
+            btn.onclick = () => this.runQuickAction(btn.dataset.action);
+        });
 
-        const btnCancelUpgrade = this.querySelector('.btn-cancel-upgrade');
-        if (btnCancelUpgrade) btnCancelUpgrade.onclick = toggleUpgrade;
-
-        const btnSaveKey = this.querySelector('#btn-save-key');
-        if (btnSaveKey) btnSaveKey.onclick = () => this.saveApiKey();
-
-        const btnClearKey = this.querySelector('#btn-clear-key');
-        if (btnClearKey) btnClearKey.onclick = () => this.clearApiKey();
-        
-        const btnNextTip = this.querySelector('#btn-next-tip');
-        if (btnNextTip) btnNextTip.onclick = () => {
-             this.currentTip = aiService.getContextTip(store.value);
-             this.render();
-        };
+        if (isSmart) {
+             const form = this.querySelector('#sage-form');
+             if (form) {
+                 form.onsubmit = (e) => {
+                     e.preventDefault();
+                     const inp = this.querySelector('#sage-input');
+                     if (inp.value.trim()) {
+                         store.chatWithSage(inp.value.trim());
+                         inp.value = '';
+                     }
+                 };
+             }
+        } else {
+             const btnUp = this.querySelector('#btn-upgrade-local');
+             if(btnUp) btnUp.onclick = () => this.toggleSettings();
+        }
     }
 }
 customElements.define('arbor-sage', ArborSage);
