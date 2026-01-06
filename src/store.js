@@ -529,10 +529,13 @@ class Store extends EventTarget {
         };
         collectLeaves(parentNode);
 
+        // Explicitly mark the Branch itself as complete so it turns green in graph
+        this.state.completedNodes.add(parentId);
+
         if(addedCount > 0) this.addXP(addedCount * 10);
         this.persistProgress();
         
-        this.checkForModuleCompletion(parentNode.children?.[0]?.id); // Trigger check
+        this.checkForModuleCompletion(parentNode.children?.[0]?.id || parentId); // Trigger check
         this.update({ lastActionMessage: "Branch Mastered! 🎓" });
         setTimeout(() => this.update({ lastActionMessage: null }), 3000);
     }
@@ -544,6 +547,10 @@ class Store extends EventTarget {
         
         modules.forEach(m => {
             if (m.isComplete) {
+                // If complete, ensure the module ID itself is marked as complete in the set
+                if (!this.state.completedNodes.has(m.id)) {
+                     this.state.completedNodes.add(m.id);
+                }
                 this.harvestFruit(m.id);
             }
         });
