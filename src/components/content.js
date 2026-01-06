@@ -1,7 +1,3 @@
-
-
-
-
 import { store } from '../store.js';
 import { parseContent } from '../utils/parser.js';
 
@@ -45,10 +41,6 @@ class ArborContent extends HTMLElement {
     resetState() {
         this.quizStates = {};
         this.activeSectionIndex = 0;
-        this.visitedSections = new Set([0]); // Always mark first section as visited by default? Maybe not.
-        // Let's change this: First section is visited only if we are there. 
-        // But visually users like to see where they are.
-        // We will separate "Current Active" from "Completed/Visited".
         this.visitedSections = new Set(); 
         this.tocFilter = '';
     }
@@ -95,7 +87,6 @@ class ArborContent extends HTMLElement {
         store.markBranchComplete(this.currentNode.parentId);
     }
 
-    // Logic: "Next / Complete" -> Marks current as visited (tick) and moves next
     async completeAndNext() {
         // Mark current section as visited/completed
         this.visitedSections.add(this.activeSectionIndex);
@@ -104,7 +95,7 @@ class ArborContent extends HTMLElement {
         if (this.activeSectionIndex < toc.length - 1) {
             this.scrollToSection(this.activeSectionIndex + 1);
         } else {
-            // Finish lesson: Mark the LEAF node as complete (green)
+            // Finish lesson: Mark the LEAF node as complete
             if (this.currentNode) {
                 store.markComplete(this.currentNode.id, true);
 
@@ -124,7 +115,6 @@ class ArborContent extends HTMLElement {
         }
     }
 
-    // Logic: "Read Later" -> Skips current (NO TICK) and moves next
     skipSection() {
         const toc = this.getToc();
         if (this.activeSectionIndex < toc.length - 1) {
@@ -137,8 +127,6 @@ class ArborContent extends HTMLElement {
     
     scrollToSection(idx) {
         this.activeSectionIndex = idx;
-        // NOTE: We do NOT add to visitedSections here. 
-        // Visited means "Completed". Navigation is just Navigation.
         this.render();
         const el = this.querySelector('#content-area');
         if(el) el.scrollTop = 0;
@@ -200,7 +188,6 @@ class ArborContent extends HTMLElement {
 
         const activeBlocks = this.getActiveBlocks(allBlocks, toc);
         
-        // Progress Calc (Visual only based on index, not completed state)
         const progress = Math.round(((this.activeSectionIndex + 1) / toc.length) * 100);
 
         // Edit permission check

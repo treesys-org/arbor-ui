@@ -1,13 +1,3 @@
-
-
-
-
-
-
-
-
-
-
 import os
 import json
 import datetime
@@ -29,7 +19,6 @@ UNIVERSE_NAME = "Arbor Standard Curriculum"
 NAMESPACE = "org.arbor.knowledge"
 
 ROOT_DIR = "./content" 
-# CHANGE: Output everything to a 'data' folder to keep root clean
 DATA_ROOT_DIR = "./data"
 API_DIR = os.path.join(DATA_ROOT_DIR, "nodes")
 OUTPUT_FILE = os.path.join(DATA_ROOT_DIR, "data.json") 
@@ -197,7 +186,7 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
             "namespace": NAMESPACE,
             "apiPath": f"{lang_folder.lower()}/{current_slug_path}",
             "totalLeaves": 0, # Will be calculated
-            "sourcePath": clean_source_path # <--- ADDED for GitHub Editing
+            "sourcePath": clean_source_path
         }
         
         # Cleanup internal keys
@@ -236,7 +225,6 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
             if api_filepath:
                 os.makedirs(os.path.dirname(api_filepath), exist_ok=True)
                 with open(api_filepath, 'w', encoding='utf-8') as f:
-                    # FIX: indent=2 added here to prevent single-line JSON errors
                     json.dump(children_for_api_file, f, indent=2, ensure_ascii=False)
 
     # --- FILE (LEAF) ---
@@ -253,7 +241,7 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
                 "namespace": NAMESPACE,
                 "name": os.path.splitext(name)[0].replace('_', ' '),
                 "icon": "📄",
-                "sourcePath": clean_source_path # <--- ADDED: Path for GitHub editing
+                "sourcePath": clean_source_path
             }
             
             try:

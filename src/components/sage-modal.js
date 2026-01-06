@@ -6,6 +6,7 @@ class ArborSage extends HTMLElement {
     constructor() {
         super();
         this.showUpgradeUI = false;
+        this.currentTip = '';
     }
 
     connectedCallback() {
@@ -15,10 +16,15 @@ class ArborSage extends HTMLElement {
     checkState() {
         const modal = store.value.modal;
         if (modal === 'sage' || (modal && modal.type === 'sage')) {
+            // Refresh tip when opening in local mode
+            if (!aiService.isSmartMode() && !this.currentTip) {
+                this.currentTip = aiService.getContextTip(store.value);
+            }
             this.render();
         } else {
             this.innerHTML = '';
             this.showUpgradeUI = false;
+            this.currentTip = '';
         }
     }
 
@@ -39,6 +45,7 @@ class ArborSage extends HTMLElement {
     clearApiKey() {
         aiService.setApiKey(null);
         this.showUpgradeUI = false;
+        this.currentTip = aiService.getContextTip(store.value);
         store.initSage();
     }
 
@@ -50,7 +57,7 @@ class ArborSage extends HTMLElement {
         let content = '';
 
         if (this.showUpgradeUI) {
-            // SCREEN: UPGRADE / API KEY
+            // --- SCREEN: UPGRADE / API KEY ---
             content = `
             <div class="flex flex-col h-full p-8 bg-slate-50 dark:bg-slate-900">
                 <div class="flex items-center justify-between mb-8">
@@ -84,7 +91,7 @@ class ArborSage extends HTMLElement {
             </div>
             `;
         } else if (aiState.status === 'idle') {
-            // SCREEN: IDLE / WAKE
+            // --- SCREEN: IDLE / WAKE ---
             content = `
             <div class="flex flex-col items-center justify-center text-center p-8 h-full relative">
                 <div class="w-32 h-32 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-7xl mb-6 shadow-xl animate-bounce cursor-pointer hover:scale-110 transition-transform" id="btn-wake-icon" style="animation-duration: 3s">
@@ -105,7 +112,7 @@ class ArborSage extends HTMLElement {
             </div>
             `;
         } else if (aiState.status === 'loading') {
-            // SCREEN: LOADING
+            // --- SCREEN: LOADING ---
             content = `
             <div class="flex flex-col items-center justify-center text-center p-8 h-full">
                 <div class="w-24 h-24 border-4 border-slate-200 dark:border-slate-700 border-t-purple-500 rounded-full animate-spin mb-6"></div>
@@ -113,33 +120,61 @@ class ArborSage extends HTMLElement {
                 <p class="text-slate-500 font-mono text-xs max-w-xs break-words">${aiState.progress}</p>
             </div>
             `;
-        } else if (aiState.status === 'error') {
-             // SCREEN: ERROR
-             content = `
-            <div class="flex flex-col items-center justify-center text-center p-8 h-full">
-                <div class="text-6xl mb-4">😵‍💫</div>
-                <h2 class="text-xl font-bold text-red-600 mb-2">${ui.sageError}</h2>
-                <p class="text-slate-500 text-sm mb-4">${aiState.progress}</p>
-                <button onclick="store.setModal(null)" class="text-slate-400 underline hover:text-slate-600">Close</button>
+        } else if (!isSmart) {
+            // --- SCREEN: LOCAL MODE ("CLIPPY") ---
+            // This replaces the Chat UI when no API key is set.
+            content = `
+            <div class="flex flex-col h-full bg-slate-50 dark:bg-slate-950/50 p-6 items-center justify-center relative overflow-hidden">
+                <!-- Background Decoration -->
+                <div class="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-purple-100/50 to-transparent dark:from-purple-900/10 pointer-events-none"></div>
+
+                <!-- Header Actions -->
+                <button class="absolute top-4 right-4 btn-close p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors z-20">✕</button>
+                <button id="btn-upgrade-toggle-local" class="absolute top-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-full bg-white dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-500 hover:text-purple-600 transition-colors z-20">
+                    ✨ Upgrade Brain
+                </button>
+
+                <!-- Avatar -->
+                <div class="w-32 h-32 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center text-7xl mb-8 shadow-2xl border-4 border-white dark:border-slate-700 relative z-10 animate-in zoom-in duration-300">
+                    🦉
+                    <div class="absolute -bottom-2 bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm">Local</div>
+                </div>
+
+                <!-- Speech Bubble -->
+                <div class="relative bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-xl max-w-xs text-center border border-slate-200 dark:border-slate-700 animate-in slide-in-from-bottom-4 duration-500">
+                    <div class="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-white dark:bg-slate-800 border-t border-l border-slate-200 dark:border-slate-700 transform rotate-45"></div>
+                    <p class="text-slate-700 dark:text-slate-200 font-medium leading-relaxed text-lg">
+                        "${this.currentTip || 'Huu huu!'}"
+                    </p>
+                </div>
+
+                <!-- Actions -->
+                <div class="mt-8 flex gap-3">
+                    <button id="btn-next-tip" class="px-6 py-3 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl transition-colors">
+                        Another Tip
+                    </button>
+                </div>
+                
+                <p class="mt-6 text-xs text-slate-400 max-w-xs text-center">
+                    I am currently in <b>Offline Mode</b>. I can only give you basic tips. Connect a Google Gemini API Key to chat with me properly.
+                </p>
             </div>
             `;
         } else {
-            // SCREEN: CHAT
+            // --- SCREEN: SMART CHAT MODE ---
             content = `
             <div class="flex flex-col h-full bg-slate-50 dark:bg-slate-950/50">
                 <!-- Header -->
                 <div class="flex-shrink-0 p-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between shadow-sm z-10">
                     <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center text-2xl cursor-pointer" id="btn-upgrade-toggle-header">
-                            ${isSmart ? '🤖' : '🦉'}
+                        <div class="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center text-2xl cursor-pointer hover:scale-110 transition-transform" id="btn-upgrade-toggle-header">
+                            🤖
                         </div>
                         <div>
                             <h3 class="font-black text-slate-800 dark:text-white text-sm">The Sage</h3>
                             <div class="flex items-center gap-1.5">
-                                <span class="w-2 h-2 rounded-full ${isSmart ? 'bg-blue-500' : 'bg-green-500'} animate-pulse"></span>
-                                <span class="text-[10px] font-bold ${isSmart ? 'text-blue-600' : 'text-green-600'} uppercase tracking-wider">
-                                    ${isSmart ? 'Gemini AI' : 'Local Logic'}
-                                </span>
+                                <span class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                                <span class="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Gemini AI</span>
                             </div>
                         </div>
                     </div>
@@ -185,15 +220,14 @@ class ArborSage extends HTMLElement {
         this.innerHTML = `
         <div class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
             <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full h-[600px] max-h-[90vh] relative overflow-hidden flex flex-col">
-                ${!this.showUpgradeUI && aiState.status !== 'ready' && aiState.status !== 'thinking' ? `<button class="btn-close absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors z-20">✕</button>` : ''}
                 ${content}
             </div>
         </div>`;
 
         this.bindEvents();
         
-        // Auto scroll
-        if (aiState.status === 'ready' || aiState.status === 'thinking') {
+        // Auto scroll for chat mode
+        if (isSmart && (aiState.status === 'ready' || aiState.status === 'thinking')) {
              const chatContainer = this.querySelector('#chat-messages');
              if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
              if (aiState.status === 'ready') setTimeout(() => this.querySelector('#chat-input')?.focus(), 100);
@@ -223,20 +257,31 @@ class ArborSage extends HTMLElement {
         }
 
         // Upgrade UI Handlers
+        const toggleUpgrade = () => this.toggleUpgradeUI();
+        
         const btnUpgrade = this.querySelector('#btn-upgrade-toggle');
-        if (btnUpgrade) btnUpgrade.onclick = () => this.toggleUpgradeUI();
+        if (btnUpgrade) btnUpgrade.onclick = toggleUpgrade;
         
         const btnUpgradeHeader = this.querySelector('#btn-upgrade-toggle-header');
-        if (btnUpgradeHeader) btnUpgradeHeader.onclick = () => this.toggleUpgradeUI();
+        if (btnUpgradeHeader) btnUpgradeHeader.onclick = toggleUpgrade;
+        
+        const btnUpgradeLocal = this.querySelector('#btn-upgrade-toggle-local');
+        if (btnUpgradeLocal) btnUpgradeLocal.onclick = toggleUpgrade;
 
         const btnCancelUpgrade = this.querySelector('.btn-cancel-upgrade');
-        if (btnCancelUpgrade) btnCancelUpgrade.onclick = () => this.toggleUpgradeUI();
+        if (btnCancelUpgrade) btnCancelUpgrade.onclick = toggleUpgrade;
 
         const btnSaveKey = this.querySelector('#btn-save-key');
         if (btnSaveKey) btnSaveKey.onclick = () => this.saveApiKey();
 
         const btnClearKey = this.querySelector('#btn-clear-key');
         if (btnClearKey) btnClearKey.onclick = () => this.clearApiKey();
+        
+        const btnNextTip = this.querySelector('#btn-next-tip');
+        if (btnNextTip) btnNextTip.onclick = () => {
+             this.currentTip = aiService.getContextTip(store.value);
+             this.render();
+        };
     }
 }
 customElements.define('arbor-sage', ArborSage);

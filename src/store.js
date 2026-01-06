@@ -1,4 +1,3 @@
-
 import { UI_LABELS, AVAILABLE_LANGUAGES } from './i18n.js';
 import { github } from './services/github.js';
 import { aiService } from './services/ai.js';
@@ -79,7 +78,6 @@ class Store extends EventTarget {
     get availableLanguages() { return AVAILABLE_LANGUAGES; }
     get currentLangInfo() { return AVAILABLE_LANGUAGES.find(l => l.code === this.state.lang); }
     
-    // Configurable constants
     get dailyXpGoal() { return 50; }
 
     update(partialState) {
@@ -216,7 +214,6 @@ class Store extends EventTarget {
     async navigateTo(nodeId) {
         let node = this.findNode(nodeId);
         if (!node) {
-            // ... (Same deep link logic as before) ...
              const pathIdsToUnfold = [];
             let currentId = nodeId;
             let highestAncestorInMemory = null;
@@ -447,8 +444,6 @@ class Store extends EventTarget {
 
             if (diffDays === 1) {
                 // Streak continues
-                // Don't increment here, we increment when they complete an action or just by logging in?
-                // Let's increment on first load of the day.
                 this.updateGamification({ streak: streak + 1, lastLoginDate: today, dailyXP: 0 });
                 this.update({ lastActionMessage: this.ui.streakKept });
                 setTimeout(() => this.update({ lastActionMessage: null }), 3000);
@@ -470,7 +465,6 @@ class Store extends EventTarget {
         let msg = `+${amount} ${this.ui.xpUnit}`;
         if (gamification.dailyXP < this.dailyXpGoal && newDaily >= this.dailyXpGoal) {
             msg = this.ui.goalReached + " ☀️";
-            // Fire confetti event if possible, or just visual feedback
         }
 
         this.updateGamification({ xp: newTotal, dailyXP: newDaily });
@@ -545,11 +539,6 @@ class Store extends EventTarget {
         // Find the top-level module for this node
         if (!relatedNodeId) return;
         const modules = this.getModulesStatus();
-        
-        // Naive matching: assumption that node ID starts with module ID
-        // Better: iterate modules, check if relatedNodeId is a descendant
-        // For Arbor, IDs are constructed parentId__slug, so startsWith works usually.
-        // But let's rely on getModulesStatus which calculates completeness accurately.
         
         modules.forEach(m => {
             if (m.isComplete) {

@@ -20,7 +20,6 @@ class ArborSidebar extends HTMLElement {
     render() {
         const ui = store.ui;
         const g = store.value.gamification;
-        const dailyProgress = Math.min(100, Math.round((g.dailyXP / store.dailyXpGoal) * 100));
 
         let mobileMenuHtml = '';
         if (this.isMobileMenuOpen) {
@@ -120,23 +119,6 @@ class ArborSidebar extends HTMLElement {
             <!-- TOP SECTION -->
             <div class="flex flex-col items-center gap-4 w-full">
                 <div class="w-12 h-12 flex items-center justify-center bg-gradient-to-br from-green-400 to-green-600 text-white rounded-xl text-2xl mb-2 shadow-lg shadow-green-500/30 cursor-pointer js-btn-home">🌳</div>
-                
-                <!-- GAMIFICATION WIDGETS -->
-                <div class="relative group cursor-default">
-                    <div class="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-500 flex flex-col items-center justify-center">
-                        <span class="text-sm">💧</span>
-                        <span class="text-[10px] font-bold leading-none">${g.streak}</span>
-                    </div>
-                    <span class="tooltip">${ui.streak}</span>
-                </div>
-
-                <div class="relative group cursor-default">
-                    <div class="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-900/20 text-orange-500 flex flex-col items-center justify-center relative overflow-hidden">
-                        <div class="absolute bottom-0 left-0 right-0 bg-orange-200 dark:bg-orange-800/50 transition-all duration-500" style="height: ${dailyProgress}%"></div>
-                        <span class="text-sm relative z-10">☀️</span>
-                    </div>
-                    <span class="tooltip">${ui.todayGoal}: ${g.dailyXP}/${store.dailyXpGoal}</span>
-                </div>
                 
                 <div class="w-8 h-px bg-slate-200 dark:bg-slate-700 my-1"></div>
 
