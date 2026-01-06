@@ -215,11 +215,11 @@ class ArborEditor extends HTMLElement {
                 color: #e2e8f0;
             }
         </style>
-        <div id="editor-overlay" class="fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-sm p-4 flex items-center justify-center animate-in fade-in duration-200">
-            <div class="bg-[#f7f9fa] dark:bg-slate-950 rounded-2xl shadow-2xl max-w-7xl w-full h-[95vh] flex flex-col border border-slate-300 dark:border-slate-700">
+        <div id="editor-overlay" class="fixed inset-0 z-[80] bg-[#f7f9fa] dark:bg-slate-950 animate-in fade-in duration-200">
+            <div class="w-full h-full flex flex-col">
                 
                 <!-- HEADER -->
-                <div class="flex-shrink-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm z-20 rounded-t-2xl p-4">
+                <div class="flex-shrink-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm z-20 p-4">
                     <div class="flex justify-between items-center mb-4">
                         <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">${this.node.sourcePath}</p>
                         <div class="flex items-center gap-3">
@@ -292,8 +292,8 @@ class ArborEditor extends HTMLElement {
                         </div>
                     </div>
                 </div>
+                 <input type="file" id="image-upload" class="hidden" accept="image/*">
             </div>
-            <input type="file" id="image-upload" class="hidden" accept="image/*">
         </div>
             
         <!-- MODAL DE GUARDADO -->
@@ -323,12 +323,20 @@ class ArborEditor extends HTMLElement {
                     <div class="option-item flex items-center gap-3" data-type="${opt.correct ? 'correct' : 'option'}">
                         <span class="w-8 h-8 rounded-full flex items-center justify-center text-lg ${opt.correct ? 'bg-green-100 text-green-600' : 'bg-red-50 text-red-400'}">${opt.correct ? '✔' : '✖'}</span>
                         <input type="text" class="flex-1" value="${opt.text}" placeholder="Texto de la opción...">
+                        <button class="btn-remove-option p-2 text-slate-400 hover:text-red-500 rounded-full">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12h-15" /></svg>
+                        </button>
                     </div>
                 `).join('');
+
                 html += `<div class="arbor-block quiz-block" contenteditable="false">
                     <h4 class="font-bold text-green-700 dark:text-green-300 uppercase text-xs mb-2">Pregunta de Evaluación</h4>
                     <input type="text" class="quiz-question-input mb-4 font-bold text-lg" value="${currentQuiz.question}" placeholder="Escribe la pregunta...">
                     <div class="options-container space-y-3">${optionsHtml}</div>
+                    <div class="mt-4 flex items-center gap-2">
+                        <button class="btn-add-option text-xs font-bold bg-green-100 text-green-700 px-3 py-1.5 rounded-md hover:bg-green-200" data-type="correct">+ Opción Correcta</button>
+                        <button class="btn-add-option text-xs font-bold bg-red-50 text-red-600 px-3 py-1.5 rounded-md hover:bg-red-100" data-type="option">+ Opción Incorrecta</button>
+                    </div>
                 </div>`;
                 currentQuiz = null;
             }
@@ -401,6 +409,40 @@ class ArborEditor extends HTMLElement {
         // Image upload handling
         this.querySelector('#image-upload').onchange = (e) => this.handleImageUpload(e);
 
+        // Delegated events for dynamic quiz options
+        const editor = this.querySelector('#wysiwyg-editor');
+        if (editor) {
+            editor.addEventListener('click', (e) => {
+                const removeBtn = e.target.closest('.btn-remove-option');
+                if (removeBtn) {
+                    e.preventDefault();
+                    removeBtn.closest('.option-item')?.remove();
+                    return;
+                }
+
+                const addBtn = e.target.closest('.btn-add-option');
+                if (addBtn) {
+                    e.preventDefault();
+                    const type = addBtn.dataset.type;
+                    const isCorrect = type === 'correct';
+                    const optionsContainer = addBtn.closest('.quiz-block').querySelector('.options-container');
+                    
+                    const newOption = document.createElement('div');
+                    newOption.className = 'option-item flex items-center gap-3';
+                    newOption.dataset.type = type;
+                    newOption.innerHTML = `
+                        <span class="w-8 h-8 rounded-full flex items-center justify-center text-lg ${isCorrect ? 'bg-green-100 text-green-600' : 'bg-red-50 text-red-400'}">${isCorrect ? '✔' : '✖'}</span>
+                        <input type="text" class="flex-1" placeholder="${isCorrect ? 'Respuesta Correcta' : 'Respuesta Incorrecta'}">
+                        <button class="btn-remove-option p-2 text-slate-400 hover:text-red-500 rounded-full">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12h-15" /></svg>
+                        </button>
+                    `;
+                    optionsContainer.appendChild(newOption);
+                    newOption.querySelector('input').focus();
+                }
+            });
+        }
+
         // Emoji picker
         this.querySelectorAll('.btn-emoji-opt').forEach(b => b.onclick = (e) => {
             e.stopPropagation();
@@ -432,8 +474,20 @@ class ArborEditor extends HTMLElement {
                 <h4 class="font-bold text-green-700 dark:text-green-300 uppercase text-xs mb-2">Pregunta de Evaluación</h4>
                 <input type="text" class="quiz-question-input mb-4 font-bold text-lg" placeholder="Escribe la pregunta...">
                 <div class="options-container space-y-3">
-                    <div class="option-item flex items-center gap-3" data-type="correct"><span class="w-8 h-8 rounded-full flex items-center justify-center text-lg bg-green-100 text-green-600">✔</span><input type="text" class="flex-1" placeholder="Respuesta Correcta"></div>
-                    <div class="option-item flex items-center gap-3" data-type="option"><span class="w-8 h-8 rounded-full flex items-center justify-center text-lg bg-red-50 text-red-400">✖</span><input type="text" class="flex-1" placeholder="Respuesta Incorrecta"></div>
+                    <div class="option-item flex items-center gap-3" data-type="correct">
+                        <span class="w-8 h-8 rounded-full flex items-center justify-center text-lg bg-green-100 text-green-600">✔</span>
+                        <input type="text" class="flex-1" placeholder="Respuesta Correcta">
+                        <button class="btn-remove-option p-2 text-slate-400 hover:text-red-500 rounded-full"><svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12h-15" /></svg></button>
+                    </div>
+                    <div class="option-item flex items-center gap-3" data-type="option">
+                        <span class="w-8 h-8 rounded-full flex items-center justify-center text-lg bg-red-50 text-red-400">✖</span>
+                        <input type="text" class="flex-1" placeholder="Respuesta Incorrecta">
+                        <button class="btn-remove-option p-2 text-slate-400 hover:text-red-500 rounded-full"><svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12h-15" /></svg></button>
+                    </div>
+                </div>
+                <div class="mt-4 flex items-center gap-2">
+                    <button class="btn-add-option text-xs font-bold bg-green-100 text-green-700 px-3 py-1.5 rounded-md hover:bg-green-200" data-type="correct">+ Opción Correcta</button>
+                    <button class="btn-add-option text-xs font-bold bg-red-50 text-red-600 px-3 py-1.5 rounded-md hover:bg-red-100" data-type="option">+ Opción Incorrecta</button>
                 </div>
             </div><p><br></p>`;
         } else if (type === 'video') {
