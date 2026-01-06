@@ -228,6 +228,8 @@ class ArborGraph extends HTMLElement {
     updateGraph() {
         if (!this.svg || !store.value.data) return;
 
+        const harvestedFruits = store.value.gamification.fruits;
+
         // 1. Construct Hierarchy
         const root = d3.hierarchy(store.value.data, d => d.expanded ? d.children : null);
         
@@ -355,6 +357,9 @@ class ArborGraph extends HTMLElement {
 
         nodeUpdate.select(".node-body")
             .attr("fill", d => {
+                const isHarvested = harvestedFruits.find(f => f.id === d.data.id);
+                if (isHarvested) return '#FCD34D'; // Gold/Yellow for Fruits
+
                 if (d.data.type === 'root') return '#8D6E63';
                 if (store.isCompleted(d.data.id)) return '#22c55e'; // Completed is always green
                 if (d.data.type === 'exam') return '#ef4444'; // Exam is red
@@ -362,18 +367,43 @@ class ArborGraph extends HTMLElement {
                 return '#F59E0B'; // Folder is orange
             })
             .attr("d", d => {
+                const isHarvested = harvestedFruits.find(f => f.id === d.data.id);
                 // Increased visual radius for the shapes
-                const r = d.data.type === 'root' ? 60 : 45; 
+                const r = d.data.type === 'root' ? 60 : (isHarvested ? 50 : 45); 
+                
                 if (d.data.type === 'leaf') return "M0,0 C-35,15 -45,45 0,85 C45,45 35,15 0,0"; // Larger Leaf
                 // Diamond shape for Exam
                 if (d.data.type === 'exam') return `M0,${-r*1.2} L${r*1.2},0 L0,${r*1.2} L${-r*1.2},0 Z`;
+                
+                // Circle (Fruits / Folders)
                 return `M${-r},0 a${r},${r} 0 1,0 ${r*2},0 a${r},${r} 0 1,0 ${-r*2},0`;
             })
-            .style("filter", d => (d.data.type === 'leaf' || d.data.type === 'exam') && store.isCompleted(d.data.id) ? "url(#leaf-glow)" : "url(#drop-shadow)");
+            .style("filter", d => {
+                const isHarvested = harvestedFruits.find(f => f.id === d.data.id);
+                if (isHarvested || ((d.data.type === 'leaf' || d.data.type === 'exam') && store.isCompleted(d.data.id))) {
+                    return "url(#leaf-glow)";
+                }
+                return "url(#drop-shadow)";
+            });
 
         nodeUpdate.select(".node-icon")
-            .text(d => (d.data.type === 'leaf' || d.data.type === 'exam') && store.isCompleted(d.data.id) ? '✓' : (d.data.icon || (d.data.type === 'exam' ? '⚔️' : '🌱')))
-            .attr("fill", d => (d.data.type === 'leaf' || d.data.type === 'exam') && store.isCompleted(d.data.id) ? '#fff' : '#1e293b')
+            .text(d => {
+                // If it is a harvested fruit module, show the fruit icon!
+                const fruit = harvestedFruits.find(f => f.id === d.data.id);
+                if (fruit) return fruit.icon;
+
+                // Standard logic
+                if ((d.data.type === 'leaf' || d.data.type === 'exam') && store.isCompleted(d.data.id)) {
+                    return '✓';
+                }
+                return d.data.icon || (d.data.type === 'exam' ? '⚔️' : '🌱');
+            })
+            .attr("fill", d => {
+                const isHarvested = harvestedFruits.find(f => f.id === d.data.id);
+                if (isHarvested) return '#1e293b'; // Dark icon on Fruit
+                if ((d.data.type === 'leaf' || d.data.type === 'exam') && store.isCompleted(d.data.id)) return '#fff';
+                return '#1e293b';
+            })
             .attr("dy", d => d.data.type === 'leaf' || d.data.type === 'exam' ? (d.data.type === 'exam' ? "0.35em" : "48px") : "0.35em")
             .attr("font-weight", d => store.isCompleted(d.data.id) ? "900" : "normal");
         
@@ -389,17 +419,24 @@ class ArborGraph extends HTMLElement {
         nodeUpdate.select(".spinner")
             .style("display", d => d.data.status === 'loading' ? 'block' : 'none');
 
-        // Label Sizing
+        // Label Sizing - Improved Logic
         nodeMerged.select(".label-group text")
             .text(d => d.data.name)
             .each(function() {
                 try {
-                    const bbox = this.getBBox();
-                    const w = Math.max(30, bbox.width + 24); // More padding
+                    // Use getComputedTextLength for accurate text width instead of getBBox
+                    const textWidth = this.getComputedTextLength();
+                    const w = Math.max(50, textWidth + 40); // Generous padding for pill shape
+                    
                     d3.select(this.parentNode).select("rect")
                         .attr("x", -w/2)
                         .attr("width", w);
-                } catch(e){}
+                } catch(e) {
+                     // Fallback if calculation fails
+                     d3.select(this.parentNode).select("rect")
+                        .attr("x", -50)
+                        .attr("width", 100);
+                }
             });
 
         // EXIT
@@ -425,7 +462,8 @@ class ArborGraph extends HTMLElement {
             });
 
         linkSelection.merge(linkEnter).transition().duration(this.duration)
-            .attr("d", d => this.diagonal(d));
+            .attr("d", d => this.diagonal(d))
+            .attr("stroke", d => store.isCompleted(d.target.data.id) ? "#22c55e" : "#8D6E63"); // Green link if target is done
 
         linkSelection.exit().transition().duration(this.duration)
             .attr("d", d => {
