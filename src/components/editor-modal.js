@@ -63,7 +63,7 @@ class ArborEditor extends HTMLElement {
     }
 
     // ==================================================================================
-    // 🧠 PARSER MEJORADO (METADATOS + CUERPO)
+    // 🧠 PARSER (METADATOS + CUERPO)
     // ==================================================================================
 
     parseFullContent(md) {
@@ -92,12 +92,11 @@ class ArborEditor extends HTMLElement {
                 } else if (value) {
                     this.meta.extra[cleanKey] = value; // Preserve unknown tags
                 } else {
-                    // Line starts with @ but isn't meta (e.g. @quiz), stop parsing meta
                     parsingMeta = false;
                     bodyLines.push(line);
                 }
             } else {
-                if (t !== '') parsingMeta = false; // Stop on first non-empty, non-meta line
+                if (t !== '') parsingMeta = false;
                 bodyLines.push(line);
             }
         }
@@ -167,8 +166,6 @@ class ArborEditor extends HTMLElement {
 
     visualToMarkdown() {
         let md = '';
-        
-        // 1. Reconstruir Metadatos desde los inputs de la cabecera
         md += `@title: ${this.querySelector('#editor-title').value.trim()}\n`;
         md += `@icon: ${this.querySelector('#btn-emoji').textContent.trim()}\n`;
         md += `@description: ${this.querySelector('#editor-description').value.trim()}\n`;
@@ -181,7 +178,6 @@ class ArborEditor extends HTMLElement {
         });
         md += `\n`;
         
-        // 2. Reconstruir cuerpo desde el editor visual
         const editorEl = this.querySelector('#wysiwyg-editor');
         const nodes = editorEl.childNodes;
         nodes.forEach(node => {
@@ -217,8 +213,6 @@ class ArborEditor extends HTMLElement {
         return md.trim();
     }
 
-    // --- ACCIONES DE LA BARRA DE HERRAMIENTAS ---
-
     execCmd(cmd, val = null) {
         document.execCommand(cmd, false, val);
         this.querySelector('#wysiwyg-editor').focus();
@@ -239,92 +233,97 @@ class ArborEditor extends HTMLElement {
         }
     }
 
-    // --- RENDERIZADO DE LA INTERFAZ ---
-
     renderEditor() {
         const ui = store.ui;
         this.innerHTML = `
-        <div class="fixed inset-0 z-[80] bg-[#f7f9fa] dark:bg-slate-950 flex flex-col animate-in fade-in duration-200">
-            
-            <!-- HEADER (Como en la imagen) -->
-            <div class="flex-shrink-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm z-20">
-                <div class="p-4 flex justify-between items-center">
-                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">${this.node.sourcePath}</p>
-                    <div class="flex items-center gap-3">
-                         <button id="btn-cancel" class="px-4 py-2 text-sm text-slate-500 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">${ui.editorCancel}</button>
-                         <button id="btn-submit" class="px-6 py-2 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg shadow-lg flex items-center gap-2 transition-transform active:scale-95">
-                            <span class="hidden sm:inline">${ui.editorChanges}</span>
-                         </button>
-                    </div>
-                </div>
-                <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-slate-100 dark:border-slate-800">
-                    <div class="flex items-start gap-3">
-                        <div class="relative group">
-                            <button id="btn-emoji" class="w-14 h-14 rounded-xl bg-slate-100 border border-slate-200 hover:border-sky-500 text-3xl flex items-center justify-center transition-colors">${this.meta.icon}</button>
-                            <div class="absolute top-16 left-0 w-64 bg-white shadow-2xl rounded-xl border border-slate-200 p-3 grid grid-cols-5 gap-2 hidden group-hover:grid z-50">${this.emojis.map(e => `<button class="btn-emoji-opt w-10 h-10 flex items-center justify-center text-xl hover:bg-slate-100 rounded" data-emoji="${e}">${e}</button>`).join('')}</div>
-                        </div>
-                        <div class="flex-1">
-                            <label class="text-xs font-bold text-slate-400">TÍTULO DE LECCIÓN</label>
-                            <input id="editor-title" type="text" class="w-full bg-transparent text-lg font-black text-slate-800 dark:text-white outline-none" value="${this.meta.title}">
+        <div id="editor-overlay" class="fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-sm p-4 flex items-center justify-center animate-in fade-in duration-200">
+            <div class="bg-[#f7f9fa] dark:bg-slate-950 rounded-2xl shadow-2xl max-w-7xl w-full h-[95vh] flex flex-col border border-slate-300 dark:border-slate-700">
+                
+                <!-- HEADER (Como en la imagen) -->
+                <div class="flex-shrink-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm z-20 rounded-t-2xl">
+                    <div class="p-4 flex justify-between items-center">
+                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">${this.node.sourcePath}</p>
+                        <div class="flex items-center gap-3">
+                             <button id="btn-cancel" class="px-4 py-2 text-sm text-slate-500 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">${ui.editorCancel}</button>
+                             <button id="btn-submit" class="px-6 py-2 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg shadow-lg flex items-center gap-2 transition-transform active:scale-95">
+                                <span class="hidden sm:inline">${ui.editorChanges}</span>
+                             </button>
                         </div>
                     </div>
-                    <div>
-                        <label class="text-xs font-bold text-slate-400">DESCRIPCIÓN BREVE</label>
-                        <input id="editor-description" type="text" class="w-full bg-transparent text-sm font-medium text-slate-600 dark:text-slate-300 outline-none" value="${this.meta.description}" placeholder="La historia de...">
-                    </div>
-                    <div class="flex items-center gap-4 col-span-1 md:col-span-2">
+                    <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-slate-100 dark:border-slate-800">
+                        <div class="flex items-start gap-3">
+                            <div class="relative group">
+                                <button id="btn-emoji" class="w-14 h-14 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-sky-500 text-3xl flex items-center justify-center transition-colors">${this.meta.icon}</button>
+                                <div class="absolute top-16 left-0 w-64 bg-white dark:bg-slate-800 shadow-2xl rounded-xl border border-slate-200 dark:border-slate-700 p-3 grid grid-cols-5 gap-2 hidden group-hover:grid z-50">${this.emojis.map(e => `<button class="btn-emoji-opt w-10 h-10 flex items-center justify-center text-xl hover:bg-slate-100 dark:hover:bg-slate-700 rounded" data-emoji="${e}">${e}</button>`).join('')}</div>
+                            </div>
+                            <div class="flex-1">
+                                <label class="text-xs font-bold text-slate-400">TÍTULO DE LECCIÓN</label>
+                                <input id="editor-title" type="text" class="w-full bg-transparent text-lg font-black text-slate-800 dark:text-white outline-none" value="${this.meta.title}">
+                            </div>
+                        </div>
                         <div>
-                            <label class="text-xs font-bold text-slate-400">ORDEN</label>
-                            <input id="editor-order" type="number" class="w-20 bg-slate-100 dark:bg-slate-800 p-2 rounded-lg font-bold text-center" value="${this.meta.order}">
+                            <label class="text-xs font-bold text-slate-400">DESCRIPCIÓN BREVE</label>
+                            <input id="editor-description" type="text" class="w-full bg-transparent text-sm font-medium text-slate-600 dark:text-slate-300 outline-none" value="${this.meta.description}" placeholder="La historia de...">
                         </div>
-                        <div class="flex items-center gap-4">
-                            <label class="text-xs font-bold text-slate-400">TIPO</label>
-                            <div class="flex items-center gap-2 text-sm font-bold">
-                                <input type="radio" id="editor-type-lesson" name="type" ${!this.meta.isExam ? 'checked' : ''}><label for="editor-type-lesson">🌱 Lección</label>
-                                <input type="radio" id="editor-type-exam" name="type" ${this.meta.isExam ? 'checked' : ''}><label for="editor-type-exam">⚔️ Examen</label>
+                        <div class="flex items-center gap-4 col-span-1 md:col-span-2">
+                            <div>
+                                <label class="text-xs font-bold text-slate-400">ORDEN</label>
+                                <input id="editor-order" type="number" class="w-20 bg-slate-100 dark:bg-slate-800 p-2 rounded-lg font-bold text-center" value="${this.meta.order}">
+                            </div>
+                            <div class="flex items-center gap-4">
+                                <label class="text-xs font-bold text-slate-400">TIPO</label>
+                                <div class="flex items-center gap-2 text-sm font-bold">
+                                    <input type="radio" id="editor-type-lesson" name="type" ${!this.meta.isExam ? 'checked' : ''}><label for="editor-type-lesson">🌱 Lección</label>
+                                    <input type="radio" id="editor-type-exam" name="type" ${this.meta.isExam ? 'checked' : ''}><label for="editor-type-exam">⚔️ Examen</label>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- TOOLBAR -->
-            <div class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-2 flex items-center gap-2 overflow-x-auto z-10 sticky top-0">
-                <button class="tb-btn p-2 rounded hover:bg-slate-200 font-bold" data-cmd="bold">B</button>
-                <button class="tb-btn p-2 rounded hover:bg-slate-200 italic" data-cmd="italic">I</button>
-                <div class="w-px h-6 bg-slate-300 mx-2"></div>
-                <button class="tb-btn p-2 rounded hover:bg-slate-200 font-bold" data-cmd="formatBlock" data-val="h1">H1</button>
-                <button class="tb-btn p-2 rounded hover:bg-slate-200 font-bold" data-cmd="formatBlock" data-val="h2">H2</button>
-                <button class="tb-btn p-2 rounded hover:bg-slate-200" data-cmd="insertUnorderedList">• Lista</button>
-                <div class="w-px h-6 bg-slate-300 mx-2"></div>
-                <button id="btn-add-img" class="p-2 rounded hover:bg-slate-200">🖼️ Imagen</button>
-                <button id="btn-add-quiz" class="px-3 py-1 rounded bg-green-100 text-green-700 font-bold text-xs flex items-center gap-1">❓ Quiz</button>
-            </div>
-
-            <!-- ÁREA DE EDICIÓN -->
-            <div class="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950/50 cursor-text p-4 md:p-8" onclick="this.querySelector('#wysiwyg-editor').focus()">
-                <div id="wysiwyg-editor" class="max-w-3xl mx-auto min-h-full bg-white dark:bg-slate-900 shadow-xl rounded-xl p-8 md:p-12 outline-none prose prose-slate dark:prose-invert prose-lg" contenteditable="true">
-                    ${this.markdownToVisual(this.bodyContent)}
+                <!-- TOOLBAR -->
+                <div class="flex-shrink-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-2 flex items-center gap-2 overflow-x-auto z-10 sticky top-0">
+                    <button class="tb-btn p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-700 font-bold" data-cmd="bold">B</button>
+                    <button class="tb-btn p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-700 italic" data-cmd="italic">I</button>
+                    <div class="w-px h-6 bg-slate-300 dark:bg-slate-700 mx-2"></div>
+                    <button class="tb-btn p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-700 font-bold" data-cmd="formatBlock" data-val="h1">H1</button>
+                    <button class="tb-btn p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-700 font-bold" data-cmd="formatBlock" data-val="h2">H2</button>
+                    <button class="tb-btn p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-700" data-cmd="insertUnorderedList">• Lista</button>
+                    <div class="w-px h-6 bg-slate-300 dark:bg-slate-700 mx-2"></div>
+                    <button id="btn-add-img" class="p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-700">🖼️ Imagen</button>
+                    <button id="btn-add-quiz" class="px-3 py-1 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 font-bold text-xs flex items-center gap-1">❓ Quiz</button>
                 </div>
-                <div class="h-24"></div>
+
+                <!-- ÁREA DE EDICIÓN -->
+                <div class="flex-1 overflow-y-auto bg-slate-100 dark:bg-slate-800/50 cursor-text p-4 md:p-8 custom-scrollbar" onclick="this.querySelector('#wysiwyg-editor').focus()">
+                    <div id="wysiwyg-editor" class="max-w-3xl mx-auto min-h-full bg-white dark:bg-slate-900 shadow-lg rounded-xl p-8 md:p-12 outline-none prose prose-slate dark:prose-invert prose-lg" contenteditable="true">
+                        ${this.markdownToVisual(this.bodyContent)}
+                    </div>
+                    <div class="h-24"></div>
+                </div>
+
             </div>
+        </div>
             
-            <!-- MODAL DE GUARDADO -->
-            <dialog id="commit-dialog" class="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-2xl backdrop:bg-slate-900/50 max-w-md w-full border border-slate-200">
-                <h3 class="font-black text-xl mb-4 text-slate-800 dark:text-white">Confirmar Cambios</h3>
-                <p class="text-sm text-slate-500 mb-2">Describe brevemente qué has cambiado:</p>
-                <textarea id="commit-msg" class="w-full h-24 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg mb-4 border border-slate-200 outline-none text-sm dark:text-white" placeholder="Ej: Corregí la fecha de la batalla..."></textarea>
-                <div class="flex justify-end gap-3">
-                    <button id="btn-commit-cancel" class="px-4 py-2 text-slate-500 font-bold hover:bg-slate-100 rounded-lg">Volver</button>
-                    <button id="btn-commit-confirm" class="px-6 py-2 bg-green-600 text-white font-bold rounded-lg shadow-lg">Publicar Cambios</button>
-                </div>
-            </dialog>
-        </div>`;
+        <!-- MODAL DE GUARDADO -->
+        <dialog id="commit-dialog" class="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-2xl backdrop:bg-slate-900/50 max-w-md w-full border border-slate-200 dark:border-slate-700">
+            <h3 class="font-black text-xl mb-4 text-slate-800 dark:text-white">Confirmar Cambios</h3>
+            <p class="text-sm text-slate-500 mb-2">Describe brevemente qué has cambiado:</p>
+            <textarea id="commit-msg" class="w-full h-24 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg mb-4 border border-slate-200 dark:border-slate-700 outline-none text-sm dark:text-white" placeholder="Ej: Corregí la fecha de la batalla..."></textarea>
+            <div class="flex justify-end gap-3">
+                <button id="btn-commit-cancel" class="px-4 py-2 text-slate-500 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">Volver</button>
+                <button id="btn-commit-confirm" class="px-6 py-2 bg-green-600 text-white font-bold rounded-lg shadow-lg">Publicar Cambios</button>
+            </div>
+        </dialog>
+        `;
 
         this.bindEvents();
     }
 
     bindEvents() {
+        this.querySelector('#editor-overlay').onclick = (e) => {
+             if(e.target.id === 'editor-overlay' && confirm('¿Descartar cambios no guardados?')) store.setModal(null);
+        };
         this.querySelectorAll('.tb-btn').forEach(b => b.onclick = (e) => { e.preventDefault(); this.execCmd(b.dataset.cmd, b.dataset.val); });
         this.querySelector('#btn-add-quiz').onclick = (e) => { e.preventDefault(); this.insertBlock('quiz'); };
         this.querySelector('#btn-add-img').onclick = (e) => { e.preventDefault(); this.insertBlock('image'); };
