@@ -1,3 +1,4 @@
+
 import { store } from '../store.js';
 import { github } from '../services/github.js';
 
@@ -18,7 +19,15 @@ class ArborEditor extends HTMLElement {
             extra: {} // Preserve unknown meta fields
         };
 
-        this.emojis = ['📚', '🧬', '📐', '🎨', '🌍', '🏰', '💻', '🎵', '⚽', '🧠', '💡', '📝', '⚔️', '🛡️', '🚀', '🧪', '🌱', '🎓', '🔎', '⚙️'];
+        // Categorized Emojis for the Picker
+        this.emojiCategories = {
+            "General": ["📚", "📁", "📄", "📌", "📎", "📂", "📝", "🧠", "💡", "🎯", "🔥", "✨", "🚀", "⭐", "🛑", "✅", "⚠️", "🔍", "🛠️", "⚙️"],
+            "Science": ["🧬", "🧪", "🔬", "🔭", "🩺", "🦠", "🦖", "🦴", "🩸", "💊", "🌡️", "🌪️", "⚛️", "🌱", "🌿", "🍄", "⚡", "💧", "🌎", "🪐"],
+            "Computing": ["💻", "🖥️", "💾", "⌨️", "🖱️", "🖨️", "📱", "🔋", "🔌", "📡", "🤖", "👾", "🌐", "🔒", "🔑", "📀", "📸", "📞", "🕹️", "🏗️"],
+            "Arts": ["🎨", "🎭", "🖼️", "🎬", "🎤", "🎧", "🎼", "🎹", "🥁", "🎷", "🎺", "🎸", "🎻", "🖌️", "🖍️", "🖊️", "🎪", "🎫", "🎥", "📷"],
+            "Society": ["🌍", "🏰", "🏛️", "🏦", "🏥", "🏫", "⚖️", "🔨", "⚔️", "🛡️", "👑", "🚩", "🏳️", "🤝", "🧑‍🤝‍🧑", "🗳️", "📜", "📢", "💬", "🏺"],
+            "Math": ["🔢", "📐", "📏", "➕", "➖", "➗", "✖️", "♾️", "💹", "📊", "📉", "💯", "🧮", "🎲", "🧩", "🕒", "📅", "💲", "🪙", "🏧"]
+        };
     }
 
     connectedCallback() {
@@ -183,6 +192,10 @@ class ArborEditor extends HTMLElement {
 
     renderEditor() {
         const ui = store.ui;
+        // Generate Emoji Categories HTML
+        const categories = Object.keys(this.emojiCategories);
+        const defaultCat = categories[0];
+
         this.innerHTML = `
         <style>
             #wysiwyg-editor:focus { outline: none; }
@@ -214,6 +227,10 @@ class ArborEditor extends HTMLElement {
                 border-color: #475569;
                 color: #e2e8f0;
             }
+            .emoji-tab-active {
+                background-color: #38bdf8;
+                color: white;
+            }
         </style>
         <div id="editor-overlay" class="fixed inset-0 z-[80] bg-[#f7f9fa] dark:bg-slate-950 animate-in fade-in duration-200">
             <div class="w-full h-full flex flex-col">
@@ -232,8 +249,24 @@ class ArborEditor extends HTMLElement {
                         <div class="flex items-start gap-3 col-span-1 md:col-span-2">
                             <div class="relative group">
                                 <button id="btn-emoji" class="w-14 h-14 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-sky-500 text-3xl flex items-center justify-center transition-colors">${this.meta.icon}</button>
-                                <div class="absolute top-16 left-0 w-64 bg-white dark:bg-slate-800 shadow-2xl rounded-xl border border-slate-200 dark:border-slate-700 p-3 grid grid-cols-5 gap-2 hidden group-hover:grid z-50">${this.emojis.map(e => `<button class="btn-emoji-opt w-10 h-10 flex items-center justify-center text-xl hover:bg-slate-100 dark:hover:bg-slate-700 rounded" data-emoji="${e}">${e}</button>`).join('')}</div>
+                                
+                                <!-- EMOJI PICKER DROPDOWN -->
+                                <div class="absolute top-16 left-0 w-80 md:w-96 bg-white dark:bg-slate-900 shadow-2xl rounded-xl border border-slate-200 dark:border-slate-700 p-0 hidden group-hover:block z-50">
+                                    <div class="flex items-center justify-between p-2 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/50 rounded-t-xl overflow-x-auto custom-scrollbar gap-1">
+                                        <h3 class="font-bold text-xs uppercase text-slate-400 px-2 flex-shrink-0">Select Icon</h3>
+                                        <button class="text-slate-400 hover:text-slate-600 dark:hover:text-white px-2" onclick="this.closest('.group').style.display='none'">✕</button>
+                                    </div>
+                                    <div class="p-2 border-b border-slate-100 dark:border-slate-700 flex gap-2 overflow-x-auto custom-scrollbar">
+                                        ${categories.map((cat, i) => `
+                                            <button class="emoji-cat-btn px-3 py-1 text-xs font-bold rounded-full transition-colors whitespace-nowrap border border-slate-200 dark:border-slate-700 ${i === 0 ? 'bg-sky-500 text-white border-sky-500' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}" data-cat="${cat}">${cat}</button>
+                                        `).join('')}
+                                    </div>
+                                    <div id="emoji-grid" class="grid grid-cols-6 gap-2 p-3 max-h-60 overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-900">
+                                         ${this.emojiCategories[defaultCat].map(e => `<button class="btn-emoji-opt w-10 h-10 flex items-center justify-center text-xl hover:bg-white dark:hover:bg-slate-800 hover:shadow-md rounded transition-all" data-emoji="${e}">${e}</button>`).join('')}
+                                    </div>
+                                </div>
                             </div>
+
                             <div class="flex-1">
                                 <label class="text-xs font-bold text-slate-400">${ui.appSubtitle}</label>
                                 <input id="editor-description" type="text" class="w-full bg-transparent text-sm font-medium text-slate-600 dark:text-slate-300 outline-none" value="${this.meta.description}" placeholder="${ui.noDescription}">
@@ -444,16 +477,50 @@ class ArborEditor extends HTMLElement {
         }
 
         // Emoji picker
-        this.querySelectorAll('.btn-emoji-opt').forEach(b => b.onclick = (e) => {
-            e.stopPropagation();
-            this.querySelector('#btn-emoji').textContent = e.target.dataset.emoji;
-        });
+        this.bindEmojiPickerEvents();
 
         // Commit dialog
         const dialog = this.querySelector('#commit-dialog');
         this.querySelector('#btn-submit').onclick = () => dialog.showModal();
         this.querySelector('#btn-commit-cancel').onclick = () => dialog.close();
         this.querySelector('#btn-commit-confirm').onclick = () => this.submitChanges();
+    }
+
+    bindEmojiPickerEvents() {
+        // Tab switching logic
+        this.querySelectorAll('.emoji-cat-btn').forEach(btn => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                // 1. Update active tab style
+                this.querySelectorAll('.emoji-cat-btn').forEach(b => {
+                    b.classList.remove('bg-sky-500', 'text-white', 'border-sky-500');
+                    b.classList.add('bg-white', 'dark:bg-slate-800', 'text-slate-500', 'dark:text-slate-400', 'hover:bg-slate-100', 'dark:hover:bg-slate-700');
+                });
+                
+                const target = e.currentTarget;
+                target.classList.remove('bg-white', 'dark:bg-slate-800', 'text-slate-500', 'dark:text-slate-400', 'hover:bg-slate-100', 'dark:hover:bg-slate-700');
+                target.classList.add('bg-sky-500', 'text-white', 'border-sky-500');
+
+                // 2. Refresh Grid
+                const cat = target.dataset.cat;
+                const grid = this.querySelector('#emoji-grid');
+                grid.innerHTML = this.emojiCategories[cat].map(emoji => 
+                    `<button class="btn-emoji-opt w-10 h-10 flex items-center justify-center text-xl hover:bg-white dark:hover:bg-slate-800 hover:shadow-md rounded transition-all" data-emoji="${emoji}">${emoji}</button>`
+                ).join('');
+                
+                // 3. Rebind click events for new emoji buttons
+                this.bindEmojiSelection();
+            };
+        });
+
+        this.bindEmojiSelection();
+    }
+
+    bindEmojiSelection() {
+        this.querySelectorAll('.btn-emoji-opt').forEach(b => b.onclick = (e) => {
+            e.stopPropagation();
+            this.querySelector('#btn-emoji').textContent = e.currentTarget.dataset.emoji;
+        });
     }
     
     formatText(cmd, value = null) {

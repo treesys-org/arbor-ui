@@ -1,9 +1,6 @@
 
 
-
-
 import { store } from '../store.js';
-import { googleDrive } from '../services/google-drive.js';
 
 class ArborSidebar extends HTMLElement {
     constructor() { 
@@ -14,8 +11,6 @@ class ArborSidebar extends HTMLElement {
     connectedCallback() {
         this.render();
         store.addEventListener('state-change', () => this.render());
-        // Listen to drive changes
-        googleDrive.subscribe(() => this.render());
     }
 
     toggleMobileMenu() {
@@ -25,9 +20,9 @@ class ArborSidebar extends HTMLElement {
 
     render() {
         const ui = store.ui;
-        const user = googleDrive.userProfile;
-        const isSyncing = googleDrive.isSyncing;
-        const isLoggedIn = !!user;
+        // Simplified user state: We are either anonymous or have local progress. 
+        // Sync is manual.
+        const isLoggedIn = false; 
 
         let mobileMenuHtml = '';
         if (this.isMobileMenuOpen) {
@@ -35,25 +30,15 @@ class ArborSidebar extends HTMLElement {
             <div id="mobile-menu-backdrop" class="md:hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[80]"></div>
             <div id="mobile-menu" class="md:hidden fixed top-16 right-4 w-[280px] bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 z-[90] p-2 animate-in fade-in slide-in-from-top-4 duration-200">
                 <!-- User Profile -->
-                ${isLoggedIn ? `
-                    <div class="p-2 border-b border-slate-100 dark:border-slate-700 mb-2">
-                        <div class="flex items-center gap-3">
-                            <img src="${user.picture}" alt="${user.name}" class="w-10 h-10 rounded-full">
-                            <div class="min-w-0">
-                                <p class="text-sm font-bold truncate text-slate-800 dark:text-white">${user.name}</p>
-                                <p class="text-xs text-slate-500 truncate">${user.email}</p>
-                            </div>
+                <div class="p-2 border-b border-slate-100 dark:border-slate-700 mb-2">
+                    <button class="js-btn-profile w-full flex items-center gap-3 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-left">
+                        <div class="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xl">👤</div>
+                        <div>
+                            <p class="text-sm font-bold text-slate-800 dark:text-white">${ui.navProfile}</p>
+                            <p class="text-xs text-slate-500">Offline</p>
                         </div>
-                        <button id="btn-sign-out-mobile" class="w-full text-center mt-3 px-3 py-2 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-700/50 text-slate-500 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700">${ui.signOut}</button>
-                    </div>
-                ` : `
-                    <div class="p-2 border-b border-slate-100 dark:border-slate-700 mb-2">
-                        <button id="btn-sign-in-mobile" class="w-full flex items-center justify-center gap-3 px-3 py-3 rounded-lg text-sm font-bold bg-sky-500 text-white shadow-lg hover:bg-sky-600 transition-colors">
-                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632" /></svg>
-                            <span>${ui.syncButton}</span>
-                        </button>
-                    </div>
-                `}
+                    </button>
+                </div>
 
                 <!-- Menu Items -->
                 <nav class="flex flex-col">
@@ -159,22 +144,12 @@ class ArborSidebar extends HTMLElement {
                 <div class="relative group"><button class="js-btn-lang w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 text-xl flex items-center justify-center">${store.currentLangInfo.flag}</button><span class="tooltip">${ui.languageTitle}</span></div>
                 <div class="relative group"><button class="js-btn-theme w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 text-xl flex items-center justify-center">${store.value.theme === 'light' ? '🌙' : '☀️'}</button><span class="tooltip">Toggle Theme</span></div>
                 
-                <!-- User Profile / Login -->
+                <!-- User Profile / Login / Sync -->
                 <div class="relative group">
-                     ${isLoggedIn ? `
-                        <button class="w-10 h-10 rounded-full border-2 border-slate-200 dark:border-slate-700 p-0.5 overflow-hidden relative">
-                            <img src="${user.picture}" alt="${user.name}" class="w-full h-full rounded-full">
-                            ${isSyncing ? `<div class="absolute inset-0 bg-black/50 flex items-center justify-center"><div class="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin"></div></div>` : ''}
-                        </button>
-                        <div class="absolute bottom-12 left-1/2 -translate-x-1/2 mb-2 w-52 bg-white dark:bg-slate-800 rounded-lg shadow-xl border dark:border-slate-700 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto z-50">
-                            <div class="p-3 border-b dark:border-slate-700"><p class="text-sm font-bold truncate text-slate-800 dark:text-white">${user.name}</p><p class="text-xs text-slate-500 truncate">${user.email}</p></div>
-                            <div class="p-2"><button id="btn-sign-out" class="w-full text-left flex items-center gap-3 px-3 py-2 rounded-md text-sm hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300">${ui.signOut}</button></div>
-                        </div>
-                     ` : `
-                        <button id="btn-sign-in" title="${ui.syncButton}" class="w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 hover:text-sky-500 transition-colors">
-                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632" /></svg>
-                        </button>
-                     `}
+                    <button class="js-btn-profile w-10 h-10 rounded-full border-2 border-slate-200 dark:border-slate-700 p-0.5 overflow-hidden relative transition-transform hover:scale-105 active:scale-95">
+                         <div class="w-full h-full rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">👤</div>
+                    </button>
+                    <span class="tooltip">${ui.navProfile}</span>
                 </div>
                 
                 <div class="relative group"><button class="js-btn-help w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 font-bold text-slate-500">?</button><span class="tooltip">${ui.navHelp}</span></div>
@@ -196,7 +171,7 @@ class ArborSidebar extends HTMLElement {
             };
         };
         
-        // Bind events using class selectors for both Mobile & Desktop buttons
+        // Bind events using class selectors
         this.querySelectorAll('.js-btn-theme').forEach(b => b.onclick = mobileMenuAction(() => store.toggleTheme()));
         this.querySelectorAll('.js-btn-search').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('search')));
         this.querySelectorAll('.js-btn-certs').forEach(b => b.onclick = mobileMenuAction(() => store.setViewMode('certificates')));
@@ -206,23 +181,11 @@ class ArborSidebar extends HTMLElement {
         this.querySelectorAll('.js-btn-help').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('tutorial')));
         this.querySelectorAll('.js-btn-impressum').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('impressum')));
         this.querySelectorAll('.js-btn-contrib').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('contributor')));
+        this.querySelectorAll('.js-btn-profile').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('profile')));
         
         // Home Button (Mobile)
         const homeBtn = this.querySelector('.js-btn-home');
         if (homeBtn) homeBtn.onclick = () => store.goHome();
-
-        // Login Logic
-        const btnSignIn = this.querySelector('#btn-sign-in');
-        if (btnSignIn) btnSignIn.onclick = () => googleDrive.signIn();
-
-        const btnSignOut = this.querySelector('#btn-sign-out');
-        if (btnSignOut) btnSignOut.onclick = () => googleDrive.signOut();
-
-        const btnSignInMobile = this.querySelector('#btn-sign-in-mobile');
-        if (btnSignInMobile) btnSignInMobile.onclick = () => googleDrive.signIn();
-
-        const btnSignOutMobile = this.querySelector('#btn-sign-out-mobile');
-        if (btnSignOutMobile) btnSignOutMobile.onclick = () => googleDrive.signOut();
         
         // Mobile Menu Toggle
         const mobileMenuToggle = this.querySelector('.js-btn-menu-mobile');

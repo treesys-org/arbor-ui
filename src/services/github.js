@@ -1,5 +1,4 @@
 
-
 import { Octokit } from "octokit";
 import { store } from "../store.js";
 
@@ -28,7 +27,6 @@ class GitHubService {
     }
 
     // Helper to get owner/repo from current Source URL
-    // Assumption: The source URL is like 'https://raw.githubusercontent.com/OWNER/REPO/branch/data/data.json'
     getRepositoryInfo() {
         const url = store.value.activeSource?.url;
         if (!url) return null;
@@ -37,7 +35,6 @@ class GitHubService {
             // Case 1: Raw GitHub User Content
             if (url.includes('raw.githubusercontent.com')) {
                 const parts = new URL(url).pathname.split('/');
-                // pathname starts with /, so parts[0] is empty
                 return { owner: parts[1], repo: parts[2] };
             }
             // Case 2: GitHub Pages (username.github.io/repo/...)
@@ -66,8 +63,8 @@ class GitHubService {
         });
 
         // Content is base64 encoded
-        // Decode unicode strings properly
-        const binaryString = atob(data.content);
+        // Use a cleaner decoding method for UTF-8
+        const binaryString = atob(data.content.replace(/\s/g, ''));
         const bytes = Uint8Array.from(binaryString, c => c.charCodeAt(0));
         const decoded = new TextDecoder().decode(bytes);
         
@@ -75,6 +72,15 @@ class GitHubService {
             content: decoded,
             sha: data.sha
         };
+    }
+
+    // Convert string to Base64 safely handling UTF-8 (emojis, etc.)
+    utf8ToBase64(str) {
+        const bytes = new TextEncoder().encode(str);
+        const binString = Array.from(bytes, (byte) =>
+            String.fromCodePoint(byte)
+        ).join("");
+        return btoa(binString);
     }
 
     async createPullRequest(filePath, newContent, message) {
@@ -112,8 +118,7 @@ class GitHubService {
         }
 
         // 4. Encode content to Base64 (UTF-8 safe)
-        const utf8Bytes = new TextEncoder().encode(newContent);
-        const base64Content = btoa(String.fromCharCode(...utf8Bytes));
+        const base64Content = this.utf8ToBase64(newContent);
 
         // 5. Update/Create file in new branch
         await this.octokit.request('PUT /repos/{owner}/{repo}/contents/{path}', {
@@ -151,13 +156,6 @@ class GitHubService {
                      const ext = file.name.split('.').pop();
                      const filename = `assets/uploads/${Date.now()}.${ext}`;
                      
-                     // Direct commit to main for assets (Simpler for now, or use same branch logic)
-                     // IMPORTANT: Ideally should be in the PR branch, but for simplicity we upload to main 
-                     // OR we need to pass the branch name if we are in the middle of an edit session.
-                     // For this MVP, let's assume assets are uploaded to a specific 'assets' branch or main 
-                     // but to avoid pollution let's upload to main so they are immediately available via raw URL
-                     // WARNING: This is a "hot" commit.
-                     
                      await this.octokit.request('PUT /repos/{owner}/{repo}/contents/{path}', {
                          owner: repoInfo.owner,
                          repo: repoInfo.repo,
@@ -167,7 +165,6 @@ class GitHubService {
                      });
                      
                      // Construct Raw URL
-                     // https://raw.githubusercontent.com/OWNER/REPO/main/path
                      const rawUrl = `https://raw.githubusercontent.com/${repoInfo.owner}/${repoInfo.repo}/main/${filename}`;
                      resolve(rawUrl);
 

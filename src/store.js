@@ -1,7 +1,6 @@
 
 
 import { UI_LABELS, AVAILABLE_LANGUAGES } from './i18n.js';
-import { googleDrive } from './services/google-drive.js';
 import { github } from './services/github.js';
 
 const OFFICIAL_DOMAINS = [
@@ -37,6 +36,12 @@ class Store extends EventTarget {
             searchIndex: [],
             path: [], 
             completedNodes: new Set(),
+            // Future-proofing for gamification
+            gamification: {
+                xp: 0,
+                streak: 0,
+                lastStudyDate: null
+            },
             selectedNode: null, 
             previewNode: null,
             loading: true,
@@ -48,7 +53,6 @@ class Store extends EventTarget {
             githubUser: null // GitHub User info
         };
         
-        this.saveTimer = null;
         this.loadProgress();
         this.loadSources();
         
@@ -61,14 +65,6 @@ class Store extends EventTarget {
         }
 
         document.documentElement.classList.toggle('dark', this.state.theme === 'dark');
-
-        // Sync Listener
-        document.addEventListener('gdrive-sign-in', async () => {
-            const remote = await googleDrive.loadProgress();
-            const merged = new Set([...this.state.completedNodes, ...remote]);
-            this.update({ completedNodes: merged });
-            this.dispatchEvent(new CustomEvent('graph-update'));
-        });
     }
 
     get ui() { return UI_LABELS[this.state.lang]; }
@@ -483,7 +479,17 @@ class Store extends EventTarget {
     loadProgress() {
         try {
             const saved = localStorage.getItem('arbor-progress');
-            if (saved) this.state.completedNodes = new Set(JSON.parse(saved));
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                // Backwards compatibility if it was just an array
+                if (Array.isArray(parsed)) {
+                    this.state.completedNodes = new Set(parsed);
+                } else if (parsed.progress) {
+                    // New format with gamification data
+                    this.state.completedNodes = new Set(parsed.progress);
+                    if (parsed.gamification) this.state.gamification = parsed.gamification;
+                }
+            }
         } catch(e) {}
     }
 
@@ -535,13 +541,79 @@ class Store extends EventTarget {
     }
 
     persistProgress() {
-        localStorage.setItem('arbor-progress', JSON.stringify([...this.state.completedNodes]));
+        const payload = {
+            progress: Array.from(this.state.completedNodes),
+            gamification: this.state.gamification,
+            timestamp: Date.now()
+        };
+        localStorage.setItem('arbor-progress', JSON.stringify(payload));
         this.update({}); 
         this.dispatchEvent(new CustomEvent('graph-update'));
+    }
 
-        if (googleDrive.userProfile) {
-            clearTimeout(this.saveTimer);
-            this.saveTimer = setTimeout(() => googleDrive.saveProgress(this.state.completedNodes), 2000);
+    // --- Manual Export/Import ---
+    getExportData() {
+        const data = {
+            v: 1, // Version
+            ts: Date.now(),
+            p: Array.from(this.state.completedNodes), // Progress
+            g: this.state.gamification // Gamification
+        };
+        // Use default JSON.stringify without whitespace for smallest size
+        const str = JSON.stringify(data);
+        // Encode to Base64 (safely for UTF-8)
+        return btoa(unescape(encodeURIComponent(str)));
+    }
+
+    downloadProgressFile() {
+        const data = {
+            version: 1,
+            timestamp: Date.now(),
+            progress: Array.from(this.state.completedNodes),
+            gamification: this.state.gamification
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `arbor_backup_${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    importProgress(input) {
+        try {
+            // Try to parse as JSON first (from file content)
+            let data;
+            if (input.trim().startsWith('{')) {
+                data = JSON.parse(input);
+            } else {
+                // Try as Base64 code
+                const decoded = decodeURIComponent(escape(atob(input.trim())));
+                data = JSON.parse(decoded);
+            }
+
+            // Handle legacy format (just an array) vs new format (object)
+            let newProgress = [];
+            if (Array.isArray(data)) newProgress = data; // Legacy simple array
+            if (data.progress) newProgress = data.progress; // New verbose
+            if (data.p) newProgress = data.p; // New compact
+
+            // Handle gamification import
+            if (data.g) this.state.gamification = data.g;
+
+            if (!Array.isArray(newProgress)) {
+                throw new Error("Invalid Format");
+            }
+
+            const merged = new Set([...this.state.completedNodes, ...newProgress]);
+            this.update({ completedNodes: merged });
+            this.persistProgress();
+            
+            return true;
+        } catch (e) {
+            console.error(e);
+            return false;
         }
     }
 

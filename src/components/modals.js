@@ -14,6 +14,8 @@ class ArborModals extends HTMLElement {
         this.pendingSourceUrl = null;
         this.showSecurityWarning = false;
         this.showImpressumDetails = false;
+        
+        this.profileTab = 'export'; // 'export' | 'import'
     }
 
     connectedCallback() {
@@ -62,6 +64,7 @@ class ArborModals extends HTMLElement {
         else if (type === 'language') content = this.renderLanguage(ui);
         else if (type === 'impressum') content = this.renderImpressum(ui);
         else if (type === 'contributor') content = this.renderContributor(ui);
+        else if (type === 'profile') content = this.renderProfile(ui);
         else if (type === 'certificate') {
             this.renderSingleCertificate(ui, modal.moduleId); 
             return; 
@@ -83,6 +86,8 @@ class ArborModals extends HTMLElement {
         if (type === 'tutorial') this.bindTutorialEvents();
         if (type === 'sources') this.bindSourcesEvents();
         if (type === 'contributor') this.bindContributorEvents();
+        if (type === 'profile') this.bindProfileEvents();
+        
         if (type === 'impressum') {
             const btnImp = this.querySelector('#btn-show-impressum');
             if(btnImp) btnImp.onclick = () => {
@@ -95,6 +100,140 @@ class ArborModals extends HTMLElement {
                 store.setLanguage(e.currentTarget.dataset.code);
                 this.close();
             });
+        }
+    }
+
+    // --- PROFILE & SYNC ---
+    renderProfile(ui) {
+        const exportCode = store.getExportData();
+
+        return `
+        <div class="flex flex-col h-full">
+            <!-- Header -->
+            <div class="p-6 pb-2 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+                <div class="flex items-center gap-4 mb-2">
+                     <div class="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-2xl overflow-hidden">
+                        👤
+                     </div>
+                     <div>
+                        <h2 class="text-xl font-black text-slate-800 dark:text-white">${ui.profileTitle}</h2>
+                        <p class="text-sm text-slate-500">${ui.profileDesc}</p>
+                     </div>
+                </div>
+            </div>
+
+            <!-- TABS -->
+            <div class="flex border-b border-slate-100 dark:border-slate-800">
+                <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${this.profileTab === 'export' ? 'border-sky-500 text-sky-600 dark:text-sky-400' : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}" id="tab-export">
+                    📤 ${ui.exportTitle}
+                </button>
+                <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${this.profileTab === 'import' ? 'border-purple-500 text-purple-600 dark:text-purple-400' : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}" id="tab-import">
+                    📥 ${ui.importTitle}
+                </button>
+            </div>
+
+            <!-- CONTENT -->
+            <div class="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950/50">
+                
+                ${this.profileTab === 'export' ? `
+                    <div class="animate-in fade-in slide-in-from-right-4 duration-300">
+                        <p class="text-sm text-slate-500 mb-4">${ui.exportDesc}</p>
+                        
+                        <!-- CODE EXPORT -->
+                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 mb-4">
+                            <textarea readonly class="w-full h-24 bg-transparent text-xs font-mono text-slate-600 dark:text-slate-300 outline-none resize-none" id="export-textarea">${exportCode}</textarea>
+                            <button id="btn-copy-code" class="w-full mt-2 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-xs rounded-lg transition-colors">
+                                📋 ${ui.copyCode}
+                            </button>
+                        </div>
+
+                        <div class="flex items-center gap-4 my-4">
+                            <div class="h-px flex-1 bg-slate-200 dark:bg-slate-700"></div>
+                            <span class="text-xs font-bold text-slate-400">OR</span>
+                            <div class="h-px flex-1 bg-slate-200 dark:bg-slate-700"></div>
+                        </div>
+
+                        <!-- FILE EXPORT -->
+                        <button id="btn-download-file" class="w-full py-3 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-xl shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2">
+                             💾 ${ui.downloadFile} (.json)
+                        </button>
+                    </div>
+                ` : `
+                    <div class="animate-in fade-in slide-in-from-left-4 duration-300">
+                        <p class="text-sm text-slate-500 mb-4">${ui.importDesc}</p>
+
+                        <!-- TEXT IMPORT -->
+                         <textarea class="w-full h-24 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl mb-4 text-xs font-mono outline-none focus:ring-2 focus:ring-purple-500" id="import-textarea" placeholder="${ui.pasteCodePlaceholder}"></textarea>
+                         
+                         <div class="flex items-center gap-4 my-4">
+                            <div class="h-px flex-1 bg-slate-200 dark:bg-slate-700"></div>
+                            <span class="text-xs font-bold text-slate-400">OR</span>
+                            <div class="h-px flex-1 bg-slate-200 dark:bg-slate-700"></div>
+                        </div>
+                        
+                        <!-- FILE IMPORT -->
+                        <div class="relative">
+                            <input type="file" id="import-file" class="hidden" accept=".json">
+                            <button onclick="document.getElementById('import-file').click()" class="w-full py-3 border-2 border-dashed border-slate-300 dark:border-slate-700 text-slate-400 hover:border-purple-500 hover:text-purple-500 font-bold rounded-xl transition-colors">
+                                📂 Select File
+                            </button>
+                        </div>
+                        
+                        <button id="btn-run-import" class="w-full mt-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl shadow-lg transition-transform active:scale-95">
+                            ${ui.importBtn}
+                        </button>
+                    </div>
+                `}
+            </div>
+        </div>`;
+    }
+
+    bindProfileEvents() {
+        // Tab Switching
+        const setTab = (t) => {
+            this.profileTab = t;
+            this.render();
+        };
+        this.querySelector('#tab-export').onclick = () => setTab('export');
+        this.querySelector('#tab-import').onclick = () => setTab('import');
+        
+        // Export Actions
+        if (this.profileTab === 'export') {
+            this.querySelector('#btn-copy-code').onclick = (e) => {
+                const txt = this.querySelector('#export-textarea');
+                txt.select();
+                document.execCommand('copy');
+                const originalText = e.target.textContent;
+                e.target.textContent = '✅ Copied!';
+                setTimeout(() => e.target.textContent = originalText, 2000);
+            };
+            this.querySelector('#btn-download-file').onclick = () => store.downloadProgressFile();
+        }
+
+        // Import Actions
+        if (this.profileTab === 'import') {
+            const runImport = (val) => {
+                 if(store.importProgress(val)) {
+                     alert(store.ui.importSuccess);
+                     this.close();
+                 } else {
+                     alert(store.ui.importError);
+                 }
+            };
+
+            this.querySelector('#btn-run-import').onclick = () => {
+                const val = this.querySelector('#import-textarea').value;
+                if(val) runImport(val);
+            };
+
+            const fileInp = this.querySelector('#import-file');
+            fileInp.onchange = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => runImport(ev.target.result);
+                reader.readAsText(file);
+            };
         }
     }
 

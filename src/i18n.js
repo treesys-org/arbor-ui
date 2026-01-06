@@ -1,8 +1,4 @@
 
-
-
-
-
 export const UI_LABELS = {
     EN: {
       appTitle: 'ARBOR',
@@ -45,7 +41,7 @@ export const UI_LABELS = {
       statsDepth: 'Levels',
       navLearn: 'Learn',
       navPractice: 'Practice',
-      navProfile: 'Profile',
+      navProfile: 'Profile & Sync',
       navAbout: 'Open Source Mission',
       navSearch: 'Search',
       navCertificates: 'Certificates',
@@ -87,7 +83,7 @@ Verantwortlich nach §5 TMG: Carlos Valin
 
 Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       createdBy: 'A product of',
-      syncButton: 'Sign in to sync progress',
+      syncButton: 'Profile & Sync',
       syncing: 'Syncing...',
       signOut: 'Sign Out',
       viewOnGithub: 'View on GitHub',
@@ -179,7 +175,23 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       prSuccessBody: 'A Pull Request has been created successfully. The community will review your contribution.',
       prLink: 'View Pull Request',
       prError: 'Error creating proposal',
-      editorLoading: 'Fetching content from GitHub...'
+      editorLoading: 'Fetching content from GitHub...',
+
+      // Manual Sync
+      profileTitle: 'Profile & Sync',
+      profileDesc: 'Manage your progress and take it with you to other devices.',
+      exportTitle: 'Export Progress',
+      importTitle: 'Import Progress',
+      exportDesc: 'Copy this code or download the file to save your progress.',
+      importDesc: 'Paste your code here or upload a file to restore progress.',
+      copyCode: 'Copy Code',
+      downloadFile: 'Download File',
+      pasteCodePlaceholder: 'Paste your Arbor code here...',
+      importBtn: 'Load Progress',
+      importSuccess: 'Progress loaded successfully!',
+      importError: 'Invalid code or file.',
+      googleSyncTitle: 'Google Drive Sync',
+      googleSyncDesc: 'Optional: Sign in to sync automatically across devices.'
     },
     ES: {
       appTitle: 'ARBOR',
@@ -222,7 +234,7 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       statsDepth: 'Niveles',
       navLearn: 'Aprender',
       navPractice: 'Práctica',
-      navProfile: 'Perfil',
+      navProfile: 'Perfil y Sync',
       navAbout: 'Misión Open Source',
       navSearch: 'Buscar',
       navCertificates: 'Certificados',
@@ -265,7 +277,7 @@ Verantwortlich nach §5 TMG: Carlos Valin
 Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       createdBy: 'Un producto de',
       
-      syncButton: 'Iniciar sesión para sincronizar progreso',
+      syncButton: 'Perfil y Sincronización',
       syncing: 'Sincronizando...',
       signOut: 'Cerrar Sesión',
       viewOnGithub: 'Ver en GitHub',
@@ -361,7 +373,23 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       prSuccessBody: 'Se ha creado un Pull Request con éxito. La comunidad revisará tu contribución.',
       prLink: 'Ver Pull Request',
       prError: 'Error creando propuesta',
-      editorLoading: 'Obteniendo contenido de GitHub...'
+      editorLoading: 'Obteniendo contenido de GitHub...',
+
+      // Manual Sync
+      profileTitle: 'Perfil y Sincronización',
+      profileDesc: 'Gestiona tu progreso y llévalo contigo a otros dispositivos.',
+      exportTitle: 'Exportar Progreso',
+      importTitle: 'Importar Progreso',
+      exportDesc: 'Copia este código o descarga el archivo para guardar tu avance.',
+      importDesc: 'Pega tu código aquí o sube un archivo para restaurar tu avance.',
+      copyCode: 'Copiar Código',
+      downloadFile: 'Descargar Archivo',
+      pasteCodePlaceholder: 'Pega tu código de Arbor aquí...',
+      importBtn: 'Cargar Progreso',
+      importSuccess: '¡Progreso cargado con éxito!',
+      importError: 'Código o archivo inválido.',
+      googleSyncTitle: 'Sincronización Google Drive',
+      googleSyncDesc: 'Opcional: Inicia sesión para sincronizar automáticamente.'
     }
 };
 

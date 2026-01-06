@@ -234,13 +234,13 @@ class ArborGraph extends HTMLElement {
         // 2. Tree Layout
         let leaves = 0;
         root.each(d => { if (!d.children) leaves++; });
-        const dynamicWidth = Math.max(this.width, leaves * 140);
+        const dynamicWidth = Math.max(this.width, leaves * 180); // Increased spacing between nodes
 
         const treeLayout = d3.tree().size([dynamicWidth, 1]);
         treeLayout(root);
 
         // 3. Coordinate Transformation
-        const levelHeight = 180;
+        const levelHeight = 220; // Increased vertical spacing
         root.descendants().forEach(d => {
             d.y = (this.height - 150) - (d.depth * levelHeight);
             if (dynamicWidth < this.width) {
@@ -287,7 +287,7 @@ class ArborGraph extends HTMLElement {
             .on("mousedown", (e) => e.stopPropagation());
 
         nodeEnter.append("circle")
-            .attr("r", 60)
+            .attr("r", 80) // Larger hit area
             .attr("cy", d => d.data.type === 'leaf' || d.data.type === 'exam' ? 30 : 0)
             .attr("fill", "transparent");
 
@@ -300,48 +300,48 @@ class ArborGraph extends HTMLElement {
             .attr("class", "node-icon")
             .attr("text-anchor", "middle")
             .attr("dy", "0.35em")
-            .style("font-size", "24px")
+            .style("font-size", "38px") // Increased Icon Size
             .style("user-select", "none")
             .style("pointer-events", "none");
 
         // Labels
         const labelGroup = nodeEnter.append("g")
             .attr("class", "label-group")
-            .attr("transform", d => `translate(0, ${d.data.type === 'leaf' || d.data.type === 'exam' ? 55 : 45})`);
+            .attr("transform", d => `translate(0, ${d.data.type === 'leaf' || d.data.type === 'exam' ? 65 : 55})`);
         
         labelGroup.append("rect")
-            .attr("rx", 10).attr("ry", 10).attr("height", 22)
+            .attr("rx", 10).attr("ry", 10).attr("height", 28) // Taller label background
             .attr("fill", "rgba(255,255,255,0.95)")
             .attr("stroke", "#e2e8f0");
         
         labelGroup.append("text")
             .attr("class", "label-text")
             .attr("text-anchor", "middle")
-            .attr("dy", 15)
+            .attr("dy", 19)
             .attr("fill", "#334155")
-            .attr("font-size", "12px")
+            .attr("font-size", "16px") // Larger Label Text
             .attr("font-weight", "800")
             .style("pointer-events", "none");
 
         // Badges (+/-)
         const badge = nodeEnter.append("g")
             .attr("class", "badge-group")
-            .attr("transform", d => `translate(${d.data.type === 'root' ? 30 : 22}, -${d.data.type === 'root' ? 30 : 22})`)
+            .attr("transform", d => `translate(${d.data.type === 'root' ? 45 : 35}, -${d.data.type === 'root' ? 45 : 35})`)
             .style("display", "none");
 
         badge.append("circle")
-            .attr("r", 14).attr("stroke", "#fff").attr("stroke-width", 2)
+            .attr("r", 16).attr("stroke", "#fff").attr("stroke-width", 2)
             .style("filter", "drop-shadow(0px 2px 3px rgba(0,0,0,0.3))");
 
         badge.append("text")
             .attr("dy", "0.35em").attr("text-anchor", "middle")
-            .attr("font-weight", "900").attr("font-size", "18px").attr("fill", "#ffffff");
+            .attr("font-weight", "900").attr("font-size", "20px").attr("fill", "#ffffff");
 
         // Spinner
         nodeEnter.append("path")
             .attr("class", "spinner")
-            .attr("d", "M-10,0 a10,10 0 0,1 20,0")
-            .attr("fill", "none").attr("stroke", "#fff").attr("stroke-width", 3)
+            .attr("d", "M-14,0 a14,14 0 0,1 28,0")
+            .attr("fill", "none").attr("stroke", "#fff").attr("stroke-width", 4)
             .style("display", "none")
             .append("animateTransform")
             .attr("attributeName", "transform").attr("type", "rotate")
@@ -362,8 +362,9 @@ class ArborGraph extends HTMLElement {
                 return '#F59E0B'; // Folder is orange
             })
             .attr("d", d => {
-                const r = d.data.type === 'root' ? 45 : 32;
-                if (d.data.type === 'leaf') return "M0,0 C-25,10 -35,35 0,65 C35,35 25,10 0,0";
+                // Increased visual radius for the shapes
+                const r = d.data.type === 'root' ? 60 : 45; 
+                if (d.data.type === 'leaf') return "M0,0 C-35,15 -45,45 0,85 C45,45 35,15 0,0"; // Larger Leaf
                 // Diamond shape for Exam
                 if (d.data.type === 'exam') return `M0,${-r*1.2} L${r*1.2},0 L0,${r*1.2} L${-r*1.2},0 Z`;
                 return `M${-r},0 a${r},${r} 0 1,0 ${r*2},0 a${r},${r} 0 1,0 ${-r*2},0`;
@@ -373,7 +374,7 @@ class ArborGraph extends HTMLElement {
         nodeUpdate.select(".node-icon")
             .text(d => (d.data.type === 'leaf' || d.data.type === 'exam') && store.isCompleted(d.data.id) ? '✓' : (d.data.icon || (d.data.type === 'exam' ? '⚔️' : '🌱')))
             .attr("fill", d => (d.data.type === 'leaf' || d.data.type === 'exam') && store.isCompleted(d.data.id) ? '#fff' : '#1e293b')
-            .attr("dy", d => d.data.type === 'leaf' || d.data.type === 'exam' ? (d.data.type === 'exam' ? "0.35em" : "38px") : "0.35em")
+            .attr("dy", d => d.data.type === 'leaf' || d.data.type === 'exam' ? (d.data.type === 'exam' ? "0.35em" : "48px") : "0.35em")
             .attr("font-weight", d => store.isCompleted(d.data.id) ? "900" : "normal");
         
         nodeUpdate.select(".badge-group")
@@ -394,7 +395,7 @@ class ArborGraph extends HTMLElement {
             .each(function() {
                 try {
                     const bbox = this.getBBox();
-                    const w = Math.max(20, bbox.width + 16);
+                    const w = Math.max(30, bbox.width + 24); // More padding
                     d3.select(this.parentNode).select("rect")
                         .attr("x", -w/2)
                         .attr("width", w);
@@ -417,7 +418,7 @@ class ArborGraph extends HTMLElement {
             .attr("class", "link")
             .attr("fill", "none")
             .attr("stroke", "#8D6E63")
-            .attr("stroke-width", d => Math.max(2, 12 - d.target.depth * 2))
+            .attr("stroke-width", d => Math.max(3, 16 - d.target.depth * 2.5)) // Thicker links
             .attr("d", d => {
                 const o = findOrigin(d.target);
                 return this.diagonal({source: o, target: o});
