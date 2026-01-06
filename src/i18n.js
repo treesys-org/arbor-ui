@@ -207,7 +207,7 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
 
       // AI Sage
       sageWakeTitle: 'Wake up the Sage',
-      sageWakeDesc: 'The Sage Owl lives inside your device. To wake him up, your browser needs to download his brain (Model: Gemma 3:1B, ~1.0GB). This only happens once.',
+      sageWakeDesc: 'The Sage Owl lives inside your device. To wake him up, your browser needs to download his brain (Model: Llama 3.2 1B, ~1.0GB). This only happens once.',
       sageWakeBtn: 'Wake up (Download)',
       sageDownloading: 'Downloading neural network...',
       sageReady: 'The Sage is awake!',
@@ -429,7 +429,7 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
 
       // AI Sage
       sageWakeTitle: 'Despertar al Sabio',
-      sageWakeDesc: 'El Búho Sabio vive dentro de tu dispositivo. Para despertarlo, tu navegador necesita descargar su cerebro (Modelo: Gemma 3:1B, ~1.0GB). Esto solo sucede una vez.',
+      sageWakeDesc: 'El Búho Sabio vive dentro de tu dispositivo. Para despertarlo, tu navegador necesita descargar su cerebro (Modelo: Llama 3.2 1B, ~1.0GB). Esto solo sucede una vez.',
       sageWakeBtn: 'Despertar (Descargar)',
       sageDownloading: 'Descargando red neuronal...',
       sageReady: '¡El Sabio está despierto!',

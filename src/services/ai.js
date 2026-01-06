@@ -1,9 +1,8 @@
 
 import { CreateMLCEngine } from "@mlc-ai/web-llm";
 
-// Model: Gemma 2 2B (It is the supported lightweight version for WebLLM currently)
-// This model is ~1.3GB and runs very fast on most GPUs.
-const SELECTED_MODEL = "gemma-2-2b-it-q4f32_1-MLC";
+// Model: Llama 3.2 1B (High performance, low VRAM usage, broad browser support)
+const SELECTED_MODEL = "Llama-3.2-1B-Instruct-q4f32_1-MLC";
 
 class LocalAIService {
     constructor() {
@@ -28,6 +27,7 @@ class LocalAIService {
                             this.initProgressCallback(progress);
                         }
                     },
+                    logLevel: "INFO" // Helps with debugging
                 }
             );
             return true;
