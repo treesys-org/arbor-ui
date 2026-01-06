@@ -1,9 +1,4 @@
 
-
-
-
-
-
 import { UI_LABELS, AVAILABLE_LANGUAGES } from './i18n.js';
 import { github } from './services/github.js';
 import { aiService } from './services/ai.js';
@@ -558,14 +553,12 @@ class Store extends EventTarget {
         // Explicitly mark the Branch itself as complete so it turns green in graph
         this.state.completedNodes.add(parentId);
         
-        // IMPORTANT: Force a fresh object reference to ensure watchers trigger, 
-        // specifically to ensure the graph visual updates immediately.
+        // IMPORTANT: Force a fresh object reference to ensure watchers trigger
         this.state.completedNodes = new Set(this.state.completedNodes);
 
         if(addedCount > 0) this.addXP(addedCount * 10, true); // Silent XP add
         this.persistProgress();
         
-        // Use the new robust method to find the top level module and check it
         const topLevelModule = this.getTopLevelModule(parentId);
         if (topLevelModule) {
             this.checkForModuleCompletion(topLevelModule.id);
@@ -726,3 +719,4 @@ class Store extends EventTarget {
 }
 
 export const store = new Store();
+   

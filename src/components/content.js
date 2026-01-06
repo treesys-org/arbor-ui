@@ -1,7 +1,4 @@
 
-
-
-
 import { store } from '../store.js';
 import { parseContent } from '../utils/parser.js';
 
@@ -88,11 +85,20 @@ class ArborContent extends HTMLElement {
 
     handleExamPass() {
         if (!this.currentNode.parentId) return;
+        
+        // 1. Mark the immediate parent (Branch) as complete
         store.markBranchComplete(this.currentNode.parentId);
 
-        // CHECK FOR MODULE COMPLETION via EXAM (Certificate Trigger)
+        // 2. CHECK FOR MODULE COMPLETION via EXAM (Certificate Trigger)
+        // Ensure we find the top-level module, regardless of nesting depth
         const topModuleNode = store.getTopLevelModule(this.currentNode.id);
+        
         if (topModuleNode) {
+             // Force mark the top level module as complete in the store 
+             // to ensure 'isComplete' will be true in getModulesStatus()
+             store.markComplete(topModuleNode.id, true);
+             
+             // Now check status
              const modules = store.getModulesStatus();
              const parentModuleStatus = modules.find(m => m.id === topModuleNode.id);
              
@@ -545,3 +551,4 @@ class ArborContent extends HTMLElement {
     }
 }
 customElements.define('arbor-content', ArborContent);
+   
