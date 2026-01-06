@@ -258,7 +258,7 @@ class ArborEditor extends HTMLElement {
                 <!-- EDITOR AREA -->
                 <div class="flex-1 flex overflow-hidden relative">
                     <!-- Toolbar -->
-                    <div class="absolute top-0 right-full mr-4 p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-full flex flex-col gap-2 shadow-lg">
+                    <div class="absolute top-20 left-4 z-10 p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-full flex flex-col gap-2 shadow-lg">
                          <button class="tb-btn p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 font-bold" data-cmd="bold">B</button>
                          <button class="tb-btn p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 italic" data-cmd="italic">I</button>
                          <div class="w-full h-px bg-slate-200 dark:bg-slate-700"></div>
