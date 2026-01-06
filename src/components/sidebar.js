@@ -97,11 +97,11 @@ class ArborSidebar extends HTMLElement {
              </button>
              
              <div class="flex items-center gap-2">
-                <!-- Streak Mobile -->
-                <div class="flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                    <span class="text-sm">💧</span>
-                    <span class="text-xs font-bold text-blue-600 dark:text-blue-400">${g.streak}</span>
-                </div>
+                <!-- Basket Mobile -->
+                <button class="js-btn-progress-mobile flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 dark:bg-orange-900/20 border border-orange-100 dark:border-orange-800/30 rounded-full active:scale-95 transition-transform">
+                    <span class="text-sm">🧺</span>
+                    <span class="text-xs font-bold text-orange-700 dark:text-orange-400">${g.fruits.length}</span>
+                </button>
 
                 <!-- Sage Config Mobile -->
                 <button class="js-btn-sage w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 active:scale-95 transition-transform">🦉</button>
@@ -188,6 +188,9 @@ class ArborSidebar extends HTMLElement {
         this.querySelectorAll('.js-btn-contrib').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('contributor')));
         this.querySelectorAll('.js-btn-profile').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('profile')));
         
+        // Add listener for Mobile Basket Button to open Profile
+        this.querySelectorAll('.js-btn-progress-mobile').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('profile')));
+
         // SAGE AI Button Linked -> Opens Settings Mode
         this.querySelectorAll('.js-btn-sage').forEach(b => b.onclick = mobileMenuAction(() => {
             store.setModal({ type: 'sage', mode: 'settings' });
