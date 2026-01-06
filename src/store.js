@@ -2,6 +2,8 @@
 
 
 
+
+
 import { UI_LABELS, AVAILABLE_LANGUAGES } from './i18n.js';
 import { github } from './services/github.js';
 import { aiService } from './services/ai.js';
@@ -480,7 +482,7 @@ class Store extends EventTarget {
         }
     }
 
-    addXP(amount) {
+    addXP(amount, silent = false) {
         const { gamification } = this.state;
         const newDaily = gamification.dailyXP + amount;
         const newTotal = gamification.xp + amount;
@@ -491,8 +493,11 @@ class Store extends EventTarget {
         }
 
         this.updateGamification({ xp: newTotal, dailyXP: newDaily });
-        this.update({ lastActionMessage: msg });
-        setTimeout(() => this.update({ lastActionMessage: null }), 3000);
+        
+        if (!silent) {
+            this.update({ lastActionMessage: msg });
+            setTimeout(() => this.update({ lastActionMessage: null }), 3000);
+        }
     }
 
     harvestFruit(moduleId) {
@@ -557,7 +562,7 @@ class Store extends EventTarget {
         // specifically to ensure the graph visual updates immediately.
         this.state.completedNodes = new Set(this.state.completedNodes);
 
-        if(addedCount > 0) this.addXP(addedCount * 10);
+        if(addedCount > 0) this.addXP(addedCount * 10, true); // Silent XP add
         this.persistProgress();
         
         // Use the new robust method to find the top level module and check it
@@ -568,7 +573,8 @@ class Store extends EventTarget {
             this.checkForModuleCompletion(parentId);
         }
         
-        this.update({ lastActionMessage: "Branch Mastered! 🎓" });
+        const xpMsg = addedCount > 0 ? ` (+${addedCount * 10} ${this.ui.xpUnit})` : '';
+        this.update({ lastActionMessage: `Branch Mastered! 🎓${xpMsg}` });
         setTimeout(() => this.update({ lastActionMessage: null }), 3000);
         
         // Force graph update

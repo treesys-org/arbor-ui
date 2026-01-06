@@ -1,5 +1,7 @@
 
 
+
+
 import { store } from '../store.js';
 import { parseContent } from '../utils/parser.js';
 
@@ -87,6 +89,20 @@ class ArborContent extends HTMLElement {
     handleExamPass() {
         if (!this.currentNode.parentId) return;
         store.markBranchComplete(this.currentNode.parentId);
+
+        // CHECK FOR MODULE COMPLETION via EXAM (Certificate Trigger)
+        const topModuleNode = store.getTopLevelModule(this.currentNode.id);
+        if (topModuleNode) {
+             const modules = store.getModulesStatus();
+             const parentModuleStatus = modules.find(m => m.id === topModuleNode.id);
+             
+             if (parentModuleStatus && parentModuleStatus.isComplete) {
+                 setTimeout(() => {
+                     store.closeContent();
+                     store.setModal({ type: 'certificate', moduleId: parentModuleStatus.id });
+                 }, 2000); // Give user time to see the "Branch Mastered" message and quiz result
+             }
+        }
     }
 
     async completeAndNext() {
