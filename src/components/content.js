@@ -1,4 +1,5 @@
 
+
 import { store } from '../store.js';
 import { parseContent } from '../utils/parser.js';
 
@@ -254,6 +255,12 @@ class ArborContent extends HTMLElement {
                 </div>
 
                 <div class="flex items-center gap-2 flex-shrink-0">
+                   <!-- SAGE BUTTON -->
+                   <button id="btn-ask-sage" class="px-3 py-1.5 rounded-lg bg-purple-50 dark:bg-purple-900/30 hover:bg-purple-100 dark:hover:bg-purple-900/50 text-purple-600 dark:text-purple-300 font-bold text-xs flex items-center gap-2 border border-purple-100 dark:border-purple-800 transition-colors">
+                      🦉 <span class="hidden sm:inline">${ui.navSage}</span>
+                   </button>
+                   <div class="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
                    ${canEdit ? `
                    <button id="btn-edit-content" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-xs flex items-center gap-2">
                       ✏️ <span class="hidden sm:inline">${ui.editButton}</span>
@@ -368,6 +375,11 @@ class ArborContent extends HTMLElement {
         safeBind('#backdrop-overlay', () => store.closeContent());
         safeBind('#btn-close-content', () => store.closeContent());
         safeBind('#btn-edit-content', () => store.openEditor(this.currentNode));
+        
+        // Sage Button
+        safeBind('#btn-ask-sage', () => {
+             store.setModal({ type: 'sage', mode: 'chat' });
+        });
         
         safeBind('#btn-toggle-toc', () => this.toggleToc());
         safeBind('#toc-mobile-backdrop', () => this.toggleToc());

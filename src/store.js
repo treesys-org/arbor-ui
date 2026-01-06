@@ -1,3 +1,4 @@
+
 import { UI_LABELS, AVAILABLE_LANGUAGES } from './i18n.js';
 import { github } from './services/github.js';
 import { aiService } from './services/ai.js';
@@ -393,17 +394,18 @@ class Store extends EventTarget {
 
         try {
             const contextNode = this.state.selectedNode || this.state.previewNode;
-            const systemPrompt = aiService.getSystemPrompt(contextNode, this.state.lang);
             
-            // Construct full conversation for API (System + History)
-            const fullPayload = [
-                { role: 'system', content: systemPrompt },
-                ...currentMsgs
-            ];
+            // Pass full messages history to AI Service, plus Context Node for RAG
+            const responseObj = await aiService.chat(currentMsgs, contextNode);
+            
+            let finalText = responseObj.text;
+            
+            // Append Sources if available (Google Search Grounding)
+            if (responseObj.sources && responseObj.sources.length > 0) {
+                finalText += `\n\n**Fuentes:**\n` + responseObj.sources.map(s => `• [${s.title}](${s.url})`).join('\n');
+            }
 
-            const reply = await aiService.chat(fullPayload);
-            
-            const newMsgs = [...currentMsgs, { role: 'assistant', content: reply }];
+            const newMsgs = [...currentMsgs, { role: 'assistant', content: finalText }];
             this.update({ ai: { ...this.state.ai, status: 'ready', messages: newMsgs } });
 
         } catch (e) {

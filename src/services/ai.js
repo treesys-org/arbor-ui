@@ -2,9 +2,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { store } from "../store.js";
 
-// AI Service (Hybrid: Local Rule-Based + Cloud Gemini)
-// Supports "Local/Offline" mode and "Smart/Gemini" mode (BYOK)
-
+// AI Service (Hybrid: Local RAG + Cloud Gemini with Grounding)
 class HybridAIService {
     constructor() {
         this.onProgress = null;
@@ -44,132 +42,142 @@ class HybridAIService {
         return true;
     }
 
-    // --- LOCAL LOGIC ENGINE ---
+    // --- LOCAL RAG ENGINE (Retrieval-Augmented Generation) ---
+    // Instead of sending the whole book, we find the relevant paragraphs.
+    retrieveRelevantContext(userQuery, fullContent) {
+        if (!fullContent) return "";
+
+        // 1. Split content into logical chunks (paragraphs)
+        const paragraphs = fullContent.split(/\n\s*\n/);
+        
+        // 2. Tokenize Query (remove stopwords in a real app, simplified here)
+        const queryTokens = userQuery.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(w => w.length > 3);
+        
+        if (queryTokens.length === 0) return fullContent.substring(0, 2000); // Fallback
+
+        // 3. Score paragraphs based on keyword density
+        const scored = paragraphs.map(p => {
+            const lowerP = p.toLowerCase();
+            let score = 0;
+            queryTokens.forEach(token => {
+                if (lowerP.includes(token)) score += 1;
+            });
+            return { text: p, score };
+        });
+
+        // 4. Sort and Pick Top Chunks (Limit to ~3000 chars context)
+        scored.sort((a, b) => b.score - a.score);
+        
+        // Always include the first paragraph (Introduction) context
+        const contextChunks = [paragraphs[0]]; 
+        let currentLength = paragraphs[0].length;
+        
+        for (const item of scored) {
+            if (item.score > 0 && !contextChunks.includes(item.text)) {
+                if (currentLength + item.text.length < 3000) {
+                    contextChunks.push(item.text);
+                    currentLength += item.text.length;
+                }
+            }
+        }
+
+        return contextChunks.join('\n\n---\n\n');
+    }
 
     analyzeLocalContent(node) {
         if (!node || !node.content) return null;
         
         const text = node.content;
+        const quizCount = (text.match(/@quiz:/g) || []).length;
+        const wordCount = text.split(/\s+/).length;
+        const timeMin = Math.ceil(wordCount / 200);
+
+        // Simple summary extraction
+        let summary = "Contenido multimedia o breve.";
         const lines = text.split('\n');
-        
-        // 1. Extract first meaningful paragraph (Summary)
-        let summary = "No hay contenido de texto claro.";
         for (let line of lines) {
             const clean = line.trim();
-            if (clean && !clean.startsWith('@') && !clean.startsWith('#') && !clean.startsWith('![')) {
-                // Strip markdown bold/italic
-                summary = clean.replace(/\*\*|\*/g, '');
+            if (clean && !clean.startsWith('@') && !clean.startsWith('#') && clean.length > 50) {
+                summary = clean.replace(/\*\*|\*/g, '').substring(0, 150) + "...";
                 break;
             }
         }
 
-        // 2. Count Quizzes
-        const quizCount = (text.match(/@quiz:/g) || []).length;
-
-        // 3. Estimate Reading Time (avg 200 words/min)
-        const wordCount = text.split(/\s+/).length;
-        const timeMin = Math.ceil(wordCount / 200);
-
         return { summary, quizCount, timeMin };
     }
 
-    async chat(messages) {
+    async chat(messages, contextNode = null) {
         const lastMsgObj = messages[messages.length - 1];
         const lastMsg = lastMsgObj.content;
 
         // 1. Check for LOCAL COMMANDS (Works offline)
-        // Used by Quick Actions in UI
         if (lastMsg.startsWith('LOCAL_ACTION:')) {
             const action = lastMsg.split(':')[1];
-            const node = store.value.selectedNode || store.value.previewNode;
+            const node = contextNode || store.value.selectedNode || store.value.previewNode;
             
-            if (!node) return "Primero debes seleccionar o entrar a una lección.";
+            if (!node) return { text: "Primero debes seleccionar o entrar a una lección." };
 
             const analysis = this.analyzeLocalContent(node);
             
-            if (action === 'SUMMARIZE') {
-                return `📝 **Resumen Rápido (Local):**\n\n"${analysis.summary}"`;
-            }
-            if (action === 'STATS') {
-                return `📊 **Análisis de la Lección:**\n\n⏱️ Tiempo de lectura: ~${analysis.timeMin} min\n❓ Evaluaciones: ${analysis.quizCount}`;
-            }
-            if (action === 'NAV') {
-                return `📍 **Ubicación:**\n\nEstás en: ${node.name}\nRuta: ${node.path}`;
-            }
+            if (action === 'SUMMARIZE') return { text: `📝 **Resumen Rápido:**\n\n"${analysis.summary}"` };
+            if (action === 'STATS') return { text: `📊 **Datos:**\n\n⏱️ Lectura: ~${analysis.timeMin} min\n❓ Preguntas: ${analysis.quizCount}` };
+            if (action === 'NAV') return { text: `📍 **Ubicación:**\n\n${node.name}\n📂 ${node.path}` };
         }
 
-        // 2. Smart Mode (Gemini)
+        // 2. Smart Mode (Gemini with RAG + Grounding)
         if (this.isSmartMode()) {
             try {
-                const systemMsg = messages.find(m => m.role === 'system')?.content || '';
-                
+                // RAG: Get only relevant context from the lesson
+                let systemContext = "";
+                if (contextNode && contextNode.content) {
+                    const relevantText = this.retrieveRelevantContext(lastMsg, contextNode.content);
+                    systemContext = `
+                    CONTEXT FROM CURRENT LESSON ("${contextNode.name}"):
+                    ${relevantText}
+                    
+                    INSTRUCTIONS:
+                    You are the Sage Owl of Arbor Academy.
+                    1. Use the LESSON CONTEXT above to answer if possible.
+                    2. If the answer is not in the context, use your built-in Google Search tool to find the answer.
+                    3. Keep answers concise and encouraging.
+                    `;
+                } else {
+                     systemContext = "You are the Sage Owl of Arbor Academy. Answer general questions helpfully.";
+                }
+
+                // Call Gemini with Grounding (Search)
                 const response = await this.client.models.generateContent({
                     model: 'gemini-2.5-flash',
-                    contents: `${systemMsg}\n\nUser Question: ${lastMsg}`,
+                    contents: [
+                        { role: 'user', parts: [{ text: systemContext + `\n\nUSER QUESTION: ${lastMsg}` }] }
+                    ],
                     config: {
-                        systemInstruction: "You are the Sage Owl of Arbor Academy. Keep answers concise, helpful, and encouraging. You are an educational assistant helping a student understand a specific lesson."
+                        tools: [{ googleSearch: {} }], // Enable Web Search
                     }
                 });
                 
-                return response.text;
+                // Extract Text
+                const text = response.text;
+                
+                // Extract Grounding Metadata (Sources)
+                let sources = [];
+                const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+                if (groundingChunks) {
+                    sources = groundingChunks
+                        .filter(c => c.web && c.web.uri)
+                        .map(c => ({ title: c.web.title, url: c.web.uri }));
+                }
+
+                return { text, sources };
+
             } catch (e) {
                 console.error("Gemini Error:", e);
-                return "Huu huu... Mi cerebro en la nube está mareado (Error de API). Revisa tu llave.";
+                return { text: "🦉 Mi conexión con la nube falló. Por favor revisa tu API Key." };
             }
         }
 
-        // 3. Local Fallback (Chat attempt without AI)
-        return "Mi cerebro inteligente está apagado. Solo puedo hacer análisis básicos locales (Resumen y Estadísticas). Conéctame a la nube para charlar de verdad.";
-    }
-
-    // Context-based tips (Synchronous / "Clippy" style)
-    getContextTip(state) {
-        const lang = state.lang;
-        
-        // Context 1: Reading a Lesson
-        if (state.selectedNode) {
-            const node = state.selectedNode;
-            const analysis = this.analyzeLocalContent(node);
-            if (analysis) {
-                 if (lang === 'ES') return `Esta lección tiene ${analysis.quizCount} preguntas y toma unos ${analysis.timeMin} minutos.`;
-                 return `This lesson has ${analysis.quizCount} quizzes and takes ~${analysis.timeMin} mins.`;
-            }
-        }
-
-        // Context 2: Previewing
-        if (state.previewNode) {
-            const node = state.previewNode;
-            if (lang === 'ES') return `Estás viendo "${node.name}". Pulsa ENTRAR para comenzar.`;
-            return `Previewing "${node.name}". Press ENTER to start.`;
-        }
-
-        // Fallback Tips
-        const tipsES = [
-            "Tip: Riega tu árbol entrando todos los días.",
-            "Tip: Los nodos rojos son Exámenes.",
-            "Tip: Puedes usar la rueda del ratón para hacer zoom.",
-            "Tip: Activa mi cerebro (API) para respuestas infinitas."
-        ];
-        return tipsES[Math.floor(Math.random() * tipsES.length)];
-    }
-
-    getSystemPrompt(contextNode, lang = 'EN') {
-        const title = contextNode ? contextNode.name : 'General';
-        const desc = contextNode ? (contextNode.description || '') : '';
-        const content = contextNode ? (contextNode.content || '') : '';
-        
-        const cleanContent = content.length > 50000 ? content.substring(0, 50000) + '...(truncated)' : content;
-
-        return `
-        Current Context:
-        Title: ${title}
-        Description: ${desc}
-        
-        Lesson Content (Markdown):
-        ${cleanContent}
-        
-        The user is currently reading this lesson. Use this content to answer their questions accurately. If the content doesn't contain the answer, say so, but offer general knowledge.
-        `;
+        // 3. Local Fallback
+        return { text: "Estoy en modo Local. Conéctame a la nube (Configuración) para responder cualquier cosa." };
     }
 }
 
