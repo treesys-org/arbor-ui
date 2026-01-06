@@ -239,38 +239,53 @@ class ArborEditor extends HTMLElement {
                                 <input id="editor-description" type="text" class="w-full bg-transparent text-sm font-medium text-slate-600 dark:text-slate-300 outline-none" value="${this.meta.description}" placeholder="${ui.noDescription}">
                             </div>
                         </div>
-                        <div class="flex items-center gap-4 col-span-1 md:col-span-2">
-                            <div>
-                                <label class="text-xs font-bold text-slate-400">ORDEN</label>
-                                <input id="editor-order" type="number" class="w-20 bg-slate-100 dark:bg-slate-800 p-2 rounded-lg font-bold text-center" value="${this.meta.order}">
+                        <div class="flex flex-wrap items-center gap-x-6 gap-y-4 col-span-1 md:col-span-2">
+                            <!-- ORDEN -->
+                            <div class="flex items-center gap-2">
+                                <label for="editor-order" class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase">ORDEN</label>
+                                <input id="editor-order" type="number" class="w-20 bg-slate-100 dark:bg-slate-800 px-2 py-1.5 rounded-lg font-bold text-center" value="${this.meta.order}">
                             </div>
-                            <div class="flex items-center gap-4">
-                                <label class="text-xs font-bold text-slate-400">TIPO</label>
-                                <div class="flex items-center gap-2 text-sm font-bold">
-                                    <input type="radio" id="editor-type-lesson" name="type" ${!this.meta.isExam ? 'checked' : ''}><label for="editor-type-lesson">🌱 Lección</label>
-                                    <input type="radio" id="editor-type-exam" name="type" ${this.meta.isExam ? 'checked' : ''}><label for="editor-type-exam">⚔️ Examen</label>
+
+                            <!-- TIPO -->
+                            <div class="flex items-center gap-2">
+                                <label class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase">TIPO</label>
+                                <div class="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg p-1 text-sm font-bold">
+                                    <label class="radio-label cursor-pointer">
+                                        <input type="radio" name="type" class="sr-only peer" id="editor-type-lesson" ${!this.meta.isExam ? 'checked' : ''}>
+                                        <div class="px-3 py-1 rounded-md flex items-center gap-1.5 text-slate-500 dark:text-slate-400 peer-checked:bg-white dark:peer-checked:bg-slate-700 peer-checked:text-slate-800 dark:peer-checked:text-white peer-checked:shadow-sm transition-colors">
+                                            <span>🌱</span>
+                                            <span>Lección</span>
+                                        </div>
+                                    </label>
+                                    <label class="radio-label cursor-pointer">
+                                        <input type="radio" name="type" class="sr-only peer" id="editor-type-exam" ${this.meta.isExam ? 'checked' : ''}>
+                                        <div class="px-3 py-1 rounded-md flex items-center gap-1.5 text-slate-500 dark:text-slate-400 peer-checked:bg-white dark:peer-checked:bg-slate-700 peer-checked:text-slate-800 dark:peer-checked:text-white peer-checked:shadow-sm transition-colors">
+                                            <span>⚔️</span>
+                                            <span>Examen</span>
+                                        </div>
+                                    </label>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
+                <!-- TOOLBAR -->
+                <div class="flex-shrink-0 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 p-2 flex items-center justify-center gap-1">
+                     <button class="tb-btn p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 font-bold" data-cmd="bold">B</button>
+                     <button class="tb-btn p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 italic" data-cmd="italic">I</button>
+                     <div class="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-2"></div>
+                     <button class="tb-btn p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 font-bold text-xs" data-cmd="formatBlock" data-val="h1">H1</button>
+                     <button class="tb-btn p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 font-bold text-xs" data-cmd="formatBlock" data-val="h2">H2</button>
+                     <div class="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-2"></div>
+                     <button id="btn-add-img" class="p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700">🖼️</button>
+                     <button id="btn-add-vid" class="p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700">🎥</button>
+                     <button id="btn-add-aud" class="p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700">🎵</button>
+                     <button id="btn-add-quiz" class="p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700">❓</button>
+                </div>
+
                 <!-- EDITOR AREA -->
-                <div class="flex-1 flex overflow-hidden relative">
-                    <!-- Toolbar -->
-                    <div class="absolute top-20 left-4 z-10 p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-full flex flex-col gap-2 shadow-lg">
-                         <button class="tb-btn p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 font-bold" data-cmd="bold">B</button>
-                         <button class="tb-btn p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 italic" data-cmd="italic">I</button>
-                         <div class="w-full h-px bg-slate-200 dark:bg-slate-700"></div>
-                         <button class="tb-btn p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 font-bold text-xs" data-cmd="formatBlock" data-val="h1">H1</button>
-                         <button class="tb-btn p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 font-bold text-xs" data-cmd="formatBlock" data-val="h2">H2</button>
-                         <div class="w-full h-px bg-slate-200 dark:bg-slate-700"></div>
-                         <button id="btn-add-img" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700">🖼️</button>
-                         <button id="btn-add-vid" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700">🎥</button>
-                         <button id="btn-add-aud" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700">🎵</button>
-                         <button id="btn-add-quiz" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700">❓</button>
-                    </div>
-                    
+                <div class="flex-1 flex overflow-hidden">
                     <div class="flex-1 overflow-y-auto bg-slate-100 dark:bg-slate-800/50 p-4 md:p-8 custom-scrollbar">
                         <div id="wysiwyg-editor" class="max-w-3xl mx-auto min-h-full bg-white dark:bg-slate-900 shadow-lg rounded-xl p-8 md:p-12 outline-none prose-slate dark:prose-invert" contenteditable="true" spellcheck="false">
                             ${this.bodyToHtml(this.bodyContent)}
