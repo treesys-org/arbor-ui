@@ -1,7 +1,5 @@
 
 
-
-
 import { store } from '../store.js';
 import { github } from '../services/github.js';
 
@@ -221,6 +219,8 @@ class ArborModals extends HTMLElement {
     // --- CONTRIBUTOR ---
     renderContributor(ui) {
         const user = store.value.githubUser;
+        const magicLink = 'https://github.com/settings/tokens/new?description=Arbor%20Studio%20Access&scopes=repo,workflow';
+
         return `
         <div class="p-8">
             <div class="w-16 h-16 bg-slate-800 text-white rounded-full flex items-center justify-center text-3xl mb-6 shadow-lg shadow-slate-500/30">🐙</div>
@@ -229,10 +229,30 @@ class ArborModals extends HTMLElement {
 
             ${!user ? `
             <div class="space-y-4">
+                <!-- Magic Link -->
+                <a href="${magicLink}" target="_blank" class="w-full py-3 px-4 border-2 border-dashed border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-sky-100 dark:hover:bg-sky-900/40 transition-colors">
+                    <span>✨</span>
+                    <span>Registro Inicial (Generar Token)</span>
+                </a>
+
+                <div class="relative py-2">
+                    <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-200 dark:border-slate-700"></div></div>
+                    <div class="relative flex justify-center text-xs uppercase"><span class="bg-white dark:bg-slate-900 px-2 text-slate-400">O ingresa tu token existente</span></div>
+                </div>
+
                 <div>
                     <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">${ui.contribToken}</label>
                     <input id="inp-gh-token" type="password" placeholder="${ui.contribTokenPlaceholder}" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-slate-500">
                 </div>
+                
+                <label class="flex items-center gap-3 p-2 cursor-pointer group">
+                    <div class="relative flex items-center">
+                        <input type="checkbox" id="chk-remember-me" class="peer sr-only" checked>
+                        <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </div>
+                    <span class="text-sm text-slate-600 dark:text-slate-400 font-medium group-hover:text-slate-900 dark:group-hover:text-slate-200">Recordarme (Guardar sesión)</span>
+                </label>
+
                 <button id="btn-gh-connect" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl shadow-lg transition-transform active:scale-95">${ui.contribConnect}</button>
             </div>
             ` : `
@@ -253,6 +273,8 @@ class ArborModals extends HTMLElement {
         if (btnConnect) {
             btnConnect.onclick = async () => {
                 const token = this.querySelector('#inp-gh-token').value.trim();
+                const rememberMe = this.querySelector('#chk-remember-me').checked;
+                
                 if (!token) return;
                 
                 btnConnect.disabled = true;
@@ -261,7 +283,15 @@ class ArborModals extends HTMLElement {
                 const user = await github.initialize(token);
                 if (user) {
                     store.update({ githubUser: user });
-                    localStorage.setItem('arbor-gh-token', token);
+                    
+                    if (rememberMe) {
+                        localStorage.setItem('arbor-gh-token', token);
+                        sessionStorage.removeItem('arbor-gh-token'); // Clear opposing storage
+                    } else {
+                        sessionStorage.setItem('arbor-gh-token', token);
+                        localStorage.removeItem('arbor-gh-token'); // Clear opposing storage
+                    }
+                    
                     this.render();
                 } else {
                     alert('Authentication failed. Check your token.');
@@ -276,7 +306,9 @@ class ArborModals extends HTMLElement {
             btnDisconnect.onclick = () => {
                 github.disconnect();
                 store.update({ githubUser: null });
+                // Clear both to be safe
                 localStorage.removeItem('arbor-gh-token');
+                sessionStorage.removeItem('arbor-gh-token');
                 this.render();
             };
         }

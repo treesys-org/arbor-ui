@@ -18,6 +18,7 @@
     "@angular/forms": "^21.0.6",
     "vite": "^7.3.0",
     "octokit": "latest",
+    "path": "^0.12.7",
     "@angular/build": "^21.0.0",
     "@angular/cli": "^21.0.0",
     "@angular/compiler-cli": "^21.0.0",

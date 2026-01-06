@@ -7,6 +7,7 @@
 
 
 
+
 import os
 import json
 import datetime
@@ -195,7 +196,8 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
             "type": "branch",
             "namespace": NAMESPACE,
             "apiPath": f"{lang_folder.lower()}/{current_slug_path}",
-            "totalLeaves": 0 # Will be calculated
+            "totalLeaves": 0, # Will be calculated
+            "sourcePath": clean_source_path # <--- ADDED for GitHub Editing
         }
         
         # Cleanup internal keys

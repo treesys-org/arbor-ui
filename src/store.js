@@ -1,7 +1,5 @@
 
 
-
-
 import { UI_LABELS, AVAILABLE_LANGUAGES } from './i18n.js';
 import { googleDrive } from './services/google-drive.js';
 import { github } from './services/github.js';
@@ -54,8 +52,8 @@ class Store extends EventTarget {
         this.loadProgress();
         this.loadSources();
         
-        // Init GitHub State
-        const ghToken = localStorage.getItem('arbor-gh-token');
+        // Init GitHub State (Check Local first, then Session)
+        const ghToken = localStorage.getItem('arbor-gh-token') || sessionStorage.getItem('arbor-gh-token');
         if (ghToken) {
             github.initialize(ghToken).then(user => {
                  if (user) this.update({ githubUser: user });
