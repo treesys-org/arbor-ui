@@ -1,4 +1,7 @@
 
+
+
+
 import { store } from '../store.js';
 import { github } from '../services/github.js';
 import { parseContent } from '../utils/parser.js';
@@ -10,6 +13,9 @@ class ArborEditor extends HTMLElement {
         this.originalContent = '';
         this.currentContent = '';
         this.isPreviewMode = false;
+        
+        // Emojis populares para educación
+        this.emojis = ['📚', '🧬', '📐', '🎨', '🌍', '🏰', '💻', '🎵', '⚽', '🧠', '💡', '📝', '⚔️', '🛡️', '🚀', '🧪', '🌱', '🎓', '🔎', '⚙️'];
     }
 
     connectedCallback() {
@@ -32,6 +38,9 @@ class ArborEditor extends HTMLElement {
     async loadContent() {
         this.renderLoading();
         try {
+            if (!this.node.sourcePath) {
+                 throw new Error("This node cannot be edited (Missing source path).");
+            }
             const { content } = await github.getFileContent(this.node.sourcePath);
             this.originalContent = content;
             this.currentContent = content;
@@ -53,331 +62,210 @@ class ArborEditor extends HTMLElement {
         </div>`;
     }
 
+    insertAtCursor(textToInsert) {
+        const textarea = this.querySelector('textarea');
+        if (!textarea) return;
+
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const text = textarea.value;
+        
+        const before = text.substring(0, start);
+        const after = text.substring(end, text.length);
+        
+        this.currentContent = before + textToInsert + after;
+        textarea.value = this.currentContent;
+        
+        // Restore cursor
+        textarea.selectionStart = textarea.selectionEnd = start + textToInsert.length;
+        textarea.focus();
+    }
+    
+    changeIcon(newIcon) {
+        // Regex to replace @icon: ANY
+        const regex = /@icon:\s*.+/;
+        if (regex.test(this.currentContent)) {
+            this.currentContent = this.currentContent.replace(regex, `@icon: ${newIcon}`);
+        } else {
+            // If missing, add to top
+            this.currentContent = `@icon: ${newIcon}\n` + this.currentContent;
+        }
+        this.renderEditor();
+    }
+
     renderEditor() {
         const ui = store.ui;
-        // Check if currently is exam
-        const isExam = this.currentContent.includes('@exam');
+        // Extract current icon
+        const iconMatch = this.currentContent.match(/@icon:\s*(.+)/i);
+        const currentIcon = iconMatch ? iconMatch[1].trim() : '📄';
 
         this.innerHTML = `
-        <div class="fixed inset-0 z-[80] bg-slate-200 dark:bg-slate-950 flex flex-col animate-in fade-in duration-200">
+        <div class="fixed inset-0 z-[80] bg-slate-100 dark:bg-slate-950 flex flex-col animate-in fade-in duration-200">
             
-            <!-- 1. Header (Actions) -->
-            <div class="h-16 bg-white dark:bg-slate-900 border-b border-slate-300 dark:border-slate-800 flex items-center justify-between px-4 md:px-8 shadow-sm z-20">
-                <div class="flex items-center gap-4">
+            <!-- HEADER -->
+            <div class="h-16 bg-white dark:bg-slate-900 border-b border-slate-300 dark:border-slate-800 flex items-center justify-between px-4 md:px-6 shadow-sm z-20 flex-shrink-0">
+                <div class="flex items-center gap-3 min-w-0">
                     <button id="btn-cancel" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors" title="${ui.editorCancel}">
-                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
-                    <div>
-                        <h2 class="font-black text-lg text-slate-800 dark:text-white leading-none flex items-center gap-2">
-                            ${this.node.name}
-                            <span id="badge-exam" class="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full border border-red-200 ${isExam ? '' : 'hidden'}">EXAM</span>
-                        </h2>
-                        <p class="text-xs text-slate-500 font-mono mt-1 opacity-70">Editing via GitHub</p>
+                    
+                    <div class="h-8 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
+                    <!-- EMOJI SELECTOR -->
+                    <div class="relative group">
+                        <button id="btn-emoji" class="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-sky-500 text-2xl flex items-center justify-center transition-all">
+                            ${currentIcon}
+                        </button>
+                        <!-- Dropdown -->
+                        <div class="absolute top-12 left-0 w-64 bg-white dark:bg-slate-900 shadow-2xl rounded-xl border border-slate-200 dark:border-slate-800 p-3 grid grid-cols-5 gap-2 hidden group-hover:grid group-focus-within:grid z-50 animate-in zoom-in duration-200">
+                            ${this.emojis.map(e => `<button class="btn-emoji-opt w-10 h-10 flex items-center justify-center text-xl hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors" data-emoji="${e}">${e}</button>`).join('')}
+                        </div>
+                    </div>
+
+                    <div class="min-w-0 flex flex-col">
+                        <h2 class="font-black text-sm md:text-lg text-slate-800 dark:text-white truncate leading-tight">${this.node.name}</h2>
+                        <p class="text-[10px] text-slate-400 font-mono truncate hidden md:block">${this.node.sourcePath}</p>
                     </div>
                 </div>
 
                 <div class="flex items-center gap-3">
-                     <!-- Mode Toggles (Tabs) -->
-                    <div class="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg mr-2">
-                        <button id="tab-write" class="px-4 py-1.5 rounded-md text-sm font-bold transition-all ${!this.isPreviewMode ? 'bg-white dark:bg-slate-700 shadow text-sky-600 dark:text-sky-400' : 'text-slate-500 hover:text-slate-700'}">
-                            Write
+                     <!-- VIEW TOGGLE -->
+                    <div class="flex bg-slate-200 dark:bg-slate-800 p-1 rounded-lg">
+                        <button id="tab-write" class="px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-2 ${!this.isPreviewMode ? 'bg-white dark:bg-slate-700 shadow text-sky-600 dark:text-sky-400' : 'text-slate-500 hover:text-slate-700'}">
+                            <span>✏️</span> <span class="hidden sm:inline">Code</span>
                         </button>
-                        <button id="tab-preview" class="px-4 py-1.5 rounded-md text-sm font-bold transition-all ${this.isPreviewMode ? 'bg-white dark:bg-slate-700 shadow text-sky-600 dark:text-sky-400' : 'text-slate-500 hover:text-slate-700'}">
-                            Preview
+                        <button id="tab-preview" class="px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-2 ${this.isPreviewMode ? 'bg-white dark:bg-slate-700 shadow text-sky-600 dark:text-sky-400' : 'text-slate-500 hover:text-slate-700'}">
+                            <span>👁️</span> <span class="hidden sm:inline">Preview</span>
                         </button>
                     </div>
 
-                    <button id="btn-submit" class="px-6 py-2.5 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-lg shadow-lg shadow-orange-600/20 transform active:scale-95 transition-all uppercase tracking-wide text-sm">
-                        Publish Changes
+                    <button id="btn-submit" class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg shadow-lg shadow-green-600/20 transform active:scale-95 transition-all text-sm flex items-center gap-2">
+                        <span>${ui.editorChanges}</span>
+                        <svg class="w-4 h-4 hidden sm:block" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
                     </button>
                 </div>
             </div>
 
-            <!-- 2. Formatting Toolbar (Only visible in Write mode) -->
-            <div id="toolbar" class="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 md:px-8 py-2 flex items-center gap-2 overflow-x-auto ${this.isPreviewMode ? 'hidden' : ''}">
-                
-                <!-- Text Formatting -->
-                <div class="flex items-center gap-1 border-r border-slate-300 dark:border-slate-700 pr-2 mr-1 flex-shrink-0">
-                    <button class="tool-btn font-serif font-black text-xl w-10 h-10 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200" data-tag="**" title="Bold">B</button>
-                    <button class="tool-btn italic font-serif text-xl w-10 h-10 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200" data-tag="*" title="Italic">I</button>
-                </div>
-
-                <!-- Headings -->
-                <div class="flex items-center gap-1 border-r border-slate-300 dark:border-slate-700 pr-2 mr-1 flex-shrink-0">
-                    <button class="tool-btn font-bold text-lg w-10 h-10 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200" data-prefix="# " title="Heading 1">H1</button>
-                    <button class="tool-btn font-bold text-sm w-10 h-10 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200" data-prefix="## " title="Heading 2">H2</button>
-                    <button class="tool-btn font-bold text-lg w-10 h-10 rounded hover:bg-slate-200 dark:hover:bg-slate-800 flex items-center justify-center text-slate-700 dark:text-slate-200" data-prefix="- " title="List">
-                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
-                    </button>
-                </div>
-
-                <!-- Media & Interactive -->
-                <div class="flex items-center gap-2 flex-shrink-0">
-                     <button id="btn-img" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-sm font-bold text-slate-600 dark:text-slate-300 transition-colors" title="Upload Image">
-                        <span>📷</span> <span class="hidden lg:inline">Image</span>
-                     </button>
-                     
-                     <button class="tool-btn flex items-center gap-2 px-3 py-2 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-sm font-bold text-slate-600 dark:text-slate-300 transition-colors" data-template="@video: https://youtube.com/watch?v=...">
-                        <span>🎥</span> <span class="hidden lg:inline">Video</span>
-                     </button>
-
-                     <button class="tool-btn flex items-center gap-2 px-3 py-2 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-sm font-bold text-slate-600 dark:text-slate-300 transition-colors" data-template="@audio: https://example.com/sound.mp3">
-                        <span>🎵</span> <span class="hidden lg:inline">Audio</span>
-                     </button>
-                </div>
-
-                <div class="w-px h-8 bg-slate-300 dark:bg-slate-700 mx-1 flex-shrink-0"></div>
-
-                <!-- Structure -->
-                <div class="flex items-center gap-2 flex-shrink-0">
-                     <button class="tool-btn flex items-center gap-2 px-3 py-2 rounded hover:bg-purple-100 dark:hover:bg-purple-900/30 text-sm font-bold text-purple-600 dark:text-purple-400 transition-colors" 
-                        data-template="\n@quiz: Question here?\n@option: Wrong Answer\n@correct: Correct Answer\n" title="Insert Quiz">
-                        <span>❓</span> <span>Quiz</span>
-                     </button>
-
-                     <button class="tool-btn flex items-center gap-2 px-3 py-2 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-sm font-bold text-slate-600 dark:text-slate-300 transition-colors" data-template="\n@section: New Section Title\n">
-                        <span>📑</span> <span class="hidden lg:inline">Section</span>
-                     </button>
-
-                     <button id="btn-exam-toggle" class="flex items-center gap-2 px-3 py-2 rounded border border-transparent hover:border-red-200 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm font-bold transition-colors ${isExam ? 'text-red-600 bg-red-50 border-red-200' : 'text-slate-500'}" title="Toggle Exam Mode (Marks this file as an Exam)">
-                        <span>⚔️</span> <span>Exam Mode</span>
-                     </button>
-                </div>
-                
-                <input type="file" id="img-upload" class="hidden" accept="image/*">
+            <!-- TOOLBAR (Only in Write Mode) -->
+            ${!this.isPreviewMode ? `
+            <div class="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-2 flex items-center gap-2 overflow-x-auto custom-scrollbar flex-shrink-0">
+                <button class="tb-btn p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs min-w-[30px]" data-ins="**Bold**" title="Bold">B</button>
+                <button class="tb-btn p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 italic text-xs min-w-[30px]" data-ins="*Italic*" title="Italic">I</button>
+                <div class="w-px h-6 bg-slate-300 dark:bg-slate-700 mx-1"></div>
+                <button class="tb-btn p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs" data-ins="# ">H1</button>
+                <button class="tb-btn p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs" data-ins="## ">H2</button>
+                <button class="tb-btn p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs" data-ins="- ">List</button>
+                <div class="w-px h-6 bg-slate-300 dark:bg-slate-700 mx-1"></div>
+                <button class="tb-btn p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs flex items-center gap-1" data-ins="@image: https://">
+                    <span>🖼️</span> <span class="hidden sm:inline">Img</span>
+                </button>
+                <button class="tb-btn p-2 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs flex items-center gap-1" data-ins="@video: https://">
+                    <span>🎬</span> <span class="hidden sm:inline">Video</span>
+                </button>
+                <div class="w-px h-6 bg-slate-300 dark:bg-slate-700 mx-1"></div>
+                <button class="tb-btn px-3 py-1.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300 font-bold text-xs flex items-center gap-1" 
+                    data-ins="\n@quiz: Question?\n@option: Wrong Answer\n@correct: Right Answer\n">
+                    <span>📝</span> <span>Quiz</span>
+                </button>
             </div>
+            ` : ''}
 
-            <!-- 3. Main Document Area -->
-            <div class="flex-1 overflow-y-auto p-4 md:p-8 flex justify-center custom-scrollbar" id="scroll-container">
-                
-                <div class="w-full max-w-4xl bg-white dark:bg-[#0d1117] min-h-[1000px] shadow-xl md:my-4 p-8 md:p-12 relative transition-all duration-300">
-                    
-                    <!-- WRITE MODE: Textarea -->
-                    <textarea id="editor-txt" 
-                        class="w-full h-full min-h-[800px] resize-none outline-none text-lg leading-loose text-slate-800 dark:text-slate-200 font-sans bg-transparent placeholder:text-slate-300 ${this.isPreviewMode ? 'hidden' : 'block'}" 
-                        placeholder="Start typing your lesson here..." 
-                        spellcheck="false">${this.currentContent}</textarea>
-                    
-                    <!-- PREVIEW MODE: Rendered HTML -->
-                    <div id="editor-preview" 
-                        class="prose prose-lg prose-slate dark:prose-invert max-w-none ${!this.isPreviewMode ? 'hidden' : 'block'} animate-in fade-in">
+            <!-- CONTENT AREA -->
+            <div class="flex-1 overflow-hidden relative">
+                ${!this.isPreviewMode ? `
+                    <textarea id="editor-area" class="w-full h-full p-6 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-mono text-sm leading-relaxed resize-none outline-none" spellcheck="false">${this.currentContent}</textarea>
+                ` : `
+                    <div class="w-full h-full p-6 md:p-12 overflow-y-auto bg-white dark:bg-slate-900 prose prose-slate dark:prose-invert max-w-none">
+                        ${parseContent(this.currentContent).map(b => this.renderPreviewBlock(b)).join('')}
                     </div>
-                
-                </div>
-
+                `}
             </div>
+
+            <!-- COMMIT MODAL (Hidden by default) -->
+            <dialog id="commit-dialog" class="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-2xl backdrop:bg-slate-900/50 max-w-md w-full border border-slate-200 dark:border-slate-800">
+                <h3 class="font-black text-xl mb-4 text-slate-800 dark:text-white">${ui.editorChanges}</h3>
+                <textarea id="commit-msg" class="w-full h-24 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg mb-4 border border-slate-200 dark:border-slate-700 outline-none text-sm dark:text-white" placeholder="${ui.editorCommitMsg}"></textarea>
+                <div class="flex justify-end gap-3">
+                    <button id="btn-commit-cancel" class="px-4 py-2 text-slate-500 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">${ui.cancel}</button>
+                    <button id="btn-commit-confirm" class="px-6 py-2 bg-green-600 text-white font-bold rounded-lg shadow-lg hover:bg-green-500">${ui.editorCommitBtn}</button>
+                </div>
+            </dialog>
+
         </div>`;
 
-        // --- Logic Binding ---
+        this.bindEvents();
+    }
 
-        const textarea = this.querySelector('#editor-txt');
-        const preview = this.querySelector('#editor-preview');
-        const btnExam = this.querySelector('#btn-exam-toggle');
-        const badgeExam = this.querySelector('#badge-exam');
-        
-        // 1. Tab Switching
-        const setMode = (previewMode) => {
-            this.isPreviewMode = previewMode;
-            if (previewMode) {
-                this.updatePreview(this.currentContent, preview);
-                this.querySelector('#tab-preview').className = 'px-4 py-1.5 rounded-md text-sm font-bold transition-all bg-white dark:bg-slate-700 shadow text-sky-600 dark:text-sky-400';
-                this.querySelector('#tab-write').className = 'px-4 py-1.5 rounded-md text-sm font-bold transition-all text-slate-500 hover:text-slate-700';
-                textarea.classList.add('hidden');
-                preview.classList.remove('hidden');
-                this.querySelector('#toolbar').classList.add('hidden');
-            } else {
-                this.querySelector('#tab-write').className = 'px-4 py-1.5 rounded-md text-sm font-bold transition-all bg-white dark:bg-slate-700 shadow text-sky-600 dark:text-sky-400';
-                this.querySelector('#tab-preview').className = 'px-4 py-1.5 rounded-md text-sm font-bold transition-all text-slate-500 hover:text-slate-700';
-                textarea.classList.remove('hidden');
-                preview.classList.add('hidden');
-                this.querySelector('#toolbar').classList.remove('hidden');
-                textarea.focus();
-            }
-        };
+    // Helper for simple preview rendering without the full ArborContent complexity
+    renderPreviewBlock(b) {
+        if (b.type === 'h1') return `<h1>${b.text}</h1>`;
+        if (b.type === 'h2') return `<h2>${b.text}</h2>`;
+        if (b.type === 'p') return `<p>${b.text}</p>`;
+        if (b.type === 'image') return `<img src="${b.src}" class="rounded-lg shadow my-4">`;
+        if (b.type === 'list') return `<ul>${b.items.map(i => `<li>${i}</li>`).join('')}</ul>`;
+        if (b.type === 'quiz') return `<div class="bg-slate-100 dark:bg-slate-800 p-4 rounded-lg my-4 border-l-4 border-purple-500"><p class="font-bold">Quiz: ${b.questions[0].question}</p></div>`;
+        return '';
+    }
 
-        this.querySelector('#tab-write').onclick = () => setMode(false);
-        this.querySelector('#tab-preview').onclick = () => setMode(true);
+    bindEvents() {
+        const ta = this.querySelector('#editor-area');
+        if (ta) {
+            ta.addEventListener('input', (e) => {
+                this.currentContent = e.target.value;
+            });
+        }
 
-        // 2. Toolbar Actions
-        this.querySelectorAll('.tool-btn').forEach(btn => {
+        // Toolbar Buttons
+        this.querySelectorAll('.tb-btn').forEach(btn => {
+            btn.onclick = () => this.insertAtCursor(btn.dataset.ins);
+        });
+
+        // Emoji Options
+        this.querySelectorAll('.btn-emoji-opt').forEach(btn => {
             btn.onclick = (e) => {
-                e.preventDefault(); 
-                const tag = btn.dataset.tag;
-                const prefix = btn.dataset.prefix;
-                // Handle escaped newlines in template string
-                const template = btn.dataset.template ? btn.dataset.template.replace(/\\n/g, '\n') : null;
-
-                if (tag) this.wrapSelection(textarea, tag);
-                else if (prefix) this.insertPrefix(textarea, prefix);
-                else if (template) this.insertAtCursor(textarea, template);
-                
-                this.currentContent = textarea.value;
+                e.stopPropagation(); // Prevent closing dropdown immediately if logic requires
+                this.changeIcon(e.target.dataset.emoji);
             };
         });
 
-        // 3. Exam Toggle
-        btnExam.onclick = () => {
-             let val = textarea.value;
-             const hasExam = val.includes('@exam');
-             
-             if (hasExam) {
-                 // Remove it
-                 val = val.replace(/^@exam\s*\n?/gm, '');
-                 // Also handle case where it might beinline (unlikely but safe)
-                 val = val.replace('@exam', '');
-                 
-                 btnExam.classList.remove('text-red-600', 'bg-red-50', 'border-red-200');
-                 btnExam.classList.add('text-slate-500');
-                 badgeExam.classList.add('hidden');
-             } else {
-                 // Add it at the top
-                 val = '@exam\n' + val;
-                 btnExam.classList.add('text-red-600', 'bg-red-50', 'border-red-200');
-                 btnExam.classList.remove('text-slate-500');
-                 badgeExam.classList.remove('hidden');
-             }
-             
-             textarea.value = val;
-             this.currentContent = val;
-             textarea.focus();
-        };
-
-        // 4. Image Upload
-        const fileInput = this.querySelector('#img-upload');
-        const btnImg = this.querySelector('#btn-img');
-        
-        btnImg.onclick = () => fileInput.click();
-        fileInput.onchange = async (e) => {
-            if(e.target.files.length > 0) {
-                const file = e.target.files[0];
-                const originalText = btnImg.innerHTML;
-                btnImg.textContent = "Uploading...";
-                btnImg.disabled = true;
-                try {
-                    const url = await github.uploadImage(file);
-                    const tag = `\n@image: ${url}\n`;
-                    this.insertAtCursor(textarea, tag);
-                    this.currentContent = textarea.value;
-                } catch(err) {
-                    alert('Upload failed: ' + err.message);
-                } finally {
-                    btnImg.innerHTML = originalText;
-                    btnImg.disabled = false;
-                    fileInput.value = '';
-                }
-            }
-        };
-
-        // 5. Save / Cancel
         this.querySelector('#btn-cancel').onclick = () => store.setModal(null);
-        this.querySelector('#btn-submit').onclick = () => this.showCommitDialog();
-
-        // 6. Input Handling
-        textarea.oninput = (e) => {
-            this.currentContent = e.target.value;
+        
+        this.querySelector('#tab-write').onclick = () => {
+            this.isPreviewMode = false;
+            this.renderEditor();
         };
-    }
+        this.querySelector('#tab-preview').onclick = () => {
+            this.isPreviewMode = true;
+            this.renderEditor();
+        };
 
-    // --- Helpers ---
-
-    wrapSelection(field, wrapper) {
-        const start = field.selectionStart;
-        const end = field.selectionEnd;
-        const text = field.value;
-        const selected = text.substring(start, end);
-        const before = text.substring(0, start);
-        const after = text.substring(end);
+        const dialog = this.querySelector('#commit-dialog');
         
-        field.value = before + wrapper + selected + wrapper + after;
-        field.selectionStart = field.selectionEnd = end + (wrapper.length * 2);
-        field.focus();
-    }
+        this.querySelector('#btn-submit').onclick = () => {
+             dialog.showModal();
+             this.querySelector('#commit-msg').focus();
+        };
 
-    insertPrefix(field, prefix) {
-        const start = field.selectionStart;
-        const text = field.value;
-        // Find beginning of current line
-        const lineStart = text.lastIndexOf('\n', start - 1) + 1;
-        const before = text.substring(0, lineStart);
-        const after = text.substring(lineStart);
+        this.querySelector('#btn-commit-cancel').onclick = () => dialog.close();
         
-        field.value = before + prefix + after;
-        field.focus();
-    }
-
-    insertAtCursor(field, text) {
-        const start = field.selectionStart;
-        const end = field.selectionEnd;
-        const val = field.value;
-        field.value = val.substring(0, start) + text + val.substring(end);
-        field.selectionStart = field.selectionEnd = start + text.length;
-        field.focus();
-    }
-
-    updatePreview(content, container) {
-        const blocks = parseContent(content);
-        // Reuse ArborContent logic via dummy element or copy logic
-        const dummyContent = document.createElement('arbor-content');
-        const html = blocks.map(b => dummyContent.renderBlock(b, store.ui)).join('');
-        container.innerHTML = html;
-    }
-
-    showCommitDialog() {
-        const ui = store.ui;
-        const dialog = document.createElement('div');
-        dialog.className = "fixed inset-0 z-[90] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4";
-        dialog.innerHTML = `
-            <div class="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-2xl w-full max-w-md animate-in zoom-in duration-200 text-center">
-                <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">📢</div>
-                <h3 class="text-xl font-black text-slate-800 dark:text-white mb-2">${ui.editorChanges}</h3>
-                <p class="text-sm text-slate-500 mb-6">Briefly describe what you changed so the admins know.</p>
-                
-                <textarea id="commit-msg" class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 text-base text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-500 mb-6 h-32 resize-none" placeholder="e.g. Fixed a typo in the second paragraph..."></textarea>
-                
-                <div class="flex gap-3">
-                    <button class="btn-dialog-cancel flex-1 py-3 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-600 dark:text-slate-300 font-bold rounded-xl">${ui.editorCancel}</button>
-                    <button class="btn-dialog-ok flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30">${ui.editorCommitBtn}</button>
-                </div>
-            </div>
-        `;
-        this.appendChild(dialog);
-
-        dialog.querySelector('.btn-dialog-cancel').onclick = () => dialog.remove();
-        dialog.querySelector('.btn-dialog-ok').onclick = async () => {
-            const msg = dialog.querySelector('#commit-msg').value;
-            if(!msg) return;
-            
-            const btn = dialog.querySelector('.btn-dialog-ok');
+        this.querySelector('#btn-commit-confirm').onclick = async () => {
+            const msg = this.querySelector('#commit-msg').value.trim() || `Update ${this.node.name}`;
+            const btn = this.querySelector('#btn-commit-confirm');
             btn.disabled = true;
-            btn.textContent = "Publishing...";
+            btn.textContent = "Processing...";
             
             try {
                 const prUrl = await github.createPullRequest(this.node.sourcePath, this.currentContent, msg);
-                this.showSuccess(prUrl);
-            } catch(e) {
-                alert(ui.prError + ': ' + e.message);
+                alert(store.ui.prSuccessBody);
+                window.open(prUrl, '_blank');
+                dialog.close();
+                store.setModal(null);
+            } catch (e) {
+                alert(store.ui.prError + ": " + e.message);
                 btn.disabled = false;
-                btn.textContent = ui.editorCommitBtn;
+                btn.textContent = store.ui.editorCommitBtn;
             }
         };
     }
-
-    showSuccess(url) {
-        const ui = store.ui;
-        this.innerHTML = `
-        <div class="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900 p-4">
-            <div class="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-2xl text-center max-w-md border-t-8 border-green-500 animate-in zoom-in">
-                <div class="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-4xl mx-auto mb-6 shadow-sm">🎉</div>
-                <h2 class="text-3xl font-black text-slate-800 dark:text-white mb-2">Submitted!</h2>
-                <p class="text-slate-500 dark:text-slate-400 mb-8 leading-relaxed">Your changes have been sent for review. Thank you for contributing to open knowledge.</p>
-                <a href="${url}" target="_blank" class="block w-full py-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-white font-bold rounded-xl mb-3 flex items-center justify-center gap-2">
-                    <span>View on GitHub</span> 
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                </a>
-                <button onclick="store.setModal(null)" class="block w-full py-4 bg-green-600 text-white font-bold rounded-xl shadow-lg hover:bg-green-500 transition-colors">Done</button>
-            </div>
-        </div>`;
-    }
 }
-
 customElements.define('arbor-editor', ArborEditor);
