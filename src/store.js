@@ -1,5 +1,7 @@
 
 
+
+
 import { UI_LABELS, AVAILABLE_LANGUAGES } from './i18n.js';
 import { github } from './services/github.js';
 import { aiService } from './services/ai.js';
@@ -550,6 +552,10 @@ class Store extends EventTarget {
 
         // Explicitly mark the Branch itself as complete so it turns green in graph
         this.state.completedNodes.add(parentId);
+        
+        // IMPORTANT: Force a fresh object reference to ensure watchers trigger, 
+        // specifically to ensure the graph visual updates immediately.
+        this.state.completedNodes = new Set(this.state.completedNodes);
 
         if(addedCount > 0) this.addXP(addedCount * 10);
         this.persistProgress();
@@ -564,6 +570,9 @@ class Store extends EventTarget {
         
         this.update({ lastActionMessage: "Branch Mastered! 🎓" });
         setTimeout(() => this.update({ lastActionMessage: null }), 3000);
+        
+        // Force graph update
+        this.dispatchEvent(new CustomEvent('graph-update'));
     }
 
     checkForModuleCompletion(relatedNodeId) {
@@ -674,13 +683,23 @@ class Store extends EventTarget {
                  // but for robustness we'll count both to ensure sync.
                  let c = 0;
                  const countCompleted = (node) => {
-                     if ((node.type === 'leaf' || node.type === 'exam') && this.state.completedNodes.has(node.id)) c++;
+                     // Check if leaf is complete OR if its parent branch is marked complete (skipped via exam)
+                     const isParentMarked = node.parentId && this.state.completedNodes.has(node.parentId);
+                     
+                     if ((node.type === 'leaf' || node.type === 'exam') && (this.state.completedNodes.has(node.id) || isParentMarked)) {
+                         c++;
+                     }
                      if (node.children) node.children.forEach(countCompleted);
                  };
                  countCompleted(topLevelNode);
                  completed = c;
             } else {
                  countProgress(topLevelNode);
+            }
+            
+            // Override: If the module root itself is marked complete (e.g. by a super-exam or import), treat as 100%
+            if (this.state.completedNodes.has(topLevelNode.id)) {
+                completed = total;
             }
 
             if (total > 0) {
