@@ -1,8 +1,9 @@
 
 import { CreateMLCEngine } from "@mlc-ai/web-llm";
 
-// Model: Gemma 3 1B (High efficiency, low VRAM usage)
-const SELECTED_MODEL = "gemma-3-1b-it-q4f32_1-MLC";
+// Model: Gemma 2 2B (It is the supported lightweight version for WebLLM currently)
+// This model is ~1.3GB and runs very fast on most GPUs.
+const SELECTED_MODEL = "gemma-2-2b-it-q4f32_1-MLC";
 
 class LocalAIService {
     constructor() {
@@ -18,6 +19,7 @@ class LocalAIService {
         if (this.engine) return;
 
         try {
+            // We pass the initProgressCallback to catch the download progress
             this.engine = await CreateMLCEngine(
                 SELECTED_MODEL,
                 {
