@@ -206,16 +206,23 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       goalReached: 'Daily Goal Reached!',
 
       // AI Sage
-      sageWakeTitle: 'Wake up the Sage',
-      sageWakeDesc: 'The Sage Owl lives inside your device. To wake him up, your browser needs to download his brain (Model: Llama 3.2 1B, ~1.0GB). This only happens once.',
-      sageWakeBtn: 'Wake up (Download)',
-      sageDownloading: 'Downloading neural network...',
-      sageReady: 'The Sage is awake!',
-      sagePlaceholder: 'Ask me anything about this topic...',
+      sageWakeTitle: 'Summon the Sage',
+      sageWakeDesc: 'The Sage Owl is ready to help.',
+      sageWakeBtn: 'Connect',
+      sageDownloading: 'Waking up...',
+      sageReady: 'The Sage is listening!',
+      sagePlaceholder: 'Ask me anything...',
       sageThinking: 'Thinking...',
-      sageError: 'The Sage is confused (Error).',
-      sageDisclaimer: 'AI runs 100% locally on your device. No data leaves your computer.',
-      sageUnsupported: 'WebGPU not supported on this browser.'
+      sageError: 'The Sage is confused.',
+      sageDisclaimer: 'Powered by Local Logic (Offline).',
+      sageUnsupported: 'Connection failed.',
+      
+      // AI Upgrade
+      sageUpgrade: 'Want to make me smart?',
+      sageUpgradeDesc: 'Enter your Gemini API Key to unlock full intelligence.',
+      sageApiKeyLabel: 'Google Gemini API Key',
+      sageSaveKey: 'Activate Super Brain 🧠',
+      sageBackToLocal: 'Switch back to Local (Free)'
     },
     ES: {
       appTitle: 'ARBOR',
@@ -428,16 +435,23 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       goalReached: '¡Meta Diaria Alcanzada!',
 
       // AI Sage
-      sageWakeTitle: 'Despertar al Sabio',
-      sageWakeDesc: 'El Búho Sabio vive dentro de tu dispositivo. Para despertarlo, tu navegador necesita descargar su cerebro (Modelo: Llama 3.2 1B, ~1.0GB). Esto solo sucede una vez.',
-      sageWakeBtn: 'Despertar (Descargar)',
-      sageDownloading: 'Descargando red neuronal...',
-      sageReady: '¡El Sabio está despierto!',
+      sageWakeTitle: 'Invocar al Sabio',
+      sageWakeDesc: 'El Búho Sabio está listo para ayudar.',
+      sageWakeBtn: 'Conectar',
+      sageDownloading: 'Despertando...',
+      sageReady: '¡El Sabio te escucha!',
       sagePlaceholder: 'Pregúntame cualquier cosa sobre este tema...',
       sageThinking: 'Pensando...',
-      sageError: 'El Sabio está confundido (Error).',
-      sageDisclaimer: 'IA ejecutada 100% local en tu dispositivo. Ningún dato sale de tu ordenador.',
-      sageUnsupported: 'WebGPU no está soportado en este navegador.'
+      sageError: 'El Sabio está confundido.',
+      sageDisclaimer: 'Lógica Local (Gratis). Pulsa el icono para hacerlo Inteligente (API).',
+      sageUnsupported: 'Conexión fallida.',
+
+      // AI Upgrade
+      sageUpgrade: '¿Quieres hacerme inteligente?',
+      sageUpgradeDesc: 'Introduce tu Gemini API Key para desbloquear la inteligencia real.',
+      sageApiKeyLabel: 'Google Gemini API Key',
+      sageSaveKey: 'Activar Super Cerebro 🧠',
+      sageBackToLocal: 'Volver a Local (Gratis)'
     }
 };
 

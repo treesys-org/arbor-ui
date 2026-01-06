@@ -1,76 +1,114 @@
 
-import { CreateMLCEngine } from "@mlc-ai/web-llm";
+import { GoogleGenAI } from "@google/genai";
 
-// Model: Llama 3.2 1B (High performance, low VRAM usage, broad browser support)
-const SELECTED_MODEL = "Llama-3.2-1B-Instruct-q4f32_1-MLC";
+// SERVICIO DE IA HÍBRIDO (GOGO v2)
+// Soporta modo "Tonto/Local" (Gratis) y "Inteligente/Gemini" (BYOK - Bring Your Own Key)
 
-class LocalAIService {
+class HybridAIService {
     constructor() {
-        this.engine = null;
-        this.initProgressCallback = null;
+        this.onProgress = null;
+        this.apiKey = localStorage.getItem('arbor_gemini_key') || null;
+        this.client = null;
     }
 
     setCallback(cb) {
-        this.initProgressCallback = cb;
+        this.onProgress = cb;
+    }
+
+    setApiKey(key) {
+        if (!key) {
+            this.apiKey = null;
+            this.client = null;
+            localStorage.removeItem('arbor_gemini_key');
+            return;
+        }
+        this.apiKey = key;
+        localStorage.setItem('arbor_gemini_key', key);
+        this.client = new GoogleGenAI({ apiKey: key });
+    }
+
+    isSmartMode() {
+        return !!this.apiKey;
     }
 
     async initialize() {
-        if (this.engine) return;
-
-        try {
-            // We pass the initProgressCallback to catch the download progress
-            this.engine = await CreateMLCEngine(
-                SELECTED_MODEL,
-                {
-                    initProgressCallback: (progress) => {
-                        if (this.initProgressCallback) {
-                            this.initProgressCallback(progress);
-                        }
-                    },
-                    logLevel: "INFO" // Helps with debugging
-                }
-            );
-            return true;
-        } catch (e) {
-            console.error("Failed to load WebLLM", e);
-            throw e;
+        if (this.onProgress) this.onProgress({ text: "Despertando al Búho..." });
+        
+        // Re-hydrate client if key exists
+        if (this.apiKey && !this.client) {
+            this.client = new GoogleGenAI({ apiKey: this.apiKey });
         }
+        
+        await new Promise(r => setTimeout(r, 500));
+        return true;
     }
 
     async chat(messages) {
-        if (!this.engine) throw new Error("AI not initialized");
-
-        try {
-            const response = await this.engine.chat.completions.create({
-                messages: messages,
-                temperature: 0.7,
-                max_tokens: 500, 
-            });
-            return response.choices[0].message.content;
-        } catch (e) {
-            console.error("Chat error", e);
-            throw e;
+        // MODO INTELIGENTE (GEMINI)
+        if (this.isSmartMode()) {
+            try {
+                // Convert Arbor messages format to Gemini format if strictly needed,
+                // but usually we just send the prompt. Ideally we send history.
+                // For simplicity/robustness in "Clippy" mode, we'll send a combined prompt.
+                
+                const lastMsg = messages[messages.length - 1].content;
+                const systemMsg = messages.find(m => m.role === 'system')?.content || '';
+                
+                // Using the specific model requested
+                const response = await this.client.models.generateContent({
+                    model: 'gemini-2.5-flash',
+                    contents: `${systemMsg}\n\nUser Question: ${lastMsg}`,
+                    config: {
+                        systemInstruction: "You are the Sage Owl of Arbor Academy. Keep answers concise, helpful, and encouraging. You are an educational assistant."
+                    }
+                });
+                
+                return response.text;
+            } catch (e) {
+                console.error("Gemini Error:", e);
+                return "Huu huu... Mi cerebro en la nube está mareado (Error de API). Usaré mi lógica local.";
+            }
         }
+
+        // MODO LOCAL (GRATIS / TONTO)
+        return this.chatLocal(messages);
+    }
+
+    // El cerebro "tonto" basado en reglas (Copia del anterior)
+    async chatLocal(messages) {
+        await new Promise(r => setTimeout(r, 600));
+
+        const lastMsgObj = messages[messages.length - 1];
+        const userText = lastMsgObj.content.toLowerCase();
+        
+        // Reglas Locales
+        if (userText.includes('ayuda') || userText.includes('help') || userText.includes('como funciona')) {
+            return "Modo Local: Para navegar, arrastra el fondo. Haz clic en círculos para aprender. ¡Dame una API Key para que pueda explicarte todo!";
+        }
+        
+        if (userText.includes('hola') || userText.includes('hi')) {
+            return "¡Huu huu! Soy el Búho en modo Ahorro de Energía (Local). Si quieres que sea un genio, configúrame.";
+        }
+
+        if (userText.includes('fruta') || userText.includes('xp')) {
+            return "Completa módulos para ganar frutas. Lee para ganar XP.";
+        }
+
+        const fallbacks = [
+            "Interesante. Lee la lección en pantalla para saber más.",
+            "¡Huu huu! Sigue estudiando.",
+            "Sin mi cerebro de nube (API Key), solo puedo animarte. ¡Tú puedes!",
+            "Esa es una buena pregunta para investigar en la lección."
+        ];
+        return fallbacks[Math.floor(Math.random() * fallbacks.length)];
     }
 
     getSystemPrompt(contextNode, lang = 'EN') {
-        const contextText = contextNode 
-            ? `Current Context: Lesson "${contextNode.name}". Description: "${contextNode.description}".` 
-            : "Context: The user is exploring the knowledge tree.";
-
-        if (lang === 'ES') {
-            return `Eres el "Sabio Búho" de Arbor, una plataforma educativa abierta.
-            Tu misión es ayudar al estudiante a entender el tema actual de forma breve, alentadora y sabia.
-            Usa emojis de búhos o naturaleza ocasionalmente.
-            Responde siempre en Español.
-            ${contextText}`;
-        } else {
-            return `You are the "Sage Owl" of Arbor, an open educational platform.
-            Your mission is to help the student understand the current topic in a brief, encouraging, and wise manner.
-            Use owl or nature emojis occasionally.
-            ${contextText}`;
-        }
+        const title = contextNode ? contextNode.name : 'General';
+        const desc = contextNode ? (contextNode.description || '') : '';
+        // Pass content context if smart mode
+        return `Current Context: ${title}. ${desc}. The user is learning this topic.`;
     }
 }
 
-export const aiService = new LocalAIService();
+export const aiService = new HybridAIService();
