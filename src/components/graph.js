@@ -1,5 +1,6 @@
 
 
+
 import { store } from '../store.js';
 
 class ArborGraph extends HTMLElement {
@@ -419,24 +420,30 @@ class ArborGraph extends HTMLElement {
         nodeUpdate.select(".spinner")
             .style("display", d => d.data.status === 'loading' ? 'block' : 'none');
 
-        // Label Sizing - Improved Logic
+        // Label Sizing - Improved Logic with fallback for initial render
         nodeMerged.select(".label-group text")
             .text(d => d.data.name)
             .each(function() {
+                const rectNode = d3.select(this.parentNode).select("rect");
+                const charCount = this.textContent.length;
+                
+                // Heuristic: ~9px per char (Nunito bold 16px) + 40px padding
+                // This prevents the "stretched/big" look (100px fixed) if getComputedTextLength fails/returns 0
+                const estimatedWidth = (charCount * 9) + 40;
+                
+                let w = estimatedWidth;
+                
                 try {
-                    // Use getComputedTextLength for accurate text width instead of getBBox
-                    const textWidth = this.getComputedTextLength();
-                    const w = Math.max(50, textWidth + 40); // Generous padding for pill shape
-                    
-                    d3.select(this.parentNode).select("rect")
-                        .attr("x", -w/2)
-                        .attr("width", w);
+                    const computed = this.getComputedTextLength();
+                    // If computed is available and valid (>0), use it. Otherwise use heuristic.
+                    if (computed > 0) {
+                        w = Math.max(50, computed + 40);
+                    }
                 } catch(e) {
-                     // Fallback if calculation fails
-                     d3.select(this.parentNode).select("rect")
-                        .attr("x", -50)
-                        .attr("width", 100);
+                    // Ignore error, use estimatedWidth
                 }
+
+                rectNode.attr("x", -w/2).attr("width", w);
             });
 
         // EXIT

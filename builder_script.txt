@@ -72,6 +72,10 @@ def parse_arbor_format(content):
     for line in lines:
         stripped = line.strip()
         
+        # FIX: Allow blank lines in the metadata block without breaking it
+        if parsing_metadata and not stripped:
+            continue
+
         # Check for Metadata directives at start of file
         if parsing_metadata and stripped.startswith('@'):
             
@@ -111,7 +115,9 @@ def parse_arbor_format(content):
                  parsing_metadata = False
                  content_lines.append(line)
         else:
-            parsing_metadata = False
+            # If we hit a line that isn't empty and doesn't start with @, metadata block ends
+            if parsing_metadata:
+                 parsing_metadata = False
             content_lines.append(line)
             
     return meta, '\n'.join(content_lines).strip()
@@ -164,7 +170,7 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
         current_slug_path = f"{relative_slug_path}/{name_slug}"
 
     # Calculate source path relative to repo root (for GitHub editing)
-    # path is like "./content/EN/..." -> we want "content/EN/..."
+    # IMPORTANT: Force forward slashes even on Windows for GitHub API compatibility
     clean_source_path = os.path.relpath(path, ".").replace("\\", "/")
 
     # --- FOLDER (BRANCH) ---
@@ -209,7 +215,7 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
                 if child_node:
                     children_for_api_file.append(child_node)
                     # Count leaves for progress tracking
-                    # Note: We now treat 'exam' nodes as leaves for counting purposes too
+                    # Note: We count 'exam' nodes as leaves so they contribute to the module progress bar
                     if child_node.get('type') in ['leaf', 'exam']:
                         node["totalLeaves"] += 1
                     else:
@@ -258,6 +264,10 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
                 node["content"] = content
                 node.update(meta)
                 node['path'] = f"{breadcrumb_path} / {node['name']}"
+
+                # Ensure Exams have the correct visual cue if user didn't set a custom icon
+                if node.get('type') == 'exam' and node.get('icon') == '📄':
+                    node['icon'] = '⚔️'
 
             except Exception as e:
                 print(f"❌ Error reading {path}: {e}")

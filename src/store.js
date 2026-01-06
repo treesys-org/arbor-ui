@@ -1,4 +1,5 @@
 
+
 import { UI_LABELS, AVAILABLE_LANGUAGES } from './i18n.js';
 import { github } from './services/github.js';
 import { aiService } from './services/ai.js';
@@ -209,6 +210,24 @@ class Store extends EventTarget {
                 if (found) return found;
             }
         }
+        return null;
+    }
+    
+    // Helper to find the Top Level Module (Branch under Root) for any given node ID
+    getTopLevelModule(nodeId) {
+        let curr = this.findNode(nodeId);
+        if (!curr) return null;
+        
+        // Traverse upwards until we find a node whose parent is the root
+        // OR we hit the top.
+        while(curr.parentId) {
+            const parent = this.findNode(curr.parentId);
+            if (!parent) break; 
+            // If parent is the language root (e.g., id ends in -root), then curr is the module
+            if (parent.type === 'root') return curr; 
+            curr = parent;
+        }
+        // If we are here, curr might be the root itself or a detached node
         return null;
     }
 
@@ -535,7 +554,14 @@ class Store extends EventTarget {
         if(addedCount > 0) this.addXP(addedCount * 10);
         this.persistProgress();
         
-        this.checkForModuleCompletion(parentNode.children?.[0]?.id || parentId); // Trigger check
+        // Use the new robust method to find the top level module and check it
+        const topLevelModule = this.getTopLevelModule(parentId);
+        if (topLevelModule) {
+            this.checkForModuleCompletion(topLevelModule.id);
+        } else {
+            this.checkForModuleCompletion(parentId);
+        }
+        
         this.update({ lastActionMessage: "Branch Mastered! 🎓" });
         setTimeout(() => this.update({ lastActionMessage: null }), 3000);
     }
@@ -543,17 +569,21 @@ class Store extends EventTarget {
     checkForModuleCompletion(relatedNodeId) {
         // Find the top-level module for this node
         if (!relatedNodeId) return;
-        const modules = this.getModulesStatus();
         
-        modules.forEach(m => {
-            if (m.isComplete) {
-                // If complete, ensure the module ID itself is marked as complete in the set
-                if (!this.state.completedNodes.has(m.id)) {
-                     this.state.completedNodes.add(m.id);
-                }
-                this.harvestFruit(m.id);
+        const topModule = this.getTopLevelModule(relatedNodeId);
+        // If we can't find a top module (e.g. we are already at root), try to see if relatedNodeId is a module
+        const moduleIdToCheck = topModule ? topModule.id : relatedNodeId;
+
+        const modules = this.getModulesStatus();
+        const targetModule = modules.find(m => m.id === moduleIdToCheck);
+        
+        if (targetModule && targetModule.isComplete) {
+            // If complete, ensure the module ID itself is marked as complete in the set
+            if (!this.state.completedNodes.has(targetModule.id)) {
+                 this.state.completedNodes.add(targetModule.id);
             }
-        });
+            this.harvestFruit(targetModule.id);
+        }
     }
 
     persistProgress() {
@@ -605,7 +635,10 @@ class Store extends EventTarget {
             this.persistProgress();
             
             // Check for retrospective achievements
-            this.checkForModuleCompletion('force-check');
+            const modules = this.getModulesStatus();
+            modules.forEach(m => {
+                if (m.isComplete) this.checkForModuleCompletion(m.id);
+            });
             return true;
         } catch (e) {
             console.error(e);
@@ -618,25 +651,37 @@ class Store extends EventTarget {
     getModulesStatus() {
         if (!this.state.data || !this.state.data.children) return [];
         const modules = [];
+        
         this.state.data.children.forEach(topLevelNode => {
             if (topLevelNode.type !== 'branch') return;
             let total = 0;
             let completed = 0;
+
+            // Recalculate totals recursively to be safe against API inconsistencies
+            const countProgress = (node) => {
+                if (node.type === 'leaf' || node.type === 'exam') {
+                    total++;
+                    if (this.state.completedNodes.has(node.id)) completed++;
+                }
+                if (node.children) node.children.forEach(countProgress);
+            };
+            
+            // Use the pre-calculated totalLeaves if available and valid, otherwise count
             if (typeof topLevelNode.totalLeaves === 'number' && topLevelNode.totalLeaves > 0) {
                  total = topLevelNode.totalLeaves;
+                 // But we still need to count completed leaves recursively
+                 // Optimization: reuse recursive walker just for completion if needed, 
+                 // but for robustness we'll count both to ensure sync.
+                 let c = 0;
+                 const countCompleted = (node) => {
+                     if ((node.type === 'leaf' || node.type === 'exam') && this.state.completedNodes.has(node.id)) c++;
+                     if (node.children) node.children.forEach(countCompleted);
+                 };
+                 countCompleted(topLevelNode);
+                 completed = c;
+            } else {
+                 countProgress(topLevelNode);
             }
-            if (total === 0) {
-                const countLeaves = (node) => {
-                    if (node.type === 'leaf' || node.type === 'exam') total++;
-                    else if (node.children) node.children.forEach(countLeaves);
-                };
-                countLeaves(topLevelNode);
-            }
-            this.state.completedNodes.forEach(id => {
-                // Only count if ID belongs to this branch. 
-                // Arbor IDs: root-lang-root__module__sub...
-                if (id.startsWith(topLevelNode.id + '__')) completed++;
-            });
 
             if (total > 0) {
                 modules.push({

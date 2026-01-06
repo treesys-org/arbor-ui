@@ -103,14 +103,18 @@ class ArborContent extends HTMLElement {
 
                 // CHECK FOR MODULE COMPLETION (Certificate Trigger)
                 const modules = store.getModulesStatus();
-                const parentModule = modules.find(m => this.currentNode.id.startsWith(m.id + '__'));
-
-                if (parentModule && parentModule.isComplete) {
-                     store.closeContent();
-                     setTimeout(() => {
-                         store.setModal({ type: 'certificate', moduleId: parentModule.id });
-                     }, 400);
-                     return;
+                // Find parent module using robust ancestry check
+                const topModuleNode = store.getTopLevelModule(this.currentNode.id);
+                
+                if (topModuleNode) {
+                    const parentModuleStatus = modules.find(m => m.id === topModuleNode.id);
+                    if (parentModuleStatus && parentModuleStatus.isComplete) {
+                         store.closeContent();
+                         setTimeout(() => {
+                             store.setModal({ type: 'certificate', moduleId: parentModuleStatus.id });
+                         }, 400);
+                         return;
+                    }
                 }
             }
             store.closeContent();
