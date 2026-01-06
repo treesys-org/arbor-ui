@@ -25,14 +25,14 @@ export const UI_LABELS = {
             icon: '🖱️'
         },
         {
-            title: 'Learn & Certify',
-            text: 'Leaves (📄) contain lessons. Read them and pass the quizzes to light them up. Complete all leaves in a branch to earn your Certificate.',
-            icon: '🎓'
+            title: 'Grow Your Garden',
+            text: 'Consistency is key. Water your tree daily to keep your streak. Collect "Sunlight" (XP) by reading lessons to reach your daily photosynthesis goal.',
+            icon: '🌱'
         },
         {
-            title: 'Expand the Universe',
-            text: 'This is crucial: Arbor is infinite. You can add external "Trees" created by the community from the Sources menu (📚). You just need the URL of a data.json file to load an entire new course!',
-            icon: '📚'
+            title: 'Harvest Fruits',
+            text: 'When you master a whole module, you will harvest a unique Fruit of Knowledge. Collect them all in your profile!',
+            icon: '🍎'
         }
       ],
 
@@ -41,13 +41,14 @@ export const UI_LABELS = {
       statsDepth: 'Levels',
       navLearn: 'Learn',
       navPractice: 'Practice',
-      navProfile: 'Profile & Sync',
+      navProfile: 'Profile & Garden',
       navAbout: 'Open Source Mission',
       navSearch: 'Search',
       navCertificates: 'Certificates',
       navSources: 'Trees',
       navHelp: 'Tutorial',
       navContributor: 'Contributor',
+      navSage: 'Ask the Sage',
 
       lessonComplete: 'MARK COMPLETE',
       lessonFinished: 'COMPLETED ✓',
@@ -178,8 +179,8 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       editorLoading: 'Fetching content from GitHub...',
 
       // Manual Sync
-      profileTitle: 'Profile & Sync',
-      profileDesc: 'Manage your progress and take it with you to other devices.',
+      profileTitle: 'Profile & Garden',
+      profileDesc: 'Manage your progress and view your harvested knowledge fruits.',
       exportTitle: 'Export Progress',
       importTitle: 'Import Progress',
       exportDesc: 'Copy this code or download the file to save your progress.',
@@ -191,7 +192,30 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       importSuccess: 'Progress loaded successfully!',
       importError: 'Invalid code or file.',
       googleSyncTitle: 'Google Drive Sync',
-      googleSyncDesc: 'Optional: Sign in to sync automatically across devices.'
+      googleSyncDesc: 'Optional: Sign in to sync automatically across devices.',
+
+      // Gamification
+      streak: 'Streak',
+      days: 'days',
+      todayGoal: 'Photosynthesis',
+      xpUnit: 'lumens',
+      gardenTitle: 'My Harvest',
+      gardenEmpty: 'Complete modules to harvest fruits.',
+      fruitHarvested: 'Fruit Harvested!',
+      streakKept: 'Streak Kept!',
+      goalReached: 'Daily Goal Reached!',
+
+      // AI Sage
+      sageWakeTitle: 'Wake up the Sage',
+      sageWakeDesc: 'The Sage Owl lives inside your device. To wake him up, your browser needs to download his brain (Model: Gemma 3:1B, ~1.0GB). This only happens once.',
+      sageWakeBtn: 'Wake up (Download)',
+      sageDownloading: 'Downloading neural network...',
+      sageReady: 'The Sage is awake!',
+      sagePlaceholder: 'Ask me anything about this topic...',
+      sageThinking: 'Thinking...',
+      sageError: 'The Sage is confused (Error).',
+      sageDisclaimer: 'AI runs 100% locally on your device. No data leaves your computer.',
+      sageUnsupported: 'WebGPU not supported on this browser.'
     },
     ES: {
       appTitle: 'ARBOR',
@@ -218,14 +242,14 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
             icon: '🖱️'
         },
         {
-            title: 'Aprender y Certificarse',
-            text: 'Las hojas (📄) contienen las lecciones. Al leerlas y pasar los cuestionarios, la hoja se iluminará. Completa todas las hojas de una rama para obtener tu Certificado.',
-            icon: '🎓'
+            title: 'Cuida tu Jardín',
+            text: 'La constancia es clave. "Riega" tu árbol entrando a diario para mantener tu racha. Acumula "Luz Solar" (XP) leyendo lecciones para hacer la fotosíntesis.',
+            icon: '🌱'
         },
         {
-            title: 'Expandir el Universo',
-            text: 'Esto es lo más importante: Arbor es infinito. Puedes añadir "Árboles" externos creados por la comunidad desde el menú de Fuentes (📚). ¡Solo necesitas la URL de un archivo data.json para cargar un curso entero nuevo!',
-            icon: '📚'
+            title: 'Cosecha Frutos',
+            text: 'Cuando domines un módulo completo, cosecharás un Fruto del Conocimiento único. ¡Colecciónalos todos en tu perfil!',
+            icon: '🍎'
         }
       ],
 
@@ -234,13 +258,14 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       statsDepth: 'Niveles',
       navLearn: 'Aprender',
       navPractice: 'Práctica',
-      navProfile: 'Perfil y Sync',
+      navProfile: 'Perfil y Jardín',
       navAbout: 'Misión Open Source',
       navSearch: 'Buscar',
       navCertificates: 'Certificados',
       navSources: 'Árboles',
       navHelp: 'Tutorial',
       navContributor: 'Contribuidor',
+      navSage: 'Preguntar al Sabio',
       
       lessonComplete: 'MARCAR COMO VISTO',
       lessonFinished: 'COMPLETADO ✓',
@@ -376,8 +401,8 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       editorLoading: 'Obteniendo contenido de GitHub...',
 
       // Manual Sync
-      profileTitle: 'Perfil y Sincronización',
-      profileDesc: 'Gestiona tu progreso y llévalo contigo a otros dispositivos.',
+      profileTitle: 'Perfil y Jardín',
+      profileDesc: 'Gestiona tu progreso y admira los frutos de tu conocimiento.',
       exportTitle: 'Exportar Progreso',
       importTitle: 'Importar Progreso',
       exportDesc: 'Copia este código o descarga el archivo para guardar tu avance.',
@@ -389,7 +414,30 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       importSuccess: '¡Progreso cargado con éxito!',
       importError: 'Código o archivo inválido.',
       googleSyncTitle: 'Sincronización Google Drive',
-      googleSyncDesc: 'Opcional: Inicia sesión para sincronizar automáticamente.'
+      googleSyncDesc: 'Opcional: Inicia sesión para sincronizar automáticamente.',
+
+      // Gamification
+      streak: 'Racha',
+      days: 'días',
+      todayGoal: 'Fotosíntesis',
+      xpUnit: 'lúmenes',
+      gardenTitle: 'Mi Cosecha',
+      gardenEmpty: 'Completa módulos para cosechar frutos.',
+      fruitHarvested: '¡Fruto Cosechado!',
+      streakKept: '¡Racha Mantenida!',
+      goalReached: '¡Meta Diaria Alcanzada!',
+
+      // AI Sage
+      sageWakeTitle: 'Despertar al Sabio',
+      sageWakeDesc: 'El Búho Sabio vive dentro de tu dispositivo. Para despertarlo, tu navegador necesita descargar su cerebro (Modelo: Gemma 3:1B, ~1.0GB). Esto solo sucede una vez.',
+      sageWakeBtn: 'Despertar (Descargar)',
+      sageDownloading: 'Descargando red neuronal...',
+      sageReady: '¡El Sabio está despierto!',
+      sagePlaceholder: 'Pregúntame cualquier cosa sobre este tema...',
+      sageThinking: 'Pensando...',
+      sageError: 'El Sabio está confundido (Error).',
+      sageDisclaimer: 'IA ejecutada 100% local en tu dispositivo. Ningún dato sale de tu ordenador.',
+      sageUnsupported: 'WebGPU no está soportado en este navegador.'
     }
 };
 

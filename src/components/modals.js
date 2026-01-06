@@ -1,5 +1,4 @@
 
-
 import { store } from '../store.js';
 import { github } from '../services/github.js';
 
@@ -15,7 +14,7 @@ class ArborModals extends HTMLElement {
         this.showSecurityWarning = false;
         this.showImpressumDetails = false;
         
-        this.profileTab = 'export'; // 'export' | 'import'
+        this.profileTab = 'garden'; // 'garden' | 'export' | 'import'
     }
 
     connectedCallback() {
@@ -25,19 +24,16 @@ class ArborModals extends HTMLElement {
     close() { store.setModal(null); }
     
     render() {
-        // 1. Preview Modal
         if (store.value.previewNode) {
             this.renderPreview(store.value.previewNode);
             return;
         }
 
-        // 2. Fullscreen Certificates View (but not if a single cert is being viewed)
         if (store.value.viewMode === 'certificates' && store.value.modal?.type !== 'certificate') {
             this.renderCertificatesGallery();
             return;
         }
 
-        // 3. Modals
         const modal = store.value.modal;
         if (!modal) {
             this.innerHTML = '';
@@ -48,7 +44,6 @@ class ArborModals extends HTMLElement {
         const type = typeof modal === 'string' ? modal : modal.type;
         const ui = store.ui;
         
-        // Editor is handled by arbor-editor component
         if (type === 'editor') return;
 
         if (type === 'search') {
@@ -56,7 +51,6 @@ class ArborModals extends HTMLElement {
             return;
         }
 
-        // Common Modal Wrapper
         let content = '';
         if (type === 'tutorial') content = this.renderTutorial(ui);
         else if (type === 'sources') content = this.renderSources(ui);
@@ -70,7 +64,6 @@ class ArborModals extends HTMLElement {
             return; 
         }
 
-        // FIX: Increased Z-Index to z-[70] to cover everything including content panel
         this.innerHTML = `
         <div class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
             <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full relative overflow-hidden flex flex-col max-h-[90vh]">
@@ -79,7 +72,6 @@ class ArborModals extends HTMLElement {
             </div>
         </div>`;
 
-        // Bind events
         const closeBtn = this.querySelector('.btn-close');
         if(closeBtn) closeBtn.onclick = () => this.close();
         
@@ -106,24 +98,31 @@ class ArborModals extends HTMLElement {
     // --- PROFILE & SYNC ---
     renderProfile(ui) {
         const exportCode = store.getExportData();
+        const g = store.value.gamification;
 
         return `
         <div class="flex flex-col h-full">
             <!-- Header -->
             <div class="p-6 pb-2 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
-                <div class="flex items-center gap-4 mb-2">
-                     <div class="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-2xl overflow-hidden">
+                <div class="flex items-center gap-4 mb-4">
+                     <div class="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-4xl overflow-hidden border-2 border-white dark:border-slate-700 shadow-lg">
                         👤
                      </div>
                      <div>
                         <h2 class="text-xl font-black text-slate-800 dark:text-white">${ui.profileTitle}</h2>
-                        <p class="text-sm text-slate-500">${ui.profileDesc}</p>
+                        <div class="flex gap-4 mt-1">
+                            <span class="text-xs font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">Level ${Math.floor(g.xp / 100) + 1}</span>
+                            <span class="text-xs font-bold text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded">💧 ${g.streak} ${ui.streak}</span>
+                        </div>
                      </div>
                 </div>
             </div>
 
             <!-- TABS -->
             <div class="flex border-b border-slate-100 dark:border-slate-800">
+                <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${this.profileTab === 'garden' ? 'border-green-500 text-green-600 dark:text-green-400' : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}" id="tab-garden">
+                    🍎 ${ui.gardenTitle}
+                </button>
                 <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${this.profileTab === 'export' ? 'border-sky-500 text-sky-600 dark:text-sky-400' : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}" id="tab-export">
                     📤 ${ui.exportTitle}
                 </button>
@@ -135,69 +134,80 @@ class ArborModals extends HTMLElement {
             <!-- CONTENT -->
             <div class="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950/50">
                 
+                ${this.profileTab === 'garden' ? `
+                    <div class="animate-in fade-in slide-in-from-bottom-4 duration-300">
+                        ${g.fruits.length === 0 ? `
+                            <div class="text-center py-10 text-slate-400">
+                                <div class="text-5xl mb-4 grayscale opacity-50">🧺</div>
+                                <p>${ui.gardenEmpty}</p>
+                            </div>
+                        ` : `
+                            <div class="grid grid-cols-4 sm:grid-cols-5 gap-4">
+                                ${g.fruits.map(f => `
+                                    <div class="aspect-square bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-center text-3xl hover:scale-110 transition-transform cursor-help" title="Harvested on ${new Date(f.date).toLocaleDateString()}">
+                                        ${f.icon}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        `}
+                        
+                        <div class="mt-8 p-4 bg-yellow-50 dark:bg-yellow-900/10 rounded-xl border border-yellow-200 dark:border-yellow-800/30">
+                            <h4 class="font-bold text-yellow-800 dark:text-yellow-500 text-xs uppercase mb-2">Total Stats</h4>
+                            <div class="flex justify-between text-sm">
+                                <span>Lifetime XP:</span>
+                                <span class="font-bold">${g.xp} ${ui.xpUnit}</span>
+                            </div>
+                             <div class="flex justify-between text-sm mt-1">
+                                <span>Fruits Harvested:</span>
+                                <span class="font-bold">${g.fruits.length}</span>
+                            </div>
+                        </div>
+                    </div>
+                ` : ''}
+
                 ${this.profileTab === 'export' ? `
                     <div class="animate-in fade-in slide-in-from-right-4 duration-300">
                         <p class="text-sm text-slate-500 mb-4">${ui.exportDesc}</p>
-                        
-                        <!-- CODE EXPORT -->
                         <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 mb-4">
                             <textarea readonly class="w-full h-24 bg-transparent text-xs font-mono text-slate-600 dark:text-slate-300 outline-none resize-none" id="export-textarea">${exportCode}</textarea>
                             <button id="btn-copy-code" class="w-full mt-2 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-xs rounded-lg transition-colors">
                                 📋 ${ui.copyCode}
                             </button>
                         </div>
-
-                        <div class="flex items-center gap-4 my-4">
-                            <div class="h-px flex-1 bg-slate-200 dark:bg-slate-700"></div>
-                            <span class="text-xs font-bold text-slate-400">OR</span>
-                            <div class="h-px flex-1 bg-slate-200 dark:bg-slate-700"></div>
-                        </div>
-
-                        <!-- FILE EXPORT -->
                         <button id="btn-download-file" class="w-full py-3 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-xl shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2">
                              💾 ${ui.downloadFile} (.json)
                         </button>
                     </div>
-                ` : `
+                ` : ''}
+
+                ${this.profileTab === 'import' ? `
                     <div class="animate-in fade-in slide-in-from-left-4 duration-300">
                         <p class="text-sm text-slate-500 mb-4">${ui.importDesc}</p>
-
-                        <!-- TEXT IMPORT -->
                          <textarea class="w-full h-24 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl mb-4 text-xs font-mono outline-none focus:ring-2 focus:ring-purple-500" id="import-textarea" placeholder="${ui.pasteCodePlaceholder}"></textarea>
-                         
-                         <div class="flex items-center gap-4 my-4">
-                            <div class="h-px flex-1 bg-slate-200 dark:bg-slate-700"></div>
-                            <span class="text-xs font-bold text-slate-400">OR</span>
-                            <div class="h-px flex-1 bg-slate-200 dark:bg-slate-700"></div>
-                        </div>
-                        
-                        <!-- FILE IMPORT -->
                         <div class="relative">
                             <input type="file" id="import-file" class="hidden" accept=".json">
                             <button onclick="document.getElementById('import-file').click()" class="w-full py-3 border-2 border-dashed border-slate-300 dark:border-slate-700 text-slate-400 hover:border-purple-500 hover:text-purple-500 font-bold rounded-xl transition-colors">
                                 📂 Select File
                             </button>
                         </div>
-                        
                         <button id="btn-run-import" class="w-full mt-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl shadow-lg transition-transform active:scale-95">
                             ${ui.importBtn}
                         </button>
                     </div>
-                `}
+                ` : ''}
             </div>
         </div>`;
     }
 
     bindProfileEvents() {
-        // Tab Switching
         const setTab = (t) => {
             this.profileTab = t;
             this.render();
         };
+        this.querySelector('#tab-garden').onclick = () => setTab('garden');
         this.querySelector('#tab-export').onclick = () => setTab('export');
         this.querySelector('#tab-import').onclick = () => setTab('import');
         
-        // Export Actions
         if (this.profileTab === 'export') {
             this.querySelector('#btn-copy-code').onclick = (e) => {
                 const txt = this.querySelector('#export-textarea');
@@ -210,7 +220,6 @@ class ArborModals extends HTMLElement {
             this.querySelector('#btn-download-file').onclick = () => store.downloadProgressFile();
         }
 
-        // Import Actions
         if (this.profileTab === 'import') {
             const runImport = (val) => {
                  if(store.importProgress(val)) {
@@ -220,12 +229,10 @@ class ArborModals extends HTMLElement {
                      alert(store.ui.importError);
                  }
             };
-
             this.querySelector('#btn-run-import').onclick = () => {
                 const val = this.querySelector('#import-textarea').value;
                 if(val) runImport(val);
             };
-
             const fileInp = this.querySelector('#import-file');
             fileInp.onchange = (e) => {
                 const file = e.target.files[0];
@@ -239,7 +246,6 @@ class ArborModals extends HTMLElement {
 
     // --- SEARCH MODAL ---
     renderSearch(ui) {
-         // FIX: Z-Index z-[70]
          this.innerHTML = `
          <div class="fixed inset-0 z-[70] flex items-start justify-center pt-[15vh] bg-slate-900/60 backdrop-blur-sm p-4 animate-in" id="search-overlay">
             <div class="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700 flex flex-col max-h-[60vh]">
@@ -283,12 +289,10 @@ class ArborModals extends HTMLElement {
          this.querySelector('.btn-close').onclick = () => this.close();
     }
 
-    // --- PREVIEW ---
     renderPreview(node) {
         const ui = store.ui;
         const isDone = store.isCompleted(node.id);
         
-        // FIX: Z-Index z-[70]
         this.innerHTML = `
         <div id="preview-overlay" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in">
             <div class="bg-white dark:bg-slate-900 rounded-3xl p-8 max-w-sm w-full shadow-2xl relative text-center">
@@ -321,7 +325,6 @@ class ArborModals extends HTMLElement {
         this.querySelector('#btn-prev-enter').onclick = () => store.enterLesson();
     }
 
-    // --- TUTORIAL ---
     renderTutorial(ui) {
         const step = ui.tutorialSteps[this.tutorialStep];
         return `
@@ -355,7 +358,6 @@ class ArborModals extends HTMLElement {
         if(btnFin) btnFin.onclick = () => this.close();
     }
 
-    // --- CONTRIBUTOR ---
     renderContributor(ui) {
         const user = store.value.githubUser;
         const magicLink = 'https://github.com/settings/tokens/new?description=Arbor%20Studio%20Access&scopes=repo,workflow';
@@ -368,22 +370,18 @@ class ArborModals extends HTMLElement {
 
             ${!user ? `
             <div class="space-y-4">
-                <!-- Magic Link -->
                 <a href="${magicLink}" target="_blank" class="w-full py-3 px-4 border-2 border-dashed border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-sky-100 dark:hover:bg-sky-900/40 transition-colors">
                     <span>✨</span>
                     <span>Registro Inicial (Generar Token)</span>
                 </a>
-
                 <div class="relative py-2">
                     <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-200 dark:border-slate-700"></div></div>
                     <div class="relative flex justify-center text-xs uppercase"><span class="bg-white dark:bg-slate-900 px-2 text-slate-400">O ingresa tu token existente</span></div>
                 </div>
-
                 <div>
                     <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">${ui.contribToken}</label>
                     <input id="inp-gh-token" type="password" placeholder="${ui.contribTokenPlaceholder}" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-slate-500">
                 </div>
-                
                 <label class="flex items-center gap-3 p-2 cursor-pointer group">
                     <div class="relative flex items-center">
                         <input type="checkbox" id="chk-remember-me" class="peer sr-only" checked>
@@ -391,7 +389,6 @@ class ArborModals extends HTMLElement {
                     </div>
                     <span class="text-sm text-slate-600 dark:text-slate-400 font-medium group-hover:text-slate-900 dark:group-hover:text-slate-200">Recordarme (Guardar sesión)</span>
                 </label>
-
                 <button id="btn-gh-connect" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl shadow-lg transition-transform active:scale-95">${ui.contribConnect}</button>
             </div>
             ` : `
@@ -422,15 +419,13 @@ class ArborModals extends HTMLElement {
                 const user = await github.initialize(token);
                 if (user) {
                     store.update({ githubUser: user });
-                    
                     if (rememberMe) {
                         localStorage.setItem('arbor-gh-token', token);
-                        sessionStorage.removeItem('arbor-gh-token'); // Clear opposing storage
+                        sessionStorage.removeItem('arbor-gh-token'); 
                     } else {
                         sessionStorage.setItem('arbor-gh-token', token);
-                        localStorage.removeItem('arbor-gh-token'); // Clear opposing storage
+                        localStorage.removeItem('arbor-gh-token'); 
                     }
-                    
                     this.render();
                 } else {
                     alert('Authentication failed. Check your token.');
@@ -445,7 +440,6 @@ class ArborModals extends HTMLElement {
             btnDisconnect.onclick = () => {
                 github.disconnect();
                 store.update({ githubUser: null });
-                // Clear both to be safe
                 localStorage.removeItem('arbor-gh-token');
                 sessionStorage.removeItem('arbor-gh-token');
                 this.render();
@@ -453,11 +447,8 @@ class ArborModals extends HTMLElement {
         }
     }
 
-    // --- SOURCES ---
     renderSources(ui) {
-        if (this.showSecurityWarning) {
-             return this.renderSecurityWarning(ui);
-        }
+        if (this.showSecurityWarning) return this.renderSecurityWarning(ui);
 
         return `
         <div class="flex flex-col h-full">
@@ -542,7 +533,6 @@ class ArborModals extends HTMLElement {
         this.querySelectorAll('.btn-load').forEach(b => b.onclick = (e) => store.loadAndSmartMerge(e.target.dataset.id));
     }
     
-    // --- OTHERS ---
     renderAbout(ui) {
         return `
         <div class="p-8">
@@ -550,7 +540,7 @@ class ArborModals extends HTMLElement {
             <h2 class="text-2xl font-black text-slate-800 dark:text-white mb-4">${ui.aboutTitle}</h2>
             <div class="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl text-left text-sm text-slate-600 dark:text-slate-300 leading-relaxed space-y-4">
                 <p><strong>${ui.missionTitle}</strong><br>${ui.missionText}</p>
-                <p class="text-xs text-slate-400 font-mono pt-4 border-t border-slate-200 dark:border-slate-700">Version 0.1<br>${ui.lastUpdated} ${store.value.data?.generatedAt || 'N/A'}</p>
+                <p class="text-xs text-slate-400 font-mono pt-4 border-t border-slate-200 dark:border-slate-700">Version 0.2<br>${ui.lastUpdated} ${store.value.data?.generatedAt || 'N/A'}</p>
             </div>
             <a href="https://github.com/treesys-org/arbor-ui" target="_blank" rel="noopener noreferrer" class="mt-6 w-full flex items-center justify-center gap-3 py-3 px-4 bg-slate-800 hover:bg-slate-700 dark:bg-slate-200 dark:hover:bg-slate-300 text-white dark:text-slate-800 font-bold text-sm rounded-xl transition-all">
                 <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"></path></svg>
@@ -598,28 +588,16 @@ class ArborModals extends HTMLElement {
         </div>`;
     }
 
-    // --- CERTIFICATES ---
-
-    getPct(m) {
-        if(m.totalLeaves === 0) return 0;
-        return Math.round((m.completedLeaves / m.totalLeaves) * 100);
-    }
-
     renderSingleCertificate(ui, moduleId) {
         const module = store.getModulesStatus().find(m => m.id === moduleId);
         if(!module) return;
 
-        // FIX: Z-Index z-[100]
         this.innerHTML = `
         <div id="cert-overlay" class="fixed inset-0 z-[100] flex items-center justify-center bg-white dark:bg-slate-950 p-6 overflow-y-auto animate-in">
-          
           <button id="btn-cert-close" class="absolute top-4 right-4 z-[110] p-3 bg-white/50 dark:bg-slate-900/50 rounded-full hover:bg-red-500 hover:text-white transition-colors no-print">
              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
-
           <div class="max-w-3xl w-full border-8 border-double border-stone-800 dark:border-stone-600 p-8 bg-stone-50 dark:bg-[#1a2e22] text-center shadow-2xl relative certificate-container">
-              
-              <!-- Ornamental Corners -->
               <div class="absolute top-2 left-2 w-12 md:w-16 h-12 md:h-16 border-t-4 border-l-4 border-stone-800 dark:border-stone-600"></div>
               <div class="absolute top-2 right-2 w-12 md:w-16 h-12 md:h-16 border-t-4 border-r-4 border-stone-800 dark:border-stone-600"></div>
               <div class="absolute bottom-2 left-2 w-12 md:w-16 h-12 md:h-16 border-b-4 border-l-4 border-stone-800 dark:border-stone-600"></div>
@@ -627,20 +605,14 @@ class ArborModals extends HTMLElement {
 
               <div class="py-12 px-6 border-2 border-stone-800/20 dark:border-stone-600/20 flex flex-col items-center justify-center">
                   <div class="w-24 h-24 mb-6 bg-green-700 text-white rounded-full flex items-center justify-center text-5xl shadow-lg">🎓</div>
-
                   <h1 class="text-3xl md:text-5xl font-black text-slate-800 dark:text-green-400 mb-2 uppercase tracking-widest font-serif">${ui.certTitle}</h1>
-                  
                   <div class="w-32 h-1 bg-stone-700 dark:bg-stone-500 mx-auto mb-8"></div>
-
                   <p class="text-xl text-slate-500 dark:text-slate-400 italic font-serif mb-6">${ui.certBody}</p>
-
                   <h2 class="text-2xl md:text-4xl font-bold text-slate-900 dark:text-white mb-12 font-serif border-b-2 border-slate-300 dark:border-slate-700 pb-2 px-6 md:px-12 inline-block min-w-[200px] w-full max-w-[500px] break-words">
                       ${module.name}
                   </h2>
-
                   <p class="text-md text-slate-600 dark:text-slate-300 mb-1">${ui.certSign}</p>
                   <p class="text-sm text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-12">${new Date().toLocaleDateString()}</p>
-
                   <button id="btn-cert-print" class="px-8 py-3 bg-stone-800 hover:bg-stone-700 text-white font-bold rounded-xl shadow-lg no-print">
                       ${ui.printCert}
                   </button>
@@ -665,7 +637,6 @@ class ArborModals extends HTMLElement {
         const modules = store.getModulesStatus();
         const ui = store.ui;
 
-        // Filter Logic
         const filtered = modules.filter(m => {
             if (!this.certShowAll && !m.isComplete) return false;
             if (this.certSearch) {
@@ -675,13 +646,11 @@ class ArborModals extends HTMLElement {
             return true;
         });
 
-        // FIX: Z-Index z-[70]
         this.innerHTML = `
         <div class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/80 backdrop-blur-md p-0 md:p-10 animate-in fade-in duration-300">
           
           <div class="bg-white dark:bg-slate-950 rounded-none md:rounded-3xl w-full max-w-6xl h-full md:max-h-[90vh] shadow-2xl relative border-0 md:border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden">
             
-            <!-- Header -->
             <div class="p-6 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row gap-4 justify-between items-start md:items-center bg-white dark:bg-slate-950 z-10 pt-16 md:pt-6">
                <div>
                    <h2 class="text-3xl font-black text-slate-800 dark:text-white flex items-center gap-3">
@@ -691,25 +660,20 @@ class ArborModals extends HTMLElement {
                </div>
                
                <div class="flex items-center gap-4 w-full md:w-auto">
-                   <!-- Search Bar -->
                    <div class="relative flex-1 md:w-64">
                        <input id="inp-cert-search" type="text" placeholder="${ui.searchCert}" value="${this.certSearch}"
                         class="w-full bg-slate-100 dark:bg-slate-900 border-none rounded-xl px-4 py-2 pl-10 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-green-600 outline-none">
                        <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
                    </div>
-
-                   <!-- Filter Toggle -->
                    <button id="btn-cert-filter" class="whitespace-nowrap px-4 py-2 rounded-xl text-sm font-bold transition-colors ${!this.certShowAll ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}">
                        ${this.certShowAll ? ui.showAll : ui.showEarned}
                    </button>
-
                    <button class="btn-close-certs w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center transition-colors flex-shrink-0">
                        <svg class="w-6 h-6 text-slate-500" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                    </button>
                </div>
             </div>
 
-            <!-- Scrollable Grid -->
             <div class="flex-1 overflow-y-auto custom-scrollbar p-6 bg-slate-50 dark:bg-slate-900/50">
                 ${filtered.length === 0 ? `
                     <div class="flex flex-col items-center justify-center h-full text-slate-400">
@@ -717,7 +681,9 @@ class ArborModals extends HTMLElement {
                     </div>` : ''}
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20 md:pb-0">
-                    ${filtered.map(module => `
+                    ${filtered.map((module, i) => {
+                        const pct = module.totalLeaves ? Math.round((module.completedLeaves / module.totalLeaves) * 100) : 0;
+                        return `
                         <div class="relative group overflow-hidden rounded-2xl border-2 transition-all duration-300 bg-white dark:bg-slate-900
                              ${module.isComplete ? 'border-green-600 shadow-xl shadow-green-600/20' : 'border-slate-200 dark:border-slate-800 opacity-75'}">
                             
@@ -739,10 +705,10 @@ class ArborModals extends HTMLElement {
                                 <div class="mt-auto">
                                     <div class="flex justify-between text-xs font-bold text-slate-400 mb-1">
                                         <span>${module.completedLeaves} / ${module.totalLeaves}</span>
-                                        <span>${this.getPct(module)}%</span>
+                                        <span>${pct}%</span>
                                     </div>
                                     <div class="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                        <div class="h-full bg-green-600 transition-all duration-500" style="width: ${this.getPct(module)}%"></div>
+                                        <div class="h-full bg-green-600 transition-all duration-500" style="width: ${pct}%"></div>
                                     </div>
                                 </div>
 
@@ -757,7 +723,7 @@ class ArborModals extends HTMLElement {
                                 </div>
                             </div>
                         </div>
-                    `).join('')}
+                    `; }).join('')}
                 </div>
             </div>
           </div>
@@ -765,7 +731,6 @@ class ArborModals extends HTMLElement {
 
         this.querySelector('.btn-close-certs').onclick = () => store.setViewMode('explore');
         const searchInput = this.querySelector('#inp-cert-search');
-        
         searchInput.oninput = (e) => {
             this.certSearch = e.target.value;
             this.render();
@@ -773,12 +738,10 @@ class ArborModals extends HTMLElement {
             el.focus();
             el.setSelectionRange(el.value.length, el.value.length);
         };
-        
         this.querySelector('#btn-cert-filter').onclick = () => {
             this.certShowAll = !this.certShowAll;
             this.render();
         };
-
         this.querySelectorAll('.btn-cert-view').forEach(b => {
             b.onclick = (e) => store.setModal({ type: 'certificate', moduleId: e.currentTarget.dataset.id });
         });

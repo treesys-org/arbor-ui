@@ -1,7 +1,7 @@
 
-
 import { UI_LABELS, AVAILABLE_LANGUAGES } from './i18n.js';
 import { github } from './services/github.js';
+import { aiService } from './services/ai.js';
 
 const OFFICIAL_DOMAINS = [
     'treesys-org.github.io',
@@ -10,19 +10,18 @@ const OFFICIAL_DOMAINS = [
     'raw.githubusercontent.com'
 ];
 
-// REFACTOR: The philosophy is that Arbor is a browser for external repos.
-// Only the official cloud curriculum is loaded by default.
 const DEFAULT_SOURCES = [
     {
         id: 'default-arbor',
         name: 'Arbor Knowledge (Official)',
-        // FIX: Use raw.githubusercontent.com to ensure reliable data fetching
-        // This bypasses GitHub Pages configuration issues.
         url: 'https://raw.githubusercontent.com/treesys-org/arbor-knowledge/main/data/data.json',
         isDefault: true,
         isTrusted: true
     }
 ];
+
+// Determine specific fruits for modules deterministically
+const FRUIT_TYPES = ['🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🍒', '🍑', '🍍', '🥥'];
 
 class Store extends EventTarget {
     constructor() {
@@ -36,27 +35,35 @@ class Store extends EventTarget {
             searchIndex: [],
             path: [], 
             completedNodes: new Set(),
-            // Future-proofing for gamification
+            // Gamification State
             gamification: {
-                xp: 0,
+                xp: 0, // Lifetime XP
+                dailyXP: 0,
                 streak: 0,
-                lastStudyDate: null
+                lastLoginDate: null, // YYYY-MM-DD
+                fruits: [] // Array of { id: moduleId, icon: '🍎', date: timestamp }
+            },
+            // AI State
+            ai: {
+                status: 'idle', // idle, loading, ready, error
+                progress: '',
+                messages: [] 
             },
             selectedNode: null, 
             previewNode: null,
             loading: true,
             error: null,
-            lastErrorMessage: null, // New error state for toasts
+            lastErrorMessage: null,
             viewMode: 'explore', 
             modal: null, 
             lastActionMessage: null,
-            githubUser: null // GitHub User info
+            githubUser: null
         };
         
         this.loadProgress();
+        this.checkStreak(); // Run daily check
         this.loadSources();
         
-        // Init GitHub State (Check Local first, then Session)
         const ghToken = localStorage.getItem('arbor-gh-token') || sessionStorage.getItem('arbor-gh-token');
         if (ghToken) {
             github.initialize(ghToken).then(user => {
@@ -71,6 +78,9 @@ class Store extends EventTarget {
     get value() { return this.state; }
     get availableLanguages() { return AVAILABLE_LANGUAGES; }
     get currentLangInfo() { return AVAILABLE_LANGUAGES.find(l => l.code === this.state.lang); }
+    
+    // Configurable constants
+    get dailyXpGoal() { return 50; }
 
     update(partialState) {
         this.state = { ...this.state, ...partialState };
@@ -85,31 +95,19 @@ class Store extends EventTarget {
         }
     }
 
-    // --- Theme & UI ---
-
-    setTheme(theme) {
-        this.update({ theme });
-    }
-
-    toggleTheme() { 
-        this.update({ theme: this.state.theme === 'light' ? 'dark' : 'light' }); 
-    }
-
+    setTheme(theme) { this.update({ theme }); }
+    toggleTheme() { this.update({ theme: this.state.theme === 'light' ? 'dark' : 'light' }); }
     setLanguage(lang) { 
         if(this.state.lang !== lang) {
             this.update({ lang }); 
             this.loadData(this.state.activeSource); 
         }
     }
-
     setModal(modal) { this.update({ modal }); }
-    
     setViewMode(viewMode) { 
         this.update({ viewMode });
         if(viewMode === 'certificates') this.update({ modal: null });
     }
-
-    // --- Sources ---
 
     isUrlTrusted(urlStr) {
         try {
@@ -121,29 +119,15 @@ class Store extends EventTarget {
     loadSources() {
         let sources = [];
         try { sources = JSON.parse(localStorage.getItem('arbor-sources')) || []; } catch(e) {}
-        
-        // Always merge defaults to ensure we have the official repo
-        // but preserve user-added sources
         const mergedSources = [...DEFAULT_SOURCES];
-        
         sources.forEach(s => {
-            // If user has a source that is NOT in defaults, add it
-            if (!DEFAULT_SOURCES.find(d => d.id === s.id)) {
-                mergedSources.push(s);
-            }
+            if (!DEFAULT_SOURCES.find(d => d.id === s.id)) mergedSources.push(s);
         });
-
-        // Save back the clean list
         localStorage.setItem('arbor-sources', JSON.stringify(mergedSources));
         
-        // Determine active source
         const savedActiveId = localStorage.getItem('arbor-active-source-id');
         let activeSource = mergedSources.find(s => s.id === savedActiveId);
-        
-        // Fallback: Default Arbor Official
-        if (!activeSource) {
-            activeSource = mergedSources.find(s => s.id === 'default-arbor');
-        }
+        if (!activeSource) activeSource = mergedSources.find(s => s.id === 'default-arbor');
 
         this.update({ sources: mergedSources, activeSource });
         this.loadData(activeSource);
@@ -153,13 +137,9 @@ class Store extends EventTarget {
         if (!url) return;
         const isTrusted = this.isUrlTrusted(url);
         let name = 'New Tree';
-        try {
-            name = new URL(url, window.location.href).hostname; 
-        } catch (e) {}
-
+        try { name = new URL(url, window.location.href).hostname; } catch (e) {}
         const newSource = { id: crypto.randomUUID(), name, url, isTrusted };
         const newSources = [...this.state.sources, newSource];
-        
         this.update({ sources: newSources });
         localStorage.setItem('arbor-sources', JSON.stringify(newSources));
         this.loadAndSmartMerge(newSource.id);
@@ -167,21 +147,15 @@ class Store extends EventTarget {
 
     removeSource(id) {
         const sourceToRemove = this.state.sources.find(s => s.id === id);
-        // Prevent removing official defaults
         if (sourceToRemove?.isDefault) return;
-
         const newSources = this.state.sources.filter(s => s.id !== id);
         this.update({ sources: newSources });
         localStorage.setItem('arbor-sources', JSON.stringify(newSources));
-        
         if (this.state.activeSource.id === id) {
-            // Fallback to official if current was deleted
             const fallback = newSources.find(s => s.id === 'default-arbor') || newSources[0];
             this.loadAndSmartMerge(fallback.id);
         }
     }
-
-    // --- Data Loading & Merging ---
 
     async loadAndSmartMerge(sourceId) {
         const source = this.state.sources.find(s => s.id === sourceId);
@@ -194,14 +168,9 @@ class Store extends EventTarget {
         localStorage.setItem('arbor-active-source-id', source.id);
 
         try {
-            // Cache busting for main data file
             const url = `${source.url}?t=${Date.now()}`;
             const res = await fetch(url);
-            
-            if (!res.ok) {
-                throw new Error(`Failed to fetch data from ${source.name} (Status ${res.status}).`);
-            }
-
+            if (!res.ok) throw new Error(`Failed to fetch data from ${source.name} (Status ${res.status}).`);
             const json = await res.json();
             
             const searchUrl = source.url.replace('data.json', 'search-index.json');
@@ -226,14 +195,11 @@ class Store extends EventTarget {
             
             this.dispatchEvent(new CustomEvent('graph-update'));
             setTimeout(() => this.update({ lastActionMessage: null }), 3000);
-
         } catch (e) {
             console.error(e);
             this.update({ loading: false, error: e.message });
         }
     }
-
-    // --- Nodes & Navigation ---
 
     findNode(id, node = this.state.data) {
         if (!node) return null;
@@ -249,9 +215,9 @@ class Store extends EventTarget {
 
     async navigateTo(nodeId) {
         let node = this.findNode(nodeId);
-        
         if (!node) {
-            const pathIdsToUnfold = [];
+            // ... (Same deep link logic as before) ...
+             const pathIdsToUnfold = [];
             let currentId = nodeId;
             let highestAncestorInMemory = null;
 
@@ -286,46 +252,32 @@ class Store extends EventTarget {
         
         node = this.findNode(nodeId);
         if (!node) return;
-
         this.toggleNode(nodeId);
         this.dispatchEvent(new CustomEvent('focus-node', { detail: nodeId }));
     }
 
     async navigateToNextLeaf() {
         if (!this.state.selectedNode || !this.state.data) return;
-        
         const leaves = [];
         const traverse = (node) => {
             if (node.type === 'leaf' || node.type === 'exam') leaves.push(node);
             if (node.children) node.children.forEach(traverse);
         };
         traverse(this.state.data);
-
         const currentIndex = leaves.findIndex(n => n.id === this.state.selectedNode.id);
-        
         if (currentIndex !== -1 && currentIndex < leaves.length - 1) {
             const nextNode = leaves[currentIndex + 1];
-            // Wait for navigation (which handles opening parents)
             await this.navigateTo(nextNode.id);
-            // Directly set to content view, bypassing preview
             this.update({ selectedNode: nextNode, previewNode: null });
         } else {
-            // End of content
             this.closeContent();
         }
     }
 
     async toggleNode(nodeId) {
-        console.log('Toggling Node:', nodeId);
         const node = this.findNode(nodeId);
-        
-        if (!node) {
-            console.error('Node not found:', nodeId);
-            return;
-        }
-
+        if (!node) return;
         try {
-            // 1. Update Path
             let path = [];
             let curr = node;
             while(curr) {
@@ -334,41 +286,32 @@ class Store extends EventTarget {
             }
             this.update({ path });
 
-            // 2. Collapse siblings (Accordion) - Explicit loop
-            // We only collapse siblings if we are EXPANDING.
             if (!node.expanded) {
-                // Find parent to get siblings
                 if (node.parentId) {
                     const parent = this.findNode(node.parentId);
                     if (parent && parent.children) {
                         parent.children.forEach(sibling => {
-                            if (sibling.id !== nodeId && sibling.expanded) {
-                                this.collapseRecursively(sibling);
-                            }
+                            if (sibling.id !== nodeId && sibling.expanded) this.collapseRecursively(sibling);
                         });
                     }
                 }
             }
 
-            // 3. Toggle Target
             if (node.type === 'leaf' || node.type === 'exam') {
                 this.update({ previewNode: node, selectedNode: null });
             } else {
                 if (!node.expanded) {
-                    if (node.hasUnloadedChildren) {
-                        await this.loadNodeChildren(node);
-                    }
+                    if (node.hasUnloadedChildren) await this.loadNodeChildren(node);
                     node.expanded = true;
                 } else {
                     this.collapseRecursively(node);
                 }
                 this.update({ selectedNode: null, previewNode: null });
             }
-            
             this.dispatchEvent(new CustomEvent('graph-update')); 
 
         } catch (e) {
-            console.error('Error toggling node:', e);
+            console.error(e);
             this.update({ lastErrorMessage: "Error interacting with node: " + e.message });
             setTimeout(() => this.update({ lastErrorMessage: null }), 5000);
         }
@@ -380,164 +323,239 @@ class Store extends EventTarget {
     }
 
     async loadNodeChildren(node) {
-        if (!node.apiPath) {
-            this.update({ lastErrorMessage: "Node API Path missing." });
-            setTimeout(() => this.update({ lastErrorMessage: null }), 4000);
-            return;
-        }
-
+        if (!node.apiPath) return;
         node.status = 'loading';
         this.dispatchEvent(new CustomEvent('graph-update'));
         
         try {
-            // Robust URL construction
             const sourceUrl = this.state.activeSource.url;
-            // Get base dir: "https://site.com/repo/data/" from "https://site.com/repo/data/data.json"
             const baseDir = sourceUrl.substring(0, sourceUrl.lastIndexOf('/') + 1);
-            
-            // This works for both local and remote if structure is maintained (data.json + nodes/)
-            // Add timestamp to avoid aggressive caching during content development
             const url = `${baseDir}nodes/${node.apiPath}.json?t=${Date.now()}`;
             
             const res = await fetch(url);
             if (res.ok) {
                 let text = await res.text();
-
-                // FIX: Handle BOM (Byte Order Mark) \uFEFF which breaks JSON.parse on some systems
-                if (text.charCodeAt(0) === 0xFEFF) {
-                    text = text.slice(1);
-                }
-                text = text.trim();
-
-                try {
-                    node.children = JSON.parse(text);
-                    node.hasUnloadedChildren = false;
-                } catch(e) {
-                    console.error("JSON Error in:", url, text);
-                    
-                    // Specific check for HTML returned instead of JSON (Soft 404)
-                    if (text.startsWith('<')) {
-                         throw new Error(`Server returned HTML instead of JSON for ${node.apiPath}. Check if file exists.`);
-                    }
-
-                    // This is the critical change to show YOU which file is broken
-                    throw new Error(`Corrupt Data in file: ${node.apiPath}.json. Error: ${e.message}`);
-                }
+                if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+                node.children = JSON.parse(text.trim());
+                node.hasUnloadedChildren = false;
             } else {
-                const msg = `Failed to load children: ${node.apiPath}.json (Status ${res.status})`;
-                console.error(msg);
-                this.update({ lastErrorMessage: msg });
-                setTimeout(() => this.update({ lastErrorMessage: null }), 5000);
+                throw new Error(`Failed to load children: ${node.apiPath}.json`);
             }
         } catch(e) { 
-            console.error(e); 
-            this.update({ lastErrorMessage: e.message }); // Show the specific file error
-            setTimeout(() => this.update({ lastErrorMessage: null }), 10000); // 10s to read
-        }
-        finally {
+            console.error(e);
+            this.update({ lastErrorMessage: e.message });
+        } finally {
             node.status = 'available';
             this.dispatchEvent(new CustomEvent('graph-update'));
         }
     }
 
-    // --- UI Actions (Content) ---
-
     goHome() {
-        this.update({
-            viewMode: 'explore',
-            selectedNode: null,
-            previewNode: null,
-            modal: null
-        });
+        this.update({ viewMode: 'explore', selectedNode: null, previewNode: null, modal: null });
     }
-
     enterLesson() {
-        if (this.state.previewNode) {
-            this.update({ selectedNode: this.state.previewNode, previewNode: null });
-        }
+        if (this.state.previewNode) this.update({ selectedNode: this.state.previewNode, previewNode: null });
     }
     closePreview() { this.update({ previewNode: null }); }
     closeContent() { this.update({ selectedNode: null }); }
-    
-    // --- Editor Actions ---
-    openEditor(node) {
-        if (!node) return;
-        this.update({ modal: { type: 'editor', node: node } });
-    }
-
+    openEditor(node) { if (node) this.update({ modal: { type: 'editor', node: node } }); }
     search(query) {
         if (!query) return [];
         const q = query.toLowerCase();
-        return this.state.searchIndex.filter(n => 
-            n.lang === this.state.lang && 
-            (n.name.toLowerCase().includes(q) || (n.description && n.description.toLowerCase().includes(q)))
-        );
+        return this.state.searchIndex.filter(n => n.lang === this.state.lang && (n.name.toLowerCase().includes(q) || (n.description && n.description.toLowerCase().includes(q))));
     }
 
-    // --- Progress ---
+    // --- AI / SAGE LOGIC ---
+
+    async initSage() {
+        this.update({ ai: { ...this.state.ai, status: 'loading', progress: '0%' } });
+        
+        aiService.setCallback((progressReport) => {
+             this.update({ ai: { ...this.state.ai, progress: progressReport.text } });
+        });
+
+        try {
+            await aiService.initialize();
+            
+            // Initial Welcome Message
+            const msgs = [{ role: 'assistant', content: "🦉 Hoot hoot! I am awake. Ask me anything." }];
+            if (this.state.lang === 'ES') {
+                msgs[0].content = "🦉 ¡Huu huu! Estoy despierto. Pregúntame lo que quieras.";
+            }
+
+            this.update({ ai: { ...this.state.ai, status: 'ready', messages: msgs } });
+        } catch (e) {
+            console.error(e);
+            this.update({ ai: { ...this.state.ai, status: 'error', progress: e.message } });
+        }
+    }
+
+    async chatWithSage(userText) {
+        const currentMsgs = [...this.state.ai.messages, { role: 'user', content: userText }];
+        this.update({ ai: { ...this.state.ai, status: 'thinking', messages: currentMsgs } });
+
+        try {
+            const contextNode = this.state.selectedNode || this.state.previewNode;
+            const systemPrompt = aiService.getSystemPrompt(contextNode, this.state.lang);
+            
+            // Construct full conversation for API (System + History)
+            const fullPayload = [
+                { role: 'system', content: systemPrompt },
+                ...currentMsgs
+            ];
+
+            const reply = await aiService.chat(fullPayload);
+            
+            const newMsgs = [...currentMsgs, { role: 'assistant', content: reply }];
+            this.update({ ai: { ...this.state.ai, status: 'ready', messages: newMsgs } });
+
+        } catch (e) {
+            const errorMsg = this.state.lang === 'ES' ? 'Error al pensar...' : 'Error thinking...';
+            const newMsgs = [...currentMsgs, { role: 'assistant', content: `🦉 ${errorMsg}` }];
+            this.update({ ai: { ...this.state.ai, status: 'ready', messages: newMsgs } });
+        }
+    }
+
+    // --- GAMIFICATION & PROGRESS LOGIC ---
 
     loadProgress() {
         try {
             const saved = localStorage.getItem('arbor-progress');
             if (saved) {
                 const parsed = JSON.parse(saved);
-                // Backwards compatibility if it was just an array
                 if (Array.isArray(parsed)) {
                     this.state.completedNodes = new Set(parsed);
                 } else if (parsed.progress) {
-                    // New format with gamification data
                     this.state.completedNodes = new Set(parsed.progress);
-                    if (parsed.gamification) this.state.gamification = parsed.gamification;
+                    if (parsed.gamification) this.state.gamification = { ...this.state.gamification, ...parsed.gamification };
                 }
             }
         } catch(e) {}
     }
 
-    markComplete(nodeId, forceState = null) {
-        let isComplete = this.state.completedNodes.has(nodeId);
-        let shouldAdd = false;
-        
-        if (forceState !== null) {
-            shouldAdd = forceState;
+    checkStreak() {
+        const today = new Date().toISOString().slice(0, 10);
+        const { lastLoginDate, streak } = this.state.gamification;
+
+        if (lastLoginDate === today) {
+             // Already logged in today, do nothing
+        } else if (lastLoginDate) {
+            const last = new Date(lastLoginDate);
+            const now = new Date(today);
+            const diffTime = Math.abs(now - last);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+
+            if (diffDays === 1) {
+                // Streak continues
+                // Don't increment here, we increment when they complete an action or just by logging in?
+                // Let's increment on first load of the day.
+                this.updateGamification({ streak: streak + 1, lastLoginDate: today, dailyXP: 0 });
+                this.update({ lastActionMessage: this.ui.streakKept });
+                setTimeout(() => this.update({ lastActionMessage: null }), 3000);
+            } else {
+                // Streak lost
+                this.updateGamification({ streak: 1, lastLoginDate: today, dailyXP: 0 });
+            }
         } else {
-            shouldAdd = !isComplete; // Toggle default
+            // First time ever
+            this.updateGamification({ streak: 1, lastLoginDate: today });
+        }
+    }
+
+    addXP(amount) {
+        const { gamification } = this.state;
+        const newDaily = gamification.dailyXP + amount;
+        const newTotal = gamification.xp + amount;
+        
+        let msg = `+${amount} ${this.ui.xpUnit}`;
+        if (gamification.dailyXP < this.dailyXpGoal && newDaily >= this.dailyXpGoal) {
+            msg = this.ui.goalReached + " ☀️";
+            // Fire confetti event if possible, or just visual feedback
         }
 
+        this.updateGamification({ xp: newTotal, dailyXP: newDaily });
+        this.update({ lastActionMessage: msg });
+        setTimeout(() => this.update({ lastActionMessage: null }), 3000);
+    }
+
+    harvestFruit(moduleId) {
+        const { gamification } = this.state;
+        // Check if already harvested
+        if (gamification.fruits.find(f => f.id === moduleId)) return;
+
+        // Deterministic Fruit Picker based on ID string char codes
+        const charSum = moduleId.split('').reduce((a,b) => a + b.charCodeAt(0), 0);
+        const fruitIcon = FRUIT_TYPES[charSum % FRUIT_TYPES.length];
+
+        const newFruit = { id: moduleId, icon: fruitIcon, date: Date.now() };
+        this.updateGamification({ fruits: [...gamification.fruits, newFruit] });
+        
+        this.update({ lastActionMessage: `${this.ui.fruitHarvested} ${fruitIcon}` });
+        setTimeout(() => this.update({ lastActionMessage: null }), 4000);
+    }
+
+    updateGamification(updates) {
+        this.state.gamification = { ...this.state.gamification, ...updates };
+        this.persistProgress();
+    }
+
+    markComplete(nodeId, forceState = null) {
+        let isComplete = this.state.completedNodes.has(nodeId);
+        let shouldAdd = forceState !== null ? forceState : !isComplete;
+
         if (shouldAdd) {
-             this.state.completedNodes.add(nodeId);
+             if (!isComplete) {
+                 this.state.completedNodes.add(nodeId);
+                 this.addXP(10); // 10 XP per lesson
+             }
         } else {
              this.state.completedNodes.delete(nodeId);
         }
         
         this.persistProgress();
+        this.checkForModuleCompletion(nodeId);
     }
 
-    // EXAM LOGIC: recursively mark a branch as complete
     markBranchComplete(parentId) {
         if (!parentId) return;
-        
         const parentNode = this.findNode(parentId);
         if (!parentNode) return;
-
-        const nodesToMark = [];
         
+        let addedCount = 0;
         const collectLeaves = (node) => {
             if (node.type === 'leaf' || node.type === 'exam') {
-                nodesToMark.push(node.id);
+                if (!this.state.completedNodes.has(node.id)) {
+                    this.state.completedNodes.add(node.id);
+                    addedCount++;
+                }
             }
-            if (node.children) {
-                node.children.forEach(collectLeaves);
-            }
+            if (node.children) node.children.forEach(collectLeaves);
         };
-
         collectLeaves(parentNode);
-        
-        // Batch update
-        nodesToMark.forEach(id => this.state.completedNodes.add(id));
-        
+
+        if(addedCount > 0) this.addXP(addedCount * 10);
         this.persistProgress();
+        
+        this.checkForModuleCompletion(parentNode.children?.[0]?.id); // Trigger check
         this.update({ lastActionMessage: "Branch Mastered! 🎓" });
         setTimeout(() => this.update({ lastActionMessage: null }), 3000);
+    }
+
+    checkForModuleCompletion(relatedNodeId) {
+        // Find the top-level module for this node
+        if (!relatedNodeId) return;
+        const modules = this.getModulesStatus();
+        
+        // Naive matching: assumption that node ID starts with module ID
+        // Better: iterate modules, check if relatedNodeId is a descendant
+        // For Arbor, IDs are constructed parentId__slug, so startsWith works usually.
+        // But let's rely on getModulesStatus which calculates completeness accurately.
+        
+        modules.forEach(m => {
+            if (m.isComplete) {
+                this.harvestFruit(m.id);
+            }
+        });
     }
 
     persistProgress() {
@@ -551,27 +569,13 @@ class Store extends EventTarget {
         this.dispatchEvent(new CustomEvent('graph-update'));
     }
 
-    // --- Manual Export/Import ---
     getExportData() {
-        const data = {
-            v: 1, // Version
-            ts: Date.now(),
-            p: Array.from(this.state.completedNodes), // Progress
-            g: this.state.gamification // Gamification
-        };
-        // Use default JSON.stringify without whitespace for smallest size
-        const str = JSON.stringify(data);
-        // Encode to Base64 (safely for UTF-8)
-        return btoa(unescape(encodeURIComponent(str)));
+        const data = { v: 1, ts: Date.now(), p: Array.from(this.state.completedNodes), g: this.state.gamification };
+        return btoa(unescape(encodeURIComponent(JSON.stringify(data))));
     }
 
     downloadProgressFile() {
-        const data = {
-            version: 1,
-            timestamp: Date.now(),
-            progress: Array.from(this.state.completedNodes),
-            gamification: this.state.gamification
-        };
+        const data = { version: 1, timestamp: Date.now(), progress: Array.from(this.state.completedNodes), gamification: this.state.gamification };
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -583,33 +587,27 @@ class Store extends EventTarget {
 
     importProgress(input) {
         try {
-            // Try to parse as JSON first (from file content)
             let data;
-            if (input.trim().startsWith('{')) {
-                data = JSON.parse(input);
-            } else {
-                // Try as Base64 code
-                const decoded = decodeURIComponent(escape(atob(input.trim())));
-                data = JSON.parse(decoded);
-            }
+            if (input.trim().startsWith('{')) data = JSON.parse(input);
+            else data = JSON.parse(decodeURIComponent(escape(atob(input.trim()))));
 
-            // Handle legacy format (just an array) vs new format (object)
             let newProgress = [];
-            if (Array.isArray(data)) newProgress = data; // Legacy simple array
-            if (data.progress) newProgress = data.progress; // New verbose
-            if (data.p) newProgress = data.p; // New compact
+            if (Array.isArray(data)) newProgress = data;
+            if (data.progress) newProgress = data.progress;
+            if (data.p) newProgress = data.p;
 
-            // Handle gamification import
-            if (data.g) this.state.gamification = data.g;
-
-            if (!Array.isArray(newProgress)) {
-                throw new Error("Invalid Format");
+            if (data.g || data.gamification) {
+                this.state.gamification = { ...this.state.gamification, ...(data.g || data.gamification) };
             }
+
+            if (!Array.isArray(newProgress)) throw new Error("Invalid Format");
 
             const merged = new Set([...this.state.completedNodes, ...newProgress]);
             this.update({ completedNodes: merged });
             this.persistProgress();
             
+            // Check for retrospective achievements
+            this.checkForModuleCompletion('force-check');
             return true;
         } catch (e) {
             console.error(e);
@@ -622,35 +620,24 @@ class Store extends EventTarget {
     getModulesStatus() {
         if (!this.state.data || !this.state.data.children) return [];
         const modules = [];
-        
         this.state.data.children.forEach(topLevelNode => {
-            if (topLevelNode.type !== 'branch') return; // Ignore loose files at root
-
+            if (topLevelNode.type !== 'branch') return;
             let total = 0;
             let completed = 0;
-
-            // 1. Try to use pre-calculated Total from data.json (Metadata)
             if (typeof topLevelNode.totalLeaves === 'number' && topLevelNode.totalLeaves > 0) {
                  total = topLevelNode.totalLeaves;
             }
-
-            // 2. Count completed leaves if not available
             if (total === 0) {
                 const countLeaves = (node) => {
-                    if (node.type === 'leaf' || node.type === 'exam') {
-                        total++;
-                    } else if (node.children) {
-                        node.children.forEach(countLeaves);
-                    }
+                    if (node.type === 'leaf' || node.type === 'exam') total++;
+                    else if (node.children) node.children.forEach(countLeaves);
                 };
                 countLeaves(topLevelNode);
             }
-
-            // Calculate Completed
             this.state.completedNodes.forEach(id => {
-                if (id.startsWith(topLevelNode.id + '__')) {
-                    completed++;
-                }
+                // Only count if ID belongs to this branch. 
+                // Arbor IDs: root-lang-root__module__sub...
+                if (id.startsWith(topLevelNode.id + '__')) completed++;
             });
 
             if (total > 0) {
@@ -661,12 +648,11 @@ class Store extends EventTarget {
                     description: topLevelNode.description,
                     totalLeaves: total,
                     completedLeaves: completed,
-                    isComplete: completed >= total, // >= just in case of weird sync states
+                    isComplete: completed >= total,
                     path: topLevelNode.name
                 });
             }
         });
-        
         return modules.sort((a,b) => b.isComplete === a.isComplete ? 0 : (b.isComplete ? 1 : -1));
     }
 }
