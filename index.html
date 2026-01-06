@@ -1,152 +1,57 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arbor Studio | Academic CMS</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <meta charset="utf-8">
+  <title>Arbor Academy</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Nunito', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  
+  <!-- D3.js -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <style>
+    body {
+      font-family: 'Nunito', sans-serif;
+      overflow: hidden; 
+      user-select: none;
+    }
     
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        mono: ['JetBrains Mono', 'monospace'],
-                    },
-                    colors: {
-                        studio: {
-                            50: '#f8fafc',
-                            100: '#f1f5f9',
-                            500: '#64748b',
-                            800: '#1e293b',
-                            900: '#0f172a',
-                        },
-                        brand: {
-                            500: '#3b82f6', // Azul Studio
-                            600: '#2563eb'
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-    <style>
-        body { font-family: 'Inter', sans-serif; overflow: hidden; }
-        .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
-        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
-        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-        .custom-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        
-        .cm-editor { font-family: 'JetBrains Mono', monospace; }
-        
-        .prose h1 { font-size: 2em; font-weight: 800; margin: 0.8em 0 0.5em 0; color: #1e293b; line-height: 1.2; }
-        .prose h2 { font-size: 1.5em; font-weight: 700; margin: 1.5em 0 0.8em 0; color: #334155; line-height: 1.3; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3em; }
-        .prose h3 { font-size: 1.25em; font-weight: 600; margin: 1.2em 0 0.5em 0; color: #475569; }
-        .prose p { margin-bottom: 1.2em; line-height: 1.7; color: #334155; font-size: 1.05rem; }
-        .prose ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 1.5em; color: #334155; }
-        .prose li { margin-bottom: 0.4em; }
-        .prose strong { color: #0f172a; font-weight: 700; }
-        .prose em { color: #0f172a; font-style: italic; }
-        .prose blockquote { border-left: 4px solid #facc15; padding-left: 1.5em; color: #475569; font-style: italic; background: #fefce8; padding: 1.5em; border-radius: 0 0.75em 0.75em 0; margin: 2em 0; }
-        .prose img { max-width: 100%; border-radius: 0.75em; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); margin: 2em auto; display: block; }
-        .prose code { background-color: #f1f5f9; padding: 0.2em 0.4em; border-radius: 0.25em; font-family: 'JetBrains Mono', monospace; font-size: 0.875em; color: #0ea5e9; font-weight: 500; }
-        
-        #visual-editor { 
-            outline: none; 
-            min-height: 100%; /* Ajustado para crecer con el contenido */
-            padding-bottom: 50px; 
-        }
-        #visual-editor h1, #visual-editor h2, #visual-editor p, #visual-editor ul, #visual-editor li { cursor: text; }
-        
-        .paged-document {
-            background-color: white;
-            min-height: 1123px; /* Altura mínima A4 */
-            height: auto; /* Permite crecer infinitamente */
-            
-            /* Marca de página sutil (línea discontinua) cada 1123px */
-            background-image: linear-gradient(to bottom, transparent 1122px, #e2e8f0 1122px);
-            background-size: 100% 1123px; 
-            background-repeat: repeat-y; 
-            
-            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-            overflow: visible;
-        }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; }
+    
+    /* Animations */
+    .animate-in { animation: fadeIn 0.3s ease-in-out forwards; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    
+    .animate-slide-in { animation: slideIn 0.3s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
+    @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
 
-        .edit-block-wrapper {
-            user-select: none;
-            margin: 2rem 0;
-            transition: all 0.2s;
-            border: 1px dashed transparent;
-            position: relative;
-        }
-        .edit-block-wrapper:hover { border-color: #cbd5e1; }
-        .edit-block-wrapper .remove-btn {
-            display: none;
-            position: absolute;
-            top: -10px;
-            right: -10px;
-            background: #ef4444;
-            color: white;
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            font-size: 14px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            z-index: 10;
-        }
-        .edit-block-wrapper:hover .remove-btn { display: flex; }
-
-        .quiz-edit-card { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 0.75rem; padding: 1.5rem; }
-        .quiz-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; color: #166534; font-weight: bold; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; }
-        .quiz-input { width: 100%; padding: 0.5rem; border: 1px solid #dcfce7; border-radius: 0.375rem; margin-bottom: 0.5rem; font-size: 0.95rem; outline: none; focus:border-green-500 focus:ring-1 focus:ring-green-500; }
-        .option-row { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; }
-        .option-radio { width: 1.25rem; height: 1.25rem; accent-color: #16a34a; cursor: pointer; }
-        
-        .section-edit-card {
-            background: #eff6ff;
-            border-left: 4px solid #3b82f6;
-            padding: 1rem;
-            border-radius: 0 0.5rem 0.5rem 0;
-            display: flex; align-items: center; gap: 1rem;
-        }
-        .section-label { color: #1e40af; font-weight: bold; font-size: 0.75rem; text-transform: uppercase; }
-        .section-input { flex: 1; background: transparent; border: none; font-size: 1.25rem; font-weight: 700; color: #1e293b; outline: none; border-bottom: 2px solid transparent; }
-        .section-input:focus { border-bottom-color: #3b82f6; }
-
-        .media-edit-card {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 0.5rem;
-            padding: 1rem;
-            display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
-        }
-        .media-preview { max-height: 200px; max-width: 100%; border-radius: 0.375rem; object-fit: contain; }
-        .media-input-row { display: flex; width: 100%; gap: 0.5rem; }
-        .media-url-input { flex: 1; padding: 0.375rem; border: 1px solid #cbd5e1; rounded: 0.25rem; font-size: 0.8rem; color: #64748b; }
-
-        .tree-item .tree-actions { display: none; }
-        .tree-item:hover .tree-actions { display: flex; }
-        .tree-item.selected { background-color: #1e293b; color: white; border-left-color: #3b82f6; }
-        .tree-item.selected .material-icons-round.folder-icon { color: #60a5fa; }
-        
-        .emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 0.5rem; }
-        .emoji-btn { 
-            font-size: 1.5rem; 
-            padding: 0.5rem; 
-            border-radius: 0.5rem; 
-            cursor: pointer; 
-            transition: all 0.2s; 
-            display: flex; align-items: center; justify-content: center;
-        }
-        .emoji-btn:hover { background: #e2e8f0; transform: scale(1.1); }
-    </style>
+    /* Web Component loading helper */
+    :not(:defined) { display: none; }
+  </style>
 <script type="importmap">
 {
   "imports": {
@@ -156,339 +61,48 @@
     "rxjs/webSocket": "https://esm.sh/rxjs@^7.8.2/webSocket?conditions=es2015",
     "rxjs/testing": "https://esm.sh/rxjs@^7.8.2/testing?conditions=es2015",
     "rxjs/fetch": "https://esm.sh/rxjs@^7.8.2/fetch?conditions=es2015",
-    "octokit": "https://esm.sh/octokit@^5.0.5?external=rxjs"
+    "@angular/compiler": "https://esm.sh/@angular/compiler@^21.0.6?external=rxjs",
+    "@angular/platform-browser": "https://esm.sh/@angular/platform-browser@^21.0.6?external=rxjs",
+    "@angular/core": "https://esm.sh/@angular/core@^21.0.6?external=rxjs",
+    "@angular/router": "https://esm.sh/@angular/router@^21.0.6?external=rxjs",
+    "@angular/common": "https://esm.sh/@angular/common@^21.0.6?external=rxjs",
+    "@angular/forms": "https://esm.sh/@angular/forms@^21.0.6?external=rxjs",
+    "vite": "https://esm.sh/vite@^7.3.0?external=rxjs",
+    "octokit": "https://esm.sh/octokit"
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
-<body class="bg-slate-50 text-slate-800 h-screen w-screen flex flex-col">
-
-    <!-- LOGIN / SETUP OVERLAY -->
-    <div id="login-overlay" class="fixed inset-0 z-50 bg-white flex flex-col items-center justify-center p-4 transition-opacity duration-300">
-        <div class="max-w-md w-full space-y-8 text-center">
-            <div class="flex justify-center">
-                <div class="w-20 h-20 bg-slate-900 text-white rounded-2xl flex items-center justify-center text-4xl shadow-xl">
-                    🌳
-                </div>
-            </div>
-            <div>
-                <h1 class="text-3xl font-black text-slate-900" data-i18n="app_title">Arbor Studio</h1>
-                <p class="mt-2 text-sm text-slate-500" data-i18n="app_subtitle">Decentralized Academic CMS</p>
-            </div>
-            
-            <div id="login-form-container" class="space-y-4">
-                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left text-sm text-blue-800">
-                    <p class="font-bold flex items-center gap-2">
-                        <span class="material-icons-round text-sm">vpn_key</span>
-                        <span data-i18n="login_header">Chancellor/Professor Access</span>
-                    </p>
-                    <p class="mt-1" data-i18n="login_desc">Enter your <strong>GitHub Personal Access Token</strong> (Classic) with <code>repo</code> and <code>workflow</code> scopes.</p>
-                </div>
-                <form id="login-form" class="space-y-4">
-                    <input type="password" id="github-token" placeholder="ghp_..." required
-                        class="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-slate-900 outline-none transition bg-slate-50 font-mono text-sm" />
-                    <button type="submit" 
-                        class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-lg transition shadow-lg flex items-center justify-center gap-2">
-                        <span data-i18n="login_btn">Enter Campus</span>
-                        <span class="material-icons-round text-sm">arrow_forward</span>
-                    </button>
-                </form>
-            </div>
-
-            <div id="wizard-container" class="hidden space-y-4 text-left bg-white border border-slate-200 p-6 rounded-xl shadow-lg animate-fade-in">
-                <h3 class="font-bold text-lg flex items-center gap-2">
-                    <span class="material-icons-round text-orange-500">build</span>
-                    Repo Health
-                </h3>
-                <ul id="health-checklist" class="space-y-2 text-sm"></ul>
-                <div id="wizard-actions" class="pt-4 hidden">
-                    <button id="btn-fix-repo" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg transition shadow flex items-center justify-center gap-2">
-                        <span class="material-icons-round">auto_fix_high</span>
-                        Initialize
-                    </button>
-                </div>
-                <p id="wizard-status" class="text-xs text-center text-slate-400 mt-2 italic"></p>
-            </div>
-        </div>
-    </div>
-
-    <!-- MAIN APP LAYOUT -->
-    <div id="app-ui" class="hidden flex-1 flex overflow-hidden">
+<body class="bg-[#f7f9fa] dark:bg-slate-950 text-slate-700 dark:text-slate-200 transition-colors duration-300">
+  
+  <div id="app" class="h-screen w-screen flex relative overflow-hidden">
+     <!-- Sidebar -->
+     <arbor-sidebar></arbor-sidebar>
+     
+     <main class="flex-1 relative flex flex-col h-full pt-16 md:pt-0">
+        <!-- Top Navigation -->
+        <arbor-breadcrumbs class="absolute top-16 md:top-0 left-0 right-0 h-16 md:h-20 z-20 pointer-events-none flex items-center px-4"></arbor-breadcrumbs>
         
-        <!-- SIDEBAR -->
-        <aside class="w-72 bg-slate-900 text-slate-300 flex flex-col border-r border-slate-800 shadow-xl z-20">
-            <!-- Header -->
-            <div class="p-4 border-b border-slate-800 flex items-center gap-3 bg-slate-950">
-                <div class="w-8 h-8 bg-gradient-to-br from-green-400 to-blue-500 rounded-lg flex items-center justify-center text-white font-bold text-xs">AS</div>
-                <div>
-                    <h2 class="font-bold text-white text-sm">Arbor Knowledge</h2>
-                    <p class="text-[10px] text-slate-500 uppercase tracking-wider" id="user-display" data-i18n="footer_guest">Guest</p>
-                </div>
-            </div>
-
-            <!-- Navigation Tabs -->
-            <div class="flex p-2 gap-1 border-b border-slate-800 bg-slate-900/50">
-                <button class="nav-tab flex-1 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 bg-slate-800 text-white shadow-sm" data-target="editor">
-                    <span class="material-icons-round text-[16px]">edit_note</span> <span data-i18n="tab_editor">Editor</span>
-                </button>
-                <button class="nav-tab flex-1 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 hover:bg-slate-800 hover:text-white transition-colors" data-target="governance">
-                    <span class="material-icons-round text-[16px]">school</span> <span data-i18n="tab_governance">Dean's Office</span>
-                </button>
-            </div>
-
-            <!-- TREE VIEW (Editor Mode) -->
-            <div id="sidebar-editor" class="flex-1 flex flex-col overflow-hidden">
-                <div class="p-2 border-b border-slate-800 flex justify-between items-center bg-slate-900">
-                    <span class="text-xs font-bold uppercase tracking-wider pl-2 text-slate-500" data-i18n="sidebar_syllabus">Syllabus</span>
-                    <div class="flex gap-1">
-                        <button id="btn-refresh" class="p-1 hover:text-white rounded hover:bg-slate-800" title="Refresh"><span class="material-icons-round text-sm">refresh</span></button>
-                        <button id="btn-new-folder" class="p-1 hover:text-white rounded hover:bg-slate-800" title="New Folder"><span class="material-icons-round text-sm">create_new_folder</span></button>
-                        <button id="btn-new-file" class="p-1 hover:text-white rounded hover:bg-slate-800" title="New Lesson"><span class="material-icons-round text-sm">note_add</span></button>
-                    </div>
-                </div>
-                <div id="file-tree" class="flex-1 overflow-y-auto custom-scroll p-2 space-y-0.5 text-sm select-none">
-                    <!-- Tree injected via JS -->
-                </div>
-                <div id="tree-footer" class="p-2 text-[10px] text-slate-500 border-t border-slate-800 bg-slate-950 truncate">
-                    Path: content/EN
-                </div>
-            </div>
-
-            <!-- GOVERNANCE MENU (Admin Mode) -->
-            <div id="sidebar-governance" class="hidden flex-1 flex flex-col p-2 space-y-1">
-                <button class="gov-tab w-full text-left px-4 py-3 rounded flex items-center gap-3 hover:bg-slate-800 text-slate-300 bg-slate-800 font-bold text-sm border-l-2 border-blue-500" data-view="prs">
-                    <span class="material-icons-round text-orange-400">rate_review</span>
-                    <span data-i18n="tab_prs">Requests (PRs)</span>
-                </button>
-                <button class="gov-tab w-full text-left px-4 py-3 rounded flex items-center gap-3 hover:bg-slate-800 text-slate-400 font-medium text-sm hover:text-white border-l-2 border-transparent" data-view="collabs">
-                    <span class="material-icons-round text-purple-400">group</span>
-                    <span data-i18n="tab_collabs">Faculty (Users)</span>
-                </button>
-                <button class="gov-tab w-full text-left px-4 py-3 rounded flex items-center gap-3 hover:bg-slate-800 text-slate-400 font-medium text-sm hover:text-white border-l-2 border-transparent" data-view="permissions">
-                    <span class="material-icons-round text-blue-400">lock</span>
-                    <span data-i18n="tab_perms">Permissions</span>
-                </button>
-            </div>
-
-            <!-- Footer -->
-            <div class="p-3 border-t border-slate-800 bg-slate-950 flex justify-between items-center text-xs">
-                <span id="repo-status" class="flex items-center gap-1 text-green-500" data-i18n="footer_connected">● Connected</span>
-                <div class="flex gap-2">
-                     <button id="btn-lang-toggle" class="hover:text-white font-bold text-slate-500">EN</button>
-                     <button id="btn-logout" class="hover:text-white" data-i18n="footer_logout">Logout</button>
-                </div>
-            </div>
-        </aside>
-
-        <!-- MAIN CONTENT AREA -->
-        <main class="flex-1 flex flex-col bg-slate-200 relative overflow-hidden">
-            
-            <!-- EDITOR VIEW (Arbor UI Style) -->
-            <div id="view-editor" class="absolute inset-0 flex flex-col">
-                
-                <!-- 1. Header (Actions) -->
-                <div class="h-16 bg-white border-b border-slate-300 flex items-center justify-between px-4 md:px-8 shadow-sm z-20 flex-shrink-0">
-                    <div class="flex items-center gap-4 min-w-0">
-                        <div class="min-w-0">
-                            <h2 id="header-node-name" class="font-black text-lg text-slate-800 leading-none flex items-center gap-2 truncate" data-i18n="header_select">
-                                Select a file
-                            </h2>
-                            <p id="header-node-path" class="text-xs text-slate-500 font-mono mt-1 opacity-70 truncate">...</p>
-                        </div>
-                    </div>
-
-                    <div class="flex items-center gap-3 flex-shrink-0">
-                        <span id="save-indicator" class="text-xs font-bold text-slate-400 mr-2 opacity-0 transition-opacity hidden md:inline" data-i18n="btn_saved">Saved</span>
-                        
-                        <button id="btn-save" class="px-6 py-2.5 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-lg shadow-lg shadow-orange-600/20 transform active:scale-95 transition-all uppercase tracking-wide text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                            <span class="material-icons-round text-sm">save</span> 
-                            <span class="hidden md:inline" data-i18n="btn_publish">PUBLISH</span>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- 1.5 METADATA PANEL (CMS Features) -->
-                <div id="metadata-panel" class="bg-slate-50 border-b border-slate-200 px-4 md:px-8 py-4 grid grid-cols-12 gap-4 flex-shrink-0 disabled-overlay">
-                    <div class="col-span-2 md:col-span-1 relative group">
-                        <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1" data-i18n="meta_icon">Icon</label>
-                        <input type="text" id="meta-icon" readonly class="w-full text-center text-2xl bg-white border border-slate-300 rounded-lg py-2 cursor-pointer hover:bg-blue-50 focus:ring-2 focus:ring-blue-500 outline-none transition-colors" placeholder="📄">
-                        <div class="absolute inset-0 top-6 flex items-center justify-center pointer-events-none opacity-0 group-hover:opacity-100">
-                             <span class="material-icons-round text-slate-400 text-xs">edit</span>
-                        </div>
-                    </div>
-                    <div class="col-span-10 md:col-span-7">
-                        <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1" data-i18n="meta_title">Lesson Title</label>
-                        <input type="text" id="meta-title" class="w-full font-bold text-lg bg-white border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ex: Intro to Biology" data-i18n="meta_title">
-                    </div>
-                    <div class="col-span-6 md:col-span-2">
-                         <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1" data-i18n="meta_order">Order</label>
-                         <input type="number" id="meta-order" class="w-full font-mono text-sm bg-white border border-slate-300 rounded-lg px-3 py-3 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="1">
-                    </div>
-                     <div class="col-span-6 md:col-span-2 flex items-end">
-                        <button id="btn-exam-toggle" class="w-full py-3 px-3 rounded-lg border-2 border-slate-200 bg-white text-slate-400 font-bold text-xs text-center select-none uppercase tracking-wider flex items-center justify-center gap-1 transition-all hover:bg-slate-50">
-                           <span>🌱</span> <span data-i18n="label_lesson">LESSON</span>
-                        </button>
-                    </div>
-                    <div class="col-span-12">
-                        <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1" data-i18n="meta_desc">Brief Description</label>
-                        <input type="text" id="meta-desc" class="w-full text-sm bg-white border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="..." data-i18n="meta_desc">
-                    </div>
-                </div>
-
-                <!-- 2. Formatting Toolbar -->
-                <div id="toolbar" class="bg-white border-b border-slate-200 px-4 md:px-8 py-2 flex items-center gap-2 overflow-x-auto disabled-overlay flex-shrink-0 sticky top-0 z-30">
-                    <div class="flex items-center gap-1 border-r border-slate-200 pr-2 mr-1 flex-shrink-0">
-                        <button class="tool-btn font-serif font-black text-xl w-9 h-9 rounded hover:bg-slate-100 text-slate-700" data-cmd="bold" title="Bold">B</button>
-                        <button class="tool-btn italic font-serif text-xl w-9 h-9 rounded hover:bg-slate-100 text-slate-700" data-cmd="italic" title="Italic">I</button>
-                    </div>
-                    <div class="flex items-center gap-1 border-r border-slate-200 pr-2 mr-1 flex-shrink-0">
-                        <button class="tool-btn font-bold text-lg w-9 h-9 rounded hover:bg-slate-100 text-slate-700" data-cmd="formatBlock" data-val="H1" title="H1">H1</button>
-                        <button class="tool-btn font-bold text-sm w-9 h-9 rounded hover:bg-slate-100 text-slate-700" data-cmd="formatBlock" data-val="H2" title="H2">H2</button>
-                        <button class="tool-btn flex items-center justify-center w-9 h-9 rounded hover:bg-slate-100 text-slate-700" data-cmd="insertUnorderedList" title="List">
-                            <span class="material-icons-round text-lg">format_list_bulleted</span>
-                        </button>
-                    </div>
-                    <div class="flex items-center gap-2 flex-shrink-0">
-                        <button class="tool-btn flex items-center gap-2 px-3 py-1.5 rounded-full hover:bg-blue-50 text-xs font-bold text-blue-600 border border-blue-100 transition-colors" data-action="insert-media" data-type="image">
-                            <span>📷</span> Img
-                        </button>
-                        <button class="tool-btn flex items-center gap-2 px-3 py-1.5 rounded-full hover:bg-blue-50 text-xs font-bold text-blue-600 border border-blue-100 transition-colors" data-action="insert-media" data-type="video">
-                            <span>🎥</span> Vid
-                        </button>
-                        <button class="tool-btn flex items-center gap-2 px-3 py-1.5 rounded-full hover:bg-blue-50 text-xs font-bold text-blue-600 border border-blue-100 transition-colors" data-action="insert-media" data-type="audio">
-                            <span>🎵</span> Aud
-                        </button>
-                    </div>
-                    <div class="w-px h-6 bg-slate-200 mx-1 flex-shrink-0"></div>
-                    <div class="flex items-center gap-2 flex-shrink-0">
-                        <button class="tool-btn flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-50 hover:bg-green-100 text-xs font-bold text-green-700 border border-green-200 transition-colors" data-action="insert-quiz">
-                            <span>❓</span> Quiz
-                        </button>
-                        <button class="tool-btn flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700 border border-slate-200 transition-colors" data-action="insert-section">
-                            <span>📑</span> Sect
-                        </button>
-                    </div>
-                </div>
-
-                <!-- 3. Main Document Area -->
-                <div class="flex-1 overflow-y-auto p-4 md:p-8 flex justify-center custom-scroll bg-slate-200" id="scroll-container">
-                    <div class="w-full max-w-4xl md:my-4 p-8 md:p-16 relative transition-all duration-300 pb-32 paged-document">
-                        <div id="editor-empty" class="absolute inset-0 flex flex-col items-center justify-center text-slate-300 bg-white/80 z-10 pointer-events-none">
-                            <span class="material-icons-round text-6xl mb-2">edit_note</span>
-                            <p data-i18n="editor_empty">Select a lesson to edit</p>
-                        </div>
-                        <div id="visual-editor" 
-                             contenteditable="true" 
-                             class="prose prose-lg prose-slate max-w-none outline-none hidden"
-                             spellcheck="false">
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- GOVERNANCE VIEW CONTAINER -->
-            <div id="view-governance" class="absolute inset-0 bg-slate-100 p-8 hidden flex flex-col overflow-y-auto">
-                <div class="max-w-5xl mx-auto w-full">
-                    <div class="flex items-center justify-between mb-2">
-                        <h1 class="text-3xl font-black text-slate-900" data-i18n="gov_title">Digital Dean's Office</h1>
-                        <button id="btn-refresh-gov" class="p-2 bg-white rounded-full shadow-sm hover:shadow text-slate-500"><span class="material-icons-round">refresh</span></button>
-                    </div>
-                    
-                    <!-- PANEL: PULL REQUESTS -->
-                    <div id="panel-prs" class="gov-panel space-y-6">
-                        <p class="text-slate-500 mb-4" data-i18n="gov_subtitle_prs">Review and approve changes.</p>
-                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden min-h-[200px]">
-                            <table class="w-full text-sm text-left">
-                                <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
-                                    <tr>
-                                        <th class="px-6 py-3" data-i18n="th_change">Change (PR)</th>
-                                        <th class="px-6 py-3" data-i18n="th_prof">Professor</th>
-                                        <th class="px-6 py-3" data-i18n="th_status">Status</th>
-                                        <th class="px-6 py-3 text-right" data-i18n="th_action">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="table-prs" class="divide-y divide-slate-100"></tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- PANEL: COLLABORATORS -->
-                    <div id="panel-collabs" class="gov-panel space-y-6 hidden">
-                        <p class="text-slate-500 mb-4" data-i18n="gov_subtitle_collabs">Manage write access.</p>
-                        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex gap-2 items-center mb-6">
-                            <span class="material-icons-round text-slate-400">person_add</span>
-                            <input type="text" id="invite-user-input" placeholder="GitHub username" class="flex-1 outline-none bg-transparent text-sm">
-                            <button id="btn-invite-user" class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-800" data-i18n="btn_invite">Invite Professor</button>
-                        </div>
-                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                            <table class="w-full text-sm text-left">
-                                <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
-                                    <tr>
-                                        <th class="px-6 py-3" data-i18n="th_user">User</th>
-                                        <th class="px-6 py-3" data-i18n="th_perm">Permission</th>
-                                        <th class="px-6 py-3 text-right" data-i18n="th_action">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="table-collabs" class="divide-y divide-slate-100"></tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- PANEL: PERMISSIONS -->
-                    <div id="panel-permissions" class="gov-panel space-y-6 hidden">
-                        <p class="text-slate-500 mb-4" data-i18n="gov_subtitle_perms">Define responsibilities.</p>
-                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                            <div class="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-                                <h3 class="font-bold text-slate-700">CODEOWNERS</h3>
-                                <button id="btn-save-governance" class="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-800 disabled:opacity-50" data-i18n="btn_save_gov">Save Changes</button>
-                            </div>
-                            <table class="w-full text-sm text-left">
-                                <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
-                                    <tr>
-                                        <th class="px-6 py-3" data-i18n="th_path">Path (Folder)</th>
-                                        <th class="px-6 py-3" data-i18n="th_owner">Owner (GitHub User)</th>
-                                        <th class="px-6 py-3 text-right" data-i18n="th_action">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="governance-table-body" class="divide-y divide-slate-100"></tbody>
-                                <tfoot class="bg-slate-50">
-                                    <tr>
-                                        <td class="px-6 py-3">
-                                            <input type="text" id="new-gov-path" placeholder="/content/EN/Science/" class="w-full bg-white border border-slate-300 rounded px-2 py-1">
-                                        </td>
-                                        <td class="px-6 py-3">
-                                            <input type="text" id="new-gov-user" placeholder="@username" class="w-full bg-white border border-slate-300 rounded px-2 py-1">
-                                        </td>
-                                        <td class="px-6 py-3 text-right">
-                                            <button id="btn-add-gov" class="text-blue-600 font-bold hover:underline">Add</button>
-                                        </td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-        </main>
-    </div>
-
-    <!-- EMOJI PICKER MODAL -->
-    <div id="emoji-picker-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/30 opacity-0 pointer-events-none transition-opacity duration-200 backdrop-blur-sm">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform scale-95 transition-transform duration-200" id="emoji-picker-panel">
-            <div class="bg-slate-50 p-3 border-b border-slate-200 flex justify-between items-center">
-                <h3 class="font-bold text-sm text-slate-700">Select Icon</h3>
-                <button id="close-emoji-picker" class="text-slate-400 hover:text-red-500"><span class="material-icons-round">close</span></button>
-            </div>
-            <div class="p-4">
-                <div class="flex gap-2 overflow-x-auto pb-2 mb-2 custom-scroll" id="emoji-tabs"></div>
-                <div class="h-64 overflow-y-auto custom-scroll p-1" id="emoji-grid-container"></div>
-            </div>
+        <!-- Graph Area -->
+        <div class="w-full h-full absolute inset-0 z-10">
+            <arbor-graph></arbor-graph>
         </div>
-    </div>
+     </main>
+     
+     <!-- Content Panel (Slide over) -->
+     <arbor-content></arbor-content>
+     
+     <!-- Modals Container (Tutorial, Certificates, Sources) -->
+     <arbor-modals></arbor-modals>
+     
+     <!-- Editor Modal -->
+     <arbor-editor></arbor-editor>
 
-    <script type="module" src="app.js"></script>
-<script type="module" src="/index.tsx"></script>
+     <!-- Progress Widget (Top Right) -->
+     <arbor-progress-widget></arbor-progress-widget>
+  </div>
+
+  <!-- Entry Point -->
+  <script type="module" src="./src/main.js"></script>
 </body>
 </html>
