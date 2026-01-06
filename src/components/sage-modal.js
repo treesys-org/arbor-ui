@@ -58,6 +58,7 @@ class ArborSage extends HTMLElement {
     close() {
         this.isVisible = false;
         this.innerHTML = '';
+        this.className = ''; // IMPORTANT: Clear backdrop/position classes
         // Explicitly clear global state on close
         store.setModal(null);
     }
@@ -92,6 +93,7 @@ class ArborSage extends HTMLElement {
     render() {
         if (!this.isVisible) {
             this.innerHTML = '';
+            this.className = '';
             return;
         }
 
