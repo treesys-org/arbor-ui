@@ -105,8 +105,14 @@ class ArborEditor extends HTMLElement {
 
     generateFinalMarkdown() {
         let md = '';
-        // 1. Metadata from inputs
-        md += `@title: ${this.querySelector('#editor-title').value.trim()}\n`;
+        const editorEl = this.querySelector('#wysiwyg-editor');
+        
+        // 1. Extract Title from the first H1 in the editor
+        const mainTitleEl = editorEl.querySelector('h1');
+        const mainTitle = mainTitleEl?.textContent.trim() || 'Untitled';
+
+        // 2. Generate Metadata
+        md += `@title: ${mainTitle}\n`;
         md += `@icon: ${this.querySelector('#btn-emoji').textContent.trim()}\n`;
         md += `@description: ${this.querySelector('#editor-description').value.trim()}\n`;
         md += `@order: ${this.querySelector('#editor-order').value.trim()}\n`;
@@ -118,12 +124,17 @@ class ArborEditor extends HTMLElement {
         });
         md += `\n`;
 
-        // 2. Body from visual editor blocks
-        const editorEl = this.querySelector('#wysiwyg-editor');
+        // 3. Body from visual editor blocks, skipping the first H1
+        let titleProcessed = false;
         editorEl.childNodes.forEach(node => {
             if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) {
                 md += node.textContent + '\n\n';
             } else if (node.nodeType === Node.ELEMENT_NODE) {
+                if (node.tagName === 'H1' && !titleProcessed) {
+                    titleProcessed = true; // Skip the main title
+                    return;
+                }
+
                 if (node.tagName === 'H1') md += `# ${node.textContent}\n\n`;
                 else if (node.tagName === 'H2') md += `## ${node.textContent}\n\n`;
                 else if (node.tagName === 'P' && node.innerHTML.trim() && node.innerHTML !== '<br>') {
@@ -132,6 +143,12 @@ class ArborEditor extends HTMLElement {
                 } else if (node.classList?.contains('image-block')) {
                     const src = node.querySelector('img')?.src;
                     if (src) md += `@image: ${src}\n\n`;
+                } else if (node.classList?.contains('video-block')) {
+                    const src = node.querySelector('.url-input')?.value.trim();
+                    if (src) md += `@video: ${src}\n\n`;
+                } else if (node.classList?.contains('audio-block')) {
+                    const src = node.querySelector('.url-input')?.value.trim();
+                    if (src) md += `@audio: ${src}\n\n`;
                 } else if (node.classList?.contains('quiz-block')) {
                     const question = node.querySelector('.quiz-question-input')?.value.trim();
                     if(question) {
@@ -169,6 +186,9 @@ class ArborEditor extends HTMLElement {
         this.innerHTML = `
         <style>
             #wysiwyg-editor:focus { outline: none; }
+            #wysiwyg-editor h1 { font-size: 2.5em; font-weight: 900; line-height: 1.2; margin-bottom: 1rem; }
+            #wysiwyg-editor h2 { font-size: 1.75em; font-weight: 800; line-height: 1.3; margin-top: 2em; margin-bottom: 0.75rem; }
+            #wysiwyg-editor p { margin-bottom: 1em; line-height: 1.6; }
             .arbor-block {
                 padding: 1rem;
                 margin: 1.5rem 0;
@@ -209,19 +229,15 @@ class ArborEditor extends HTMLElement {
                     </div>
                     <!-- Metadata Fields -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-slate-100 dark:border-slate-800 pt-4">
-                        <div class="flex items-start gap-3">
+                        <div class="flex items-start gap-3 col-span-1 md:col-span-2">
                             <div class="relative group">
                                 <button id="btn-emoji" class="w-14 h-14 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-sky-500 text-3xl flex items-center justify-center transition-colors">${this.meta.icon}</button>
                                 <div class="absolute top-16 left-0 w-64 bg-white dark:bg-slate-800 shadow-2xl rounded-xl border border-slate-200 dark:border-slate-700 p-3 grid grid-cols-5 gap-2 hidden group-hover:grid z-50">${this.emojis.map(e => `<button class="btn-emoji-opt w-10 h-10 flex items-center justify-center text-xl hover:bg-slate-100 dark:hover:bg-slate-700 rounded" data-emoji="${e}">${e}</button>`).join('')}</div>
                             </div>
                             <div class="flex-1">
-                                <label class="text-xs font-bold text-slate-400">${ui.lessonTopics}</label>
-                                <input id="editor-title" type="text" class="w-full bg-transparent text-lg font-black text-slate-800 dark:text-white outline-none" value="${this.meta.title}">
+                                <label class="text-xs font-bold text-slate-400">${ui.appSubtitle}</label>
+                                <input id="editor-description" type="text" class="w-full bg-transparent text-sm font-medium text-slate-600 dark:text-slate-300 outline-none" value="${this.meta.description}" placeholder="${ui.noDescription}">
                             </div>
-                        </div>
-                        <div>
-                            <label class="text-xs font-bold text-slate-400">${ui.appSubtitle}</label>
-                            <input id="editor-description" type="text" class="w-full bg-transparent text-sm font-medium text-slate-600 dark:text-slate-300 outline-none" value="${this.meta.description}" placeholder="${ui.noDescription}">
                         </div>
                         <div class="flex items-center gap-4 col-span-1 md:col-span-2">
                             <div>
@@ -250,11 +266,13 @@ class ArborEditor extends HTMLElement {
                          <button class="tb-btn p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 font-bold text-xs" data-cmd="formatBlock" data-val="h2">H2</button>
                          <div class="w-full h-px bg-slate-200 dark:bg-slate-700"></div>
                          <button id="btn-add-img" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700">🖼️</button>
+                         <button id="btn-add-vid" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700">🎥</button>
+                         <button id="btn-add-aud" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700">🎵</button>
                          <button id="btn-add-quiz" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700">❓</button>
                     </div>
                     
                     <div class="flex-1 overflow-y-auto bg-slate-100 dark:bg-slate-800/50 p-4 md:p-8 custom-scrollbar">
-                        <div id="wysiwyg-editor" class="max-w-3xl mx-auto min-h-full bg-white dark:bg-slate-900 shadow-lg rounded-xl p-8 md:p-12 outline-none prose prose-slate dark:prose-invert prose-lg" contenteditable="true">
+                        <div id="wysiwyg-editor" class="max-w-3xl mx-auto min-h-full bg-white dark:bg-slate-900 shadow-lg rounded-xl p-8 md:p-12 outline-none prose-slate dark:prose-invert" contenteditable="true" spellcheck="false">
                             ${this.bodyToHtml(this.bodyContent)}
                         </div>
                     </div>
@@ -278,8 +296,10 @@ class ArborEditor extends HTMLElement {
     }
 
     bodyToHtml(md) {
+        // Start with the main title from metadata as the first H1
+        let html = `<h1>${this.meta.title}</h1>`;
+        
         const lines = md.split('\n');
-        let html = '';
         let currentQuiz = null;
 
         const closeQuiz = () => {
@@ -314,8 +334,21 @@ class ArborEditor extends HTMLElement {
                 html += `<div class="arbor-block image-block" contenteditable="false">
                     <img src="${t.substring(7).trim()}" class="w-full rounded-lg shadow">
                 </div>`;
+            } else if (t.startsWith('@video:')) {
+                closeQuiz();
+                html += `<div class="arbor-block video-block" contenteditable="false">
+                    <h4 class="font-bold text-sky-700 dark:text-sky-300 uppercase text-xs mb-2">Video</h4>
+                    <input type="text" placeholder="URL (https://...)" class="url-input" value="${t.substring(7).trim()}">
+                </div>`;
+            } else if (t.startsWith('@audio:')) {
+                closeQuiz();
+                html += `<div class="arbor-block audio-block" contenteditable="false">
+                    <h4 class="font-bold text-purple-700 dark:text-purple-300 uppercase text-xs mb-2">Audio</h4>
+                    <input type="text" placeholder="URL (https://...)" class="url-input" value="${t.substring(7).trim()}">
+                </div>`;
             } else if (t.startsWith('# ')) {
-                closeQuiz(); html += `<h1>${t.substring(2)}</h1>`;
+                // Ignore H1 from body, as it's handled by the main title
+                // html += `<h1>${t.substring(2)}</h1>`;
             } else if (t.startsWith('## ')) {
                 closeQuiz(); html += `<h2>${t.substring(3)}</h2>`;
             } else if (t.trim()) {
@@ -345,8 +378,10 @@ class ArborEditor extends HTMLElement {
         });
 
         // Insert blocks
-        this.querySelector('#btn-add-quiz').onclick = (e) => { e.preventDefault(); this.insertBlock('quiz'); };
         this.querySelector('#btn-add-img').onclick = (e) => { e.preventDefault(); this.querySelector('#image-upload').click(); };
+        this.querySelector('#btn-add-vid').onclick = (e) => { e.preventDefault(); this.insertBlock('video'); };
+        this.querySelector('#btn-add-aud').onclick = (e) => { e.preventDefault(); this.insertBlock('audio'); };
+        this.querySelector('#btn-add-quiz').onclick = (e) => { e.preventDefault(); this.insertBlock('quiz'); };
         
         // Image upload handling
         this.querySelector('#image-upload').onchange = (e) => this.handleImageUpload(e);
@@ -386,6 +421,16 @@ class ArborEditor extends HTMLElement {
                     <div class="option-item flex items-center gap-3" data-type="option"><span class="w-8 h-8 rounded-full flex items-center justify-center text-lg bg-red-50 text-red-400">✖</span><input type="text" class="flex-1" placeholder="Respuesta Incorrecta"></div>
                 </div>
             </div><p><br></p>`;
+        } else if (type === 'video') {
+            blockHtml = `<div class="arbor-block video-block" contenteditable="false">
+                <h4 class="font-bold text-sky-700 dark:text-sky-300 uppercase text-xs mb-2">Video</h4>
+                <input type="text" placeholder="URL (https://...)" class="url-input">
+            </div><p><br></p>`;
+        } else if (type === 'audio') {
+            blockHtml = `<div class="arbor-block audio-block" contenteditable="false">
+                <h4 class="font-bold text-purple-700 dark:text-purple-300 uppercase text-xs mb-2">Audio</h4>
+                <input type="text" placeholder="URL (https://...)" class="url-input">
+            </div><p><br></p>`;
         }
         document.execCommand('insertHTML', false, blockHtml);
     }
@@ -411,7 +456,7 @@ class ArborEditor extends HTMLElement {
 
     async submitChanges() {
         const ui = store.ui;
-        const msg = this.querySelector('#commit-msg').value.trim() || `Update ${this.querySelector('#editor-title').value.trim()}`;
+        const msg = this.querySelector('#commit-msg').value.trim() || `Update ${this.querySelector('#wysiwyg-editor h1')?.textContent.trim() || 'content'}`;
         const btn = this.querySelector('#btn-commit-confirm');
         
         btn.disabled = true;
