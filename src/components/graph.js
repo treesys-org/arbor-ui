@@ -1,4 +1,5 @@
 
+
 import { store } from '../store.js';
 
 class ArborGraph extends HTMLElement {
@@ -12,7 +13,6 @@ class ArborGraph extends HTMLElement {
         this.duration = 600; 
         // Cache to store where nodes are, so we can animate FROM there or TO there
         this.nodePositions = new Map();
-        this.activePathIds = new Set();
     }
 
     connectedCallback() {
@@ -58,8 +58,7 @@ class ArborGraph extends HTMLElement {
                 this.height = container.clientHeight;
                 if(this.svg) {
                     this.svg.attr("viewBox", [0, 0, this.width, this.height]);
-                    // Extent updates happen inside updateGraph now
-                    this.drawGround();
+                    this.drawGround(); // Redraw ground on resize to cover new width
                     this.updateGraph();
                 }
             }
@@ -159,10 +158,6 @@ class ArborGraph extends HTMLElement {
 
         this.g = this.svg.append("g");
         this.groundGroup = this.g.append("g").attr("class", "ground");
-        
-        // New: Separator Lines Layer (Behind links)
-        this.separatorGroup = this.g.append("g").attr("class", "separators");
-        
         this.linkGroup = this.g.append("g").attr("class", "links");
         this.nodeGroup = this.g.append("g").attr("class", "nodes");
 
@@ -177,7 +172,7 @@ class ArborGraph extends HTMLElement {
         this.svg.call(this.zoom).on("dblclick.zoom", null);
         
         // Initial generic extent, updated later in updateGraph
-        this.zoom.translateExtent([[-4000, -4000], [4000, 4000]]);
+        this.zoom.translateExtent([[-5000, -5000], [5000, 5000]]);
 
         this.resetZoom(0);
         
@@ -186,10 +181,14 @@ class ArborGraph extends HTMLElement {
     
     resetZoom(duration = 750) {
         if (!this.svg || !this.zoom) return;
-        const k = 0.85;
-        const tx = (this.width / 2) * (1 - k); 
-        const ty = (this.height * 0.85) - (this.height - 100) * k;
         
+        const isMobile = this.width < 768;
+        const k = isMobile ? 0.6 : 0.85; // Un poco más lejos en móvil para ver el contexto horizontal
+        
+        // Focus on bottom center (Root position)
+        const tx = (this.width / 2) * (1 - k); 
+        const ty = (this.height - 50) - (this.height * k); 
+
         this.svg.transition().duration(duration)
             .call(this.zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(k));
     }
@@ -200,11 +199,13 @@ class ArborGraph extends HTMLElement {
         const color = theme === 'dark' ? '#1e293b' : '#22c55e';
         const backColor = theme === 'dark' ? '#0f172a' : '#4ade80';
 
+        // Make the ground VERY wide to support horizontal scrolling of large trees
         const cx = this.width / 2;
         const groundY = this.height;
-        const groundWidth = Math.max(this.width * 1.5, 3000); 
+        const groundWidth = 10000; // Large enough to cover horizontal expansion
         const groundDepth = 4000;
 
+        // Bottom-Up Ground (Standard for both Mobile & Desktop)
         this.groundGroup.append("path")
             .attr("d", `M${cx - groundWidth},${groundY} 
                         C${cx - 500},${groundY - 180} ${cx + 500},${groundY - 60} ${cx + groundWidth},${groundY} 
@@ -221,95 +222,56 @@ class ArborGraph extends HTMLElement {
             .attr("fill", color);
     }
 
-    // --- HORIZONTAL CAROUSEL LAYOUT ---
-    calculateMobileLayout(root) {
-        const centerX = this.width / 2;
-        const parentY = 140; 
-        const childrenY = 320; 
-        const childSpacing = 160; 
-
-        // 1. Identify "Active Parent" (Deepest Expanded Node)
-        // In this mode, we focus on the node that has its children exposed.
-        let activeParent = root;
-        while(activeParent.children && activeParent.children.some(c => c.data.expanded)) {
-            // Traverse down to the open node
-            const expandedChild = activeParent.children.find(c => c.data.expanded);
-            if(expandedChild) activeParent = expandedChild;
-            else break;
-        }
-
-        // 2. Position Active Parent (Top Center)
-        activeParent.x = centerX;
-        activeParent.y = parentY;
-        activeParent.isActiveParent = true;
-
-        // 3. Position Ancestors (Fade out above)
-        let curr = activeParent.parent;
-        let yOffset = parentY - 100;
-        while(curr) {
-            curr.x = centerX;
-            curr.y = yOffset;
-            curr.isAncestor = true;
-            yOffset -= 80;
-            curr = curr.parent;
-        }
-
-        // 4. Position Children (Horizontal Row)
-        if (activeParent.children) {
-            const children = activeParent.children;
-            const count = children.length;
-            const totalWidth = (count - 1) * childSpacing;
-            const startX = centerX - (totalWidth / 2);
-
-            children.forEach((child, i) => {
-                child.x = startX + (i * childSpacing);
-                child.y = childrenY;
-            });
-            
-            // Note: Grandchildren are hidden/collapsed by graph logic usually.
-            // If they are rendered, they would stack below, but logic ensures only one active branch.
-        }
-
-        // Ensure all nodes have coordinates to prevent NaNs
-        root.each(d => {
-            if (d.x === undefined) { d.x = centerX; d.y = parentY; }
-        });
-    }
-
     updateGraph() {
         if (!this.svg || !store.value.data) return;
 
         const isMobile = this.width < 768;
         const harvestedFruits = store.value.gamification.fruits;
 
+        // 1. Calculate Hierarchy
         const root = d3.hierarchy(store.value.data, d => d.expanded ? d.children : null);
         
-        // --- LAYOUT CALCULATION ---
-        if (isMobile) {
-            this.calculateMobileLayout(root);
-        } else {
-            // Desktop Fan
-            let leaves = 0;
-            root.each(d => { if (!d.children) leaves++; });
-            const dynamicWidth = Math.max(this.width, leaves * 160); 
+        // 2. Determine Dynamic Width based on visible Leaves
+        // This ensures the tree expands horizontally as much as needed
+        let leaves = 0;
+        root.each(d => { if (!d.children) leaves++; });
+        
+        // Mobile needs less gap, Desktop more
+        const nodeGap = isMobile ? 110 : 160; 
+        const treeWidth = Math.max(this.width, leaves * nodeGap);
 
-            const treeLayout = d3.tree().size([dynamicWidth, 1]);
-            treeLayout(root);
+        // 3. Compute Layout (Fan / Bottom-Up)
+        const treeLayout = d3.tree().size([treeWidth, 1]); // Height is handled manually
+        treeLayout(root);
 
-            const levelHeight = 200; 
-            root.descendants().forEach(d => {
-                d.y = (this.height - 150) - (d.depth * levelHeight);
-                d.side = 'center'; 
-                if (dynamicWidth < this.width) {
-                    d.x += (this.width - dynamicWidth) / 2;
-                }
-            });
-        }
+        // 4. Position Nodes (Invert Y for Bottom-Up)
+        const levelHeight = isMobile ? 180 : 200; 
+        const bottomOffset = 150;
+        
+        root.descendants().forEach(d => {
+            // Y: Grow upwards from bottom
+            d.y = (this.height - bottomOffset) - (d.depth * levelHeight);
+            
+            // X: If tree is narrower than screen, center it.
+            // If tree is wider, d3.tree uses 0..treeWidth, so it's aligned to left by default.
+            // We want to center the whole group relative to the screen center.
+            if (treeWidth < this.width) {
+                 d.x += (this.width - treeWidth) / 2;
+            } else {
+                 // Tree is wider than screen.
+                 // d.x ranges from 0 to treeWidth.
+                 // We shift it so the CENTER of the tree aligns with CENTER of screen roughly if zoomed out,
+                 // but mainly we just leave it in coordinate space relative to 0.
+                 // To make "Center" of tree be x=0 (for easier zooming logic), we can shift:
+                 d.x = d.x - (treeWidth / 2) + (this.width / 2);
+            }
+        });
 
         const nodes = root.descendants();
         const links = root.links();
 
-        // --- DYNAMIC BOUNDING BOX & CONSTRAINT ---
+        // --- DYNAMIC NAV RESTRICTION (No side navigation if empty) ---
+        // Calculate the Bounding Box of the *visible* nodes
         let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
         nodes.forEach(d => {
             if (d.x < minX) minX = d.x;
@@ -318,35 +280,29 @@ class ArborGraph extends HTMLElement {
             if (d.y > maxY) maxY = d.y;
         });
 
-        const padX = Math.max(this.width * 0.5, 300);
-        const padY = Math.max(this.height * 0.5, 400);
+        // Add padding to the constraints
+        const padX = isMobile ? 50 : 200;
+        const padYTop = 200;
+        const padYBot = 200;
 
+        // Apply strict translation extent to preventing panning into void
         if (this.zoom && nodes.length > 0) {
+            // Extent: [[x0, y0], [x1, y1]]
+            // We lock X to the tree width. We lock Y to allow some vertical movement but not infinite.
             this.zoom.translateExtent([
-                [minX - padX, minY - padY], 
-                [maxX + padX, maxY + padY]
+                [minX - padX, minY - padYTop], 
+                [maxX + padX, this.height + padYBot] 
             ]);
         }
 
-        // --- RENDER VISUALS ---
 
-        // Visual Guide Line for Carousel (Only Mobile)
-        const sepSelection = this.separatorGroup.selectAll(".guide-line").data(isMobile ? [1] : []);
-        sepSelection.enter().append("line")
-            .attr("class", "guide-line")
-            .attr("stroke", "#cbd5e1")
-            .attr("stroke-width", 2)
-            .attr("stroke-dasharray", "4,4")
-            .merge(sepSelection)
-            .attr("x1", minX - 100).attr("x2", maxX + 100)
-            .attr("y1", 320).attr("y2", 320)
-            .attr("opacity", 0.3);
-        sepSelection.exit().remove();
+        // --- RENDER VISUALS ---
 
         const findOrigin = (d) => {
             if (d.parent && this.nodePositions.has(d.parent.data.id)) {
                 return this.nodePositions.get(d.parent.data.id);
             }
+            // Grow from bottom-center if no parent cache
             return { x: this.width / 2, y: this.height };
         };
 
@@ -376,10 +332,11 @@ class ArborGraph extends HTMLElement {
             .on("click", (e, d) => this.handleNodeClick(e, d))
             .on("mousedown", (e) => e.stopPropagation());
 
+        // Hit Area (Larger for touch)
         nodeEnter.append("circle")
             .attr("r", isMobile ? 50 : 80)
             .attr("cy", d => d.data.type === 'leaf' || d.data.type === 'exam' ? (isMobile ? 0 : 30) : 0)
-            .attr("fill", "transparent"); // Hit area
+            .attr("fill", "transparent"); 
 
         nodeEnter.append("path")
             .attr("class", "node-body")
@@ -442,9 +399,7 @@ class ArborGraph extends HTMLElement {
             .attr("d", d => {
                 const isHarvested = harvestedFruits.find(f => f.id === d.data.id);
                 let r = d.data.type === 'root' ? 60 : (isHarvested ? 50 : 45); 
-                
-                // In mobile carousel, make ancestors slightly smaller
-                if (isMobile && d.isAncestor) r = r * 0.7;
+                if (isMobile) r = r * 0.9; // Slightly smaller on mobile
 
                 if (d.data.type === 'leaf') return "M0,0 C-35,15 -45,45 0,85 C45,45 35,15 0,0"; 
                 if (d.data.type === 'exam') return `M0,${-r*1.2} L${r*1.2},0 L0,${r*1.2} L${-r*1.2},0 Z`;
@@ -456,8 +411,7 @@ class ArborGraph extends HTMLElement {
                     return "url(#leaf-glow)";
                 }
                 return "url(#drop-shadow)";
-            })
-            .style("opacity", d => isMobile && d.isAncestor ? 0.6 : 1);
+            });
 
         nodeUpdate.select(".node-icon")
             .text(d => {
@@ -470,13 +424,8 @@ class ArborGraph extends HTMLElement {
         
         nodeMerged.select(".label-group")
             .attr("transform", d => {
-                if (isMobile) {
-                    return `translate(0, 45)`;
-                } else {
-                    return `translate(0, ${d.data.type === 'leaf' || d.data.type === 'exam' ? 65 : 55})`;
-                }
-            })
-            .style("opacity", d => isMobile && d.isAncestor ? 0 : 1);
+                return `translate(0, ${isMobile ? 55 : (d.data.type === 'leaf' || d.data.type === 'exam' ? 65 : 55)})`;
+            });
 
         nodeMerged.select(".label-text").attr("text-anchor", "middle");
 
@@ -494,8 +443,7 @@ class ArborGraph extends HTMLElement {
 
         nodeUpdate.select(".badge-group")
             .style("display", d => (d.data.type === 'leaf' || d.data.type === 'exam') ? 'none' : 'block')
-            .attr("transform", d => `translate(${isMobile ? 25 : 35}, -${isMobile ? 25 : 35})`)
-            .style("opacity", d => isMobile && d.isAncestor ? 0 : 1);
+            .attr("transform", d => `translate(${isMobile ? 25 : 35}, -${isMobile ? 25 : 35})`);
         
         nodeUpdate.select(".badge-group circle")
             .attr("fill", d => d.data.expanded ? "#ef4444" : "#22c55e");
@@ -548,8 +496,8 @@ class ArborGraph extends HTMLElement {
     diagonal(d) {
         const s = d.source;
         const t = d.target;
-        const midY = (s.y + t.y) / 2;
-        return `M ${s.x} ${s.y} C ${s.x} ${midY}, ${t.x} ${midY}, ${t.x} ${t.y}`;
+        // Standard vertical tree diagonal
+        return `M ${s.x} ${s.y} C ${s.x} ${(s.y + t.y) / 2}, ${t.x} ${(s.y + t.y) / 2}, ${t.x} ${t.y}`;
     }
 
     handleNodeClick(e, d) {
@@ -558,21 +506,40 @@ class ArborGraph extends HTMLElement {
         
         store.toggleNode(d.data.id);
         
-        // Auto-scroll logic for Desktop
-        if (this.width >= 768 && (d.data.type === 'branch' || d.data.type === 'root')) {
+        // Auto-scroll logic
+        if (d.data.type === 'branch' || d.data.type === 'root') {
              this.adjustCameraToActiveNode(d);
         }
-        // Mobile carousel auto-centers via updateGraph recalculations
     }
 
+    // Adjust camera to maintain context
     adjustCameraToActiveNode(d) {
         if (!this.svg || !this.zoom) return;
+        
+        // Use current transform
         const t = d3.zoomTransform(this.svg.node());
         const currentY = t.applyY(d.y);
-        let targetY = d.data.expanded ? this.height * 0.6 : this.height * 0.2;
+        const currentX = t.applyX(d.x);
+        
+        const isMobile = this.width < 768;
+        
+        // Target Y Position on screen
+        // Move clicked node to ~60% height (so children appear above/below comfortably)
+        // Since children appear UP, we want node relatively low (80%)
+        let targetY;
+        if (!d.data.expanded) {
+             targetY = this.height * 0.6; // Expanding -> Node moves down a bit to show children up
+        } else {
+             targetY = this.height * 0.8; // Collapsing -> Node moves lower
+        }
+        
+        const targetX = this.width / 2; // Always center horizontally
+
         const dy = targetY - currentY;
+        const dx = targetX - currentX;
+
         this.svg.transition().duration(this.duration + 200)
-            .call(this.zoom.transform, t.translate(0, dy / t.k));
+            .call(this.zoom.transform, t.translate(dx / t.k, dy / t.k));
     }
 
     focusNode(nodeId) {
@@ -583,7 +550,7 @@ class ArborGraph extends HTMLElement {
 
         if(target && this.zoom) {
              const transform = d3.zoomIdentity
-                .translate(this.width/2, this.height * 0.3)
+                .translate(this.width/2, this.height * 0.6) 
                 .scale(1.2)
                 .translate(-target.x, -target.y);
              

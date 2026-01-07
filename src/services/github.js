@@ -1,11 +1,11 @@
 
 import { Octokit } from "octokit";
+import { store } from "../store.js";
 
 class GitHubService {
     constructor() {
         this.octokit = null;
         this.currentUser = null;
-        this.activeUrl = null; // Store context locally to avoid circular dependency
     }
 
     async initialize(token) {
@@ -26,14 +26,9 @@ class GitHubService {
         this.currentUser = null;
     }
 
-    // Set the context manually from Store
-    setContext(url) {
-        this.activeUrl = url;
-    }
-
     // Helper to get owner/repo from current Source URL
     getRepositoryInfo() {
-        const url = this.activeUrl;
+        const url = store.value.activeSource?.url;
         if (!url) return null;
 
         try {
