@@ -1,4 +1,5 @@
 
+
 import { store } from '../store.js';
 import { parseContent } from '../utils/parser.js';
 
@@ -75,40 +76,69 @@ class ArborContent extends HTMLElement {
             state.currentIdx++;
         } else {
             state.finished = true;
-            // EXAM LOGIC: If this is an exam node and they passed (100% or close? Strict 100% for now)
-            if (this.currentNode.type === 'exam' && state.score === total) {
-                 this.handleExamPass();
-            }
+            // Logic is now moved to the UI render, this just triggers the re-render with the final state.
         }
         this.render();
     }
+    
+    _commitExamPass(showCertificate = false) {
+        const passedNode = this.currentNode;
+        if (!passedNode) return;
+
+        const parentModuleId = passedNode.parentId;
+        if (!parentModuleId) {
+            store.closeContent();
+            return;
+        }
+
+        // --- ORCHESTRATE ALL COMPLETION EVENTS ---
+        store.addXP(100);
+        store.markComplete(passedNode.id, true);
+        store.markBranchComplete(parentModuleId);
+        store.harvestFruit(parentModuleId);
+
+        // Conditional UI action
+        if (showCertificate) {
+            setTimeout(() => {
+                store.closeContent();
+                setTimeout(() => {
+                    store.setModal({ type: 'certificate', moduleId: passedNode.id });
+                }, 300);
+            }, 100);
+        } else {
+            // Just close the content panel without showing the cert
+            store.closeContent();
+        }
+    }
 
     handleExamPass() {
-        if (!this.currentNode.parentId) return;
-        
-        // 1. Mark the immediate parent (Branch) as complete
-        store.markBranchComplete(this.currentNode.parentId);
+        this._commitExamPass(true);
+    }
 
-        // 2. CHECK FOR MODULE COMPLETION via EXAM (Certificate Trigger)
-        // Ensure we find the top-level module, regardless of nesting depth
-        const topModuleNode = store.getTopLevelModule(this.currentNode.id);
-        
-        if (topModuleNode) {
-             // Force mark the top level module as complete in the store 
-             // to ensure 'isComplete' will be true in getModulesStatus()
-             store.markComplete(topModuleNode.id, true);
-             
-             // Now check status
-             const modules = store.getModulesStatus();
-             const parentModuleStatus = modules.find(m => m.id === topModuleNode.id);
-             
-             if (parentModuleStatus && parentModuleStatus.isComplete) {
-                 setTimeout(() => {
-                     store.closeContent();
-                     store.setModal({ type: 'certificate', moduleId: parentModuleStatus.id });
-                 }, 2000); // Give user time to see the "Branch Mastered" message and quiz result
-             }
+    handleClose() {
+        if (this.currentNode?.type === 'exam') {
+            const allBlocks = parseContent(this.currentNode.content);
+            const quizBlock = allBlocks.find(b => b.type === 'quiz');
+            if (quizBlock) {
+                const state = this.getQuizState(quizBlock.id);
+                if (state.finished) {
+                    const total = quizBlock.questions.length;
+                    const passingScore = Math.ceil(total * 0.8);
+                    const didPass = state.score >= passingScore;
+
+                    // Check if they passed but haven't claimed the cert yet
+                    const isAlreadyCommitted = store.isCompleted(this.currentNode.id);
+
+                    if (didPass && !isAlreadyCommitted) {
+                        this._commitExamPass(false); // Silently commit and close
+                        return;
+                    }
+                }
+            }
         }
+        
+        // Default close action
+        store.closeContent();
     }
 
     async completeAndNext() {
@@ -122,24 +152,9 @@ class ArborContent extends HTMLElement {
             // Finish lesson: Mark the LEAF node as complete
             if (this.currentNode) {
                 store.markComplete(this.currentNode.id, true);
-
-                // CHECK FOR MODULE COMPLETION (Certificate Trigger)
-                const modules = store.getModulesStatus();
-                // Find parent module using robust ancestry check
-                const topModuleNode = store.getTopLevelModule(this.currentNode.id);
-                
-                if (topModuleNode) {
-                    const parentModuleStatus = modules.find(m => m.id === topModuleNode.id);
-                    if (parentModuleStatus && parentModuleStatus.isComplete) {
-                         store.closeContent();
-                         setTimeout(() => {
-                             store.setModal({ type: 'certificate', moduleId: parentModuleStatus.id });
-                         }, 400);
-                         return;
-                    }
-                }
             }
-            store.closeContent();
+            // NO LONGER AWARDS CERTIFICATE, this is now only for exams.
+            this.handleClose();
         }
     }
 
@@ -149,10 +164,18 @@ class ArborContent extends HTMLElement {
             this.scrollToSection(this.activeSectionIndex + 1);
         } else {
             // If it's the last section and we skip, we just close without marking the leaf as complete.
-            store.closeContent();
+            this.handleClose();
         }
     }
     
+    startTheExam() {
+        const toc = this.getToc();
+        const quizSectionIndex = toc.findIndex(item => item.isQuiz);
+        if (quizSectionIndex > -1) {
+            this.scrollToSection(quizSectionIndex);
+        }
+    }
+
     scrollToSection(idx) {
         this.activeSectionIndex = idx;
         this.render();
@@ -237,6 +260,12 @@ class ArborContent extends HTMLElement {
         // Edit permission check
         const canEdit = store.value.githubUser && this.currentNode.sourcePath;
 
+        // Exam specific state
+        const isExam = this.currentNode.type === 'exam';
+        const quizSectionIndex = isExam ? toc.findIndex(item => item.isQuiz) : -1;
+        const onExamIntro = isExam && quizSectionIndex > -1 && this.activeSectionIndex < quizSectionIndex;
+        const onExamQuiz = isExam && quizSectionIndex > -1 && this.activeSectionIndex === quizSectionIndex;
+
         const containerClasses = [
             "fixed", "z-[60]", "bg-white", "dark:bg-slate-900", "shadow-2xl", "flex", "flex-col",
             "transition-all", "duration-500", "ease-[cubic-bezier(0.25,0.8,0.25,1)]",
@@ -258,7 +287,7 @@ class ArborContent extends HTMLElement {
             
             <div class="sticky top-0 flex-none px-4 md:px-6 py-4 md:py-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm transition-colors z-20 ${!this.isExpanded ? 'md:rounded-tl-3xl' : ''}">
                 <div class="flex items-center gap-3 md:gap-4 overflow-hidden">
-                    ${toc.length > 1 ? `
+                    ${toc.length > 1 && !isExam ? `
                         <button id="btn-toggle-toc" class="flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-colors
                             ${this.isTocVisible
                                 ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'
@@ -273,7 +302,7 @@ class ArborContent extends HTMLElement {
                         <div class="flex flex-col min-w-0">
                             <h1 class="text-base md:text-xl font-black text-slate-800 dark:text-slate-100 leading-tight tracking-tight truncate">
                                 ${this.currentNode.name}
-                                ${this.currentNode.type === 'exam' ? '<span class="ml-2 text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full border border-red-200 align-middle">EXAM</span>' : ''}
+                                ${isExam ? '<span class="ml-2 text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full border border-red-200 align-middle">EXAM</span>' : ''}
                             </h1>
                             ${this.currentNode.path ? `<p class="text-[10px] md:text-xs font-medium text-slate-400 dark:text-slate-500 truncate mt-1">${this.currentNode.path.split(' / ').slice(0, -1).join(' / ')}</p>` : ''}
                         </div>
@@ -300,7 +329,7 @@ class ArborContent extends HTMLElement {
                 </div>
             </div>
 
-            ${toc.length > 1 ? `
+            ${toc.length > 1 && !isExam ? `
                 <div class="px-4 md:px-6 py-3 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm flex-none">
                     <div class="flex justify-between items-center mb-1">
                         <span class="text-xs font-bold text-slate-500 dark:text-slate-400">${ui.lessonProgress}</span>
@@ -313,7 +342,7 @@ class ArborContent extends HTMLElement {
             ` : ''}
 
             <div class="flex-1 flex overflow-hidden bg-slate-50/50 dark:bg-slate-950/30 relative">
-                ${toc.length > 1 ? `
+                ${toc.length > 1 && !isExam ? `
                     <div id="toc-mobile-backdrop" class="md:hidden absolute inset-0 bg-slate-900/50 z-20 transition-opacity duration-300 ${!this.isTocVisible ? 'opacity-0 pointer-events-none' : 'opacity-100'}"></div>
                     <div class="absolute inset-y-0 left-0 z-30 w-3/4 max-w-xs md:static md:w-auto md:max-w-none flex-shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-y-auto custom-scrollbar transition-all duration-300 ease-in-out shadow-xl md:shadow-none transform
                         ${!this.isTocVisible ? '-translate-x-full md:w-0 md:p-0 md:overflow-hidden md:translate-x-0' : 'translate-x-0 md:w-1/4 md:lg:w-1/5 p-6'}">
@@ -349,7 +378,7 @@ class ArborContent extends HTMLElement {
                             ${activeBlocks.map(b => this.renderBlock(b, ui)).join('')}
                         </div>
 
-                        ${toc.length > 0 ? `
+                        ${toc.length > 0 && !isExam ? `
                         <div class="mt-8 pt-8 border-t border-slate-200 dark:border-slate-800 hidden md:flex flex-col-reverse md:flex-row gap-4 justify-between items-center">
                             <button id="btn-prev" class="w-full md:w-auto px-5 py-4 md:py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300" ${this.activeSectionIndex === 0 ? 'disabled' : ''}>
                                 <span>${ui.previousSection}</span>
@@ -367,13 +396,21 @@ class ArborContent extends HTMLElement {
                             </div>
                         </div>
                         ` : ''}
+                        
+                        ${onExamIntro ? `
+                         <div class="mt-8 pt-8 border-t border-slate-200 dark:border-slate-800 flex justify-center">
+                             <button id="btn-start-exam" class="px-8 py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all bg-red-600 text-white hover:bg-red-500 shadow-lg shadow-red-500/20 active:scale-95">
+                                 <span>${ui.quizStart} ${ui.quizLabel}</span>
+                             </button>
+                         </div>
+                        ` : ''}
 
                     </div>
                 </div>
             </div>
 
             <!-- MOBILE FOOTER -->
-            ${toc.length > 0 ? `
+            ${toc.length > 0 && !isExam ? `
             <div class="md:hidden flex-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800 p-3 z-20">
                 <div class="flex items-center justify-between gap-3 max-w-3xl mx-auto">
                     <button id="btn-prev-mobile" class="w-1/4 justify-center px-4 py-3 rounded-xl font-bold flex items-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 active:scale-95" ${this.activeSectionIndex === 0 ? 'disabled' : ''}>
@@ -390,6 +427,14 @@ class ArborContent extends HTMLElement {
                 </div>
             </div>
             ` : ''}
+            
+            ${onExamIntro ? `
+            <div class="md:hidden flex-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800 p-3 z-20">
+                 <button id="btn-start-exam-mobile" class="w-full justify-center text-center px-4 py-3 rounded-xl font-bold flex items-center gap-2 transition-all bg-red-600 text-white hover:bg-red-500 shadow-lg shadow-red-500/20 active:scale-95">
+                     <span>${ui.quizStart} ${ui.quizLabel}</span>
+                 </button>
+            </div>
+            ` : ''}
         </aside>
         `;
 
@@ -398,8 +443,8 @@ class ArborContent extends HTMLElement {
             if(el) el.onclick = fn;
         };
 
-        safeBind('#backdrop-overlay', () => store.closeContent());
-        safeBind('#btn-close-content', () => store.closeContent());
+        safeBind('#backdrop-overlay', () => this.handleClose());
+        safeBind('#btn-close-content', () => this.handleClose());
         safeBind('#btn-edit-content', () => store.openEditor(this.currentNode));
         
         // Sage Button
@@ -415,6 +460,9 @@ class ArborContent extends HTMLElement {
         
         safeBind('#btn-complete', () => this.completeAndNext());
         safeBind('#btn-complete-mobile', () => this.completeAndNext());
+        
+        safeBind('#btn-start-exam', () => this.startTheExam());
+        safeBind('#btn-start-exam-mobile', () => this.startTheExam());
         
         // Read Later -> Skip Section
         safeBind('#btn-later', () => this.skipSection());
@@ -450,6 +498,8 @@ class ArborContent extends HTMLElement {
         this.querySelectorAll('.btn-quiz-retry').forEach(b => {
              b.onclick = (e) => this.startQuiz(e.currentTarget.dataset.id);
         });
+        
+        safeBind('#btn-view-certificate', () => this.handleExamPass());
     }
 
     renderBlock(b, ui) {
@@ -493,17 +543,37 @@ class ArborContent extends HTMLElement {
             const total = b.questions.length;
             
             if (state.finished) {
+                 const isExam = this.currentNode.type === 'exam';
+                 const passingScore = isExam ? Math.ceil(total * 0.8) : total;
+                 const didPass = state.score >= passingScore;
+
+                 const icon = didPass ? '🏆' : '😔';
+                 const bgColor = didPass ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600';
+                 const masteryMessage = isExam && didPass ? `<p class="text-green-600 font-bold mt-2">${ui.congrats} ¡RAMA DOMINADA!</p>` : '';
+                 
+                 let actionButtons = '';
+                 if (isExam && didPass) {
+                     actionButtons = `
+                        <button id="btn-view-certificate" class="mt-4 w-full md:w-auto px-6 py-4 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2">
+                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            ${ui.viewCert}
+                        </button>
+                     `;
+                 } else {
+                     actionButtons = `<button class="btn-quiz-retry mt-4 w-full md:w-auto px-6 py-3 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-200 font-bold rounded-lg text-sm transition-colors" data-id="${b.id}">${ui.quizRetry}</button>`;
+                 }
+
                  return `
                  <div id="${b.id}" class="not-prose my-12 bg-white dark:bg-slate-800 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-700 p-6 md:p-8 relative overflow-hidden transition-all">
                     <div class="absolute top-0 right-0 p-4 opacity-10 text-9xl">📝</div>
                     <div class="relative z-10 text-center py-4 animate-in fade-in zoom-in duration-300">
-                        <div class="w-20 h-20 mx-auto rounded-full flex items-center justify-center text-4xl mb-4 shadow-xl ${state.score === total ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'}">
-                            ${state.score === total ? '🏆' : '👏'}
+                        <div class="w-20 h-20 mx-auto rounded-full flex items-center justify-center text-4xl mb-4 shadow-xl ${bgColor}">
+                            ${icon}
                         </div>
                         <h3 class="text-xl font-black text-slate-800 dark:text-white mb-1">${ui.quizCompleted}</h3>
                         <p class="text-slate-500 dark:text-slate-400 mb-6">${ui.quizScore} <strong class="text-slate-900 dark:text-white">${state.score} / ${total}</strong></p>
-                        ${this.currentNode.type === 'exam' && state.score === total ? '<p class="text-green-600 font-bold animate-bounce">BRANCH MASTERED! 🚀</p>' : ''}
-                        <button class="btn-quiz-retry w-full md:w-auto px-6 py-3 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-200 font-bold rounded-lg text-sm transition-colors" data-id="${b.id}">${ui.quizRetry}</button>
+                        ${masteryMessage}
+                        ${actionButtons}
                     </div>
                  </div>`;
             }
@@ -551,4 +621,3 @@ class ArborContent extends HTMLElement {
     }
 }
 customElements.define('arbor-content', ArborContent);
-   
