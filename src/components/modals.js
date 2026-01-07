@@ -21,6 +21,8 @@ class ArborModals extends HTMLElement {
         // Search State
         this.isBroadSearchLoading = false;
         this.broadSearchMessage = null;
+
+        this.currentRenderKey = null; // Cache to prevent re-rendering identical states
     }
 
     connectedCallback() {
@@ -30,17 +32,54 @@ class ArborModals extends HTMLElement {
     close() { store.setModal(null); }
     
     render() {
-        if (store.value.previewNode) {
-            this.renderPreview(store.value.previewNode);
+        const modal = store.value.modal;
+        const viewMode = store.value.viewMode;
+        const previewNode = store.value.previewNode;
+
+        // 1. Handle Sage Collision: If Sage is active, this component should stay out of the way
+        // Sage is handled by its own component <arbor-sage>
+        if (modal && (modal === 'sage' || modal.type === 'sage')) {
+            if (this.innerHTML !== '') {
+                this.innerHTML = '';
+                this.currentRenderKey = 'sage-hidden';
+            }
             return;
         }
 
-        if (store.value.viewMode === 'certificates' && store.value.modal?.type !== 'certificate') {
+        // 2. Generate a Unique Key for current state to prevent flickering (re-rendering same content)
+        // We include: previewNode ID, ViewMode, Modal Type/Props
+        const stateKey = JSON.stringify({
+            p: previewNode ? previewNode.id : null,
+            v: viewMode,
+            m: modal,
+            // Internal states that require re-render
+            i: { 
+                step: this.tutorialStep, 
+                tab: this.profileTab, 
+                sq: this.searchQuery, 
+                sr: this.searchResults.length,
+                sec: this.showSecurityWarning,
+                imp: this.showImpressumDetails,
+                certS: this.certSearch,
+                certF: this.certShowAll
+            }
+        });
+
+        if (stateKey === this.currentRenderKey) return; // STOP: Nothing changed visually
+        this.currentRenderKey = stateKey;
+
+        // --- RENDER LOGIC START ---
+
+        if (previewNode) {
+            this.renderPreview(previewNode);
+            return;
+        }
+
+        if (viewMode === 'certificates' && modal?.type !== 'certificate') {
             this.renderCertificatesGallery();
             return;
         }
 
-        const modal = store.value.modal;
         if (!modal) {
             this.innerHTML = '';
             this.showImpressumDetails = false;
@@ -50,7 +89,7 @@ class ArborModals extends HTMLElement {
         const type = typeof modal === 'string' ? modal : modal.type;
         const ui = store.ui;
         
-        if (type === 'editor') return;
+        if (type === 'editor') return; // Handled by <arbor-editor>
 
         if (type === 'search') {
             this.renderSearch(ui);

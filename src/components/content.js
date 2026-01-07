@@ -11,6 +11,7 @@ class ArborContent extends HTMLElement {
         // Internal UI State
         this.isExpanded = true;
         this.isTocVisible = window.innerWidth >= 768;
+        this.lastRenderKey = null; // Caching key to prevent re-renders
         
         this.resetState();
     }
@@ -18,22 +19,35 @@ class ArborContent extends HTMLElement {
     connectedCallback() {
         store.addEventListener('state-change', (e) => {
             const newNode = e.detail.selectedNode;
+            const newId = newNode ? newNode.id : null;
+            const currentId = this.currentNode ? this.currentNode.id : null;
             
-            // If node changes, reset state
-            if (newNode && (!this.currentNode || newNode.id !== this.currentNode.id)) {
+            // 1. Detect Navigation Change
+            if (newId !== currentId) {
                 this.currentNode = newNode;
-                this.resetState();
-                // Default to expanded
-                this.isExpanded = true;
-                this.isTocVisible = window.innerWidth >= 768;
+                if (newNode) {
+                    this.resetState();
+                    // Default to expanded on open
+                    this.isExpanded = true;
+                    this.isTocVisible = window.innerWidth >= 768;
+                }
+                this.render();
+                return;
             }
-            
-            // If deselected, clear
-            if (!newNode) {
-                this.currentNode = null;
+
+            // 2. Detect Completion Status Change (for Button update)
+            // If we are looking at a node, and its completion status changed, we need to update
+            if (this.currentNode) {
+                const isCompleted = store.isCompleted(this.currentNode.id);
+                // We use a property to track this locally without full re-render if possible,
+                // but for simplicity we rely on the render() debounce check.
+                
+                // Trigger render check - the render method will debounce if nothing changed visually
+                this.render();
+            } else {
+                 // Current node is null. Ensure UI is clear.
+                 if (this.innerHTML !== '') this.render();
             }
-            
-            this.render();
         });
         
         // Initial Load
@@ -46,6 +60,7 @@ class ArborContent extends HTMLElement {
         this.activeSectionIndex = 0;
         this.visitedSections = new Set(); 
         this.tocFilter = '';
+        this.lastRenderKey = null;
     }
 
     // --- Business Logic ---
@@ -241,6 +256,20 @@ class ArborContent extends HTMLElement {
     // --- Render ---
 
     render() {
+        // Debounce: Create a unique key for the current visual state
+        const stateKey = JSON.stringify({
+            id: this.currentNode ? this.currentNode.id : null,
+            expanded: this.isExpanded,
+            tocVisible: this.isTocVisible,
+            section: this.activeSectionIndex,
+            filter: this.tocFilter,
+            quizzes: this.quizStates,
+            completed: this.currentNode ? store.isCompleted(this.currentNode.id) : false
+        });
+
+        if (stateKey === this.lastRenderKey) return; // Nothing changed visually
+        this.lastRenderKey = stateKey;
+
         if (!this.currentNode) {
             this.innerHTML = '';
             this.className = '';

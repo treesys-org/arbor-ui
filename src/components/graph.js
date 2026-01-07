@@ -183,7 +183,8 @@ class ArborGraph extends HTMLElement {
         if (!this.svg || !this.zoom) return;
         
         const isMobile = this.width < 768;
-        const k = isMobile ? 0.6 : 0.85; // Un poco más lejos en móvil para ver el contexto horizontal
+        // Increased zoom scale for better visibility on small screens
+        const k = isMobile ? 0.95 : 1.0; 
         
         // Focus on bottom center (Root position)
         const tx = (this.width / 2) * (1 - k); 
@@ -399,7 +400,7 @@ class ArborGraph extends HTMLElement {
             .attr("d", d => {
                 const isHarvested = harvestedFruits.find(f => f.id === d.data.id);
                 let r = d.data.type === 'root' ? 60 : (isHarvested ? 50 : 45); 
-                if (isMobile) r = r * 0.9; // Slightly smaller on mobile
+                // Note: removed reduction for mobile to improve visibility (r * 0.9)
 
                 if (d.data.type === 'leaf') return "M0,0 C-35,15 -45,45 0,85 C45,45 35,15 0,0"; 
                 if (d.data.type === 'exam') return `M0,${-r*1.2} L${r*1.2},0 L0,${r*1.2} L${-r*1.2},0 Z`;
@@ -549,9 +550,12 @@ class ArborGraph extends HTMLElement {
         });
 
         if(target && this.zoom) {
+             const isMobile = this.width < 768;
+             const targetScale = isMobile ? 1.6 : 1.3; // Increased from 1.2
+             
              const transform = d3.zoomIdentity
                 .translate(this.width/2, this.height * 0.6) 
-                .scale(1.2)
+                .scale(targetScale)
                 .translate(-target.x, -target.y);
              
              this.svg.transition().duration(1200).call(this.zoom.transform, transform);

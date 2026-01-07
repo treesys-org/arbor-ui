@@ -1,4 +1,5 @@
 
+
 import { UI_LABELS, AVAILABLE_LANGUAGES } from './i18n.js';
 import { github } from './services/github.js';
 import { aiService } from './services/ai.js';
@@ -655,12 +656,17 @@ class Store extends EventTarget {
     markBranchComplete(branchId) {
         if (!branchId) return;
         
-        // Since we don't have a full search index, we must traverse the live tree if possible
-        // OR rely on recursive logic.
-        // For simplicity in this optimized version: We only mark the branch itself.
-        // To properly mark all children without a full index is expensive. 
-        // We will implement a lazy "flood fill" or just mark the module ID.
+        // 1. Mark the branch folder itself
         this.state.completedNodes.add(branchId);
+
+        // 2. Find the branch in memory to mark its children (siblings of the exam)
+        const branchNode = this.findNode(branchId);
+        if (branchNode && branchNode.children) {
+            branchNode.children.forEach(child => {
+                // Add all children (lessons, other exams, sub-branches) to completed
+                this.state.completedNodes.add(child.id);
+            });
+        }
         
         this.state.completedNodes = new Set(this.state.completedNodes); 
         this.persistProgress(); 
