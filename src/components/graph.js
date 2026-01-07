@@ -239,14 +239,14 @@ class ArborGraph extends HTMLElement {
         let leaves = 0;
         root.each(d => { if (!d.children) leaves++; });
         
-        // Reduced multiplier from 180 to 110 to keep tree tighter horizontally
-        const dynamicWidth = Math.max(this.width, leaves * 110); 
+        // Increased multiplier to space out nodes horizontally
+        const dynamicWidth = Math.max(this.width, leaves * 140); 
 
         const treeLayout = d3.tree().size([dynamicWidth, 1]);
         treeLayout(root);
 
         // 3. Coordinate Transformation (ADJUSTED HEIGHT)
-        const levelHeight = 160; // Reduced from 220 to 160 to keep tree tighter vertically
+        const levelHeight = 180; // Increased to space out nodes vertically
         
         root.descendants().forEach(d => {
             d.y = (this.height - 150) - (d.depth * levelHeight);
