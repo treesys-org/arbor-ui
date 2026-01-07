@@ -262,63 +262,55 @@ class Store extends EventTarget {
     }
 
     async navigateTo(nodeId) {
-        let node = this.findNode(nodeId);
+        const targetNodeInfo = this.state.searchIndex.find(n => n.id === nodeId && n.lang === this.state.lang);
 
-        // If node is not in memory, we need to traverse and load parents
-        if (!node) {
-            const pathIdsToUnfold = [];
-            let currentId = nodeId;
-            let highestAncestorInMemory = null;
-
-            // Traverse upwards from the target ID to find the highest ancestor that's already in our live tree
-            while (currentId) {
-                const foundNode = this.findNode(currentId);
-                if (foundNode) {
-                    highestAncestorInMemory = foundNode;
-                    break;
-                }
-                pathIdsToUnfold.unshift(currentId);
-                
-                // This logic infers parent ID from child ID for leaf nodes (parentID__slug).
-                // It's a best-effort approach that stops when it hits a branch with a UUID-based ID.
-                const parentId = currentId.substring(0, currentId.lastIndexOf('__'));
-                
-                // If we can't get a parent ID this way, we assume the highest ancestor is the root.
-                if (!parentId || !parentId.includes('-root')) {
-                    highestAncestorInMemory = this.state.data;
-                    break;
-                }
-                currentId = parentId;
-            }
-
-            // Now, traverse downwards from the highest known ancestor, loading children as we go.
-            let parentToExpand = highestAncestorInMemory;
-            while (pathIdsToUnfold.length > 0 && parentToExpand) {
-                // Ensure the current parent node is expanded
-                if (parentToExpand.type !== 'leaf' && parentToExpand.type !== 'exam' && !parentToExpand.expanded) {
-                    if (parentToExpand.hasUnloadedChildren) {
-                        await this.loadNodeChildren(parentToExpand);
-                    }
-                    parentToExpand.expanded = true;
-                }
-                
-                const nextIdToFind = pathIdsToUnfold.shift();
-                parentToExpand = parentToExpand.children?.find(c => c.id === nextIdToFind) || null;
-            }
-        }
-        
-        // At this point, the node should be in memory. Let's find it again to be sure.
-        node = this.findNode(nodeId);
-        if (!node) {
-            console.error("Failed to navigate to node after attempting to load path:", nodeId);
+        if (!targetNodeInfo || !targetNodeInfo.path) {
+            console.error("Cannot navigate: Node info not found in search index for ID:", nodeId);
             return;
         }
-
-        // Use the existing toggleNode to handle final selection, path update, and preview.
-        this.toggleNode(nodeId);
         
-        // And dispatch focus event for the graph to center on it.
-        this.dispatchEvent(new CustomEvent('focus-node', { detail: nodeId }));
+        // Split the path string into ancestor names. e.g., "Arbor EN / Science / Physics"
+        const pathNames = targetNodeInfo.path.split(' / ');
+        
+        // Start from the root of the live tree.
+        let currentNode = this.state.data;
+        
+        // The first name in the path is the root, which we already have.
+        // Iterate through the rest of the path to find and expand each ancestor.
+        for (let i = 1; i < pathNames.length; i++) {
+            const ancestorName = pathNames[i];
+            
+            // If the current node's children aren't loaded, load them now.
+            if (currentNode.hasUnloadedChildren) {
+                await this.loadNodeChildren(currentNode);
+            }
+
+            // Find the next node in the path among the current node's children.
+            const nextNode = currentNode.children?.find(child => child.name === ancestorName);
+
+            if (!nextNode) {
+                console.error(`Navigation failed: Could not find child "${ancestorName}" in node "${currentNode.name}"`);
+                return; // Stop if the path is broken.
+            }
+
+            // Expand the branch so its children are visible in the graph.
+            if (nextNode.type === 'branch' || nextNode.type === 'root') {
+                nextNode.expanded = true;
+            }
+            
+            currentNode = nextNode;
+        }
+
+        // After the loop, the full path to the node is loaded and expanded in the live tree.
+        this.dispatchEvent(new CustomEvent('graph-update'));
+        
+        // Use a timeout to allow the graph to render the new nodes before we try to focus.
+        setTimeout(() => {
+            // Select the node to show its preview or content.
+            this.toggleNode(nodeId);
+            // Center the graph on the node.
+            this.dispatchEvent(new CustomEvent('focus-node', { detail: nodeId }));
+        }, 100);
     }
 
     async navigateToNextLeaf() {
@@ -401,7 +393,12 @@ class Store extends EventTarget {
             if (res.ok) {
                 let text = await res.text();
                 if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
-                node.children = JSON.parse(text.trim());
+                const children = JSON.parse(text.trim());
+                
+                // Set parentId for newly loaded children for upward traversal
+                children.forEach(child => child.parentId = node.id);
+                node.children = children;
+
 
                 // --- NEW: Apply prefix to newly loaded children ---
                 const examPrefix = this.ui.examLabelPrefix;

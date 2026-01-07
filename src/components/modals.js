@@ -1,5 +1,4 @@
 
-
 import { store } from '../store.js';
 import { github } from '../services/github.js';
 
@@ -245,6 +244,19 @@ class ArborModals extends HTMLElement {
         }
     }
 
+    renderSearchLabel(type) {
+        if (type === 'branch') {
+            return `<span class="text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/30 px-2 py-1 rounded-full border border-amber-200 dark:border-amber-800/50">Módulo</span>`;
+        }
+        if (type === 'leaf') {
+            return `<span class="text-[10px] font-bold text-purple-700 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/30 px-2 py-1 rounded-full border border-purple-200 dark:border-purple-800/50">Lección</span>`;
+        }
+        if (type === 'exam') {
+            return `<span class="text-[10px] font-bold text-red-700 dark:text-red-400 bg-red-100 dark:bg-red-900/30 px-2 py-1 rounded-full border border-red-200 dark:border-red-800/50">Examen</span>`;
+        }
+        return '';
+    }
+
     // --- SEARCH MODAL ---
     renderSearch(ui) {
          this.innerHTML = `
@@ -258,10 +270,16 @@ class ArborModals extends HTMLElement {
                 <div class="overflow-y-auto p-2" id="search-results">
                     ${this.searchResults.length === 0 && this.searchQuery.length > 0 ? `<div class="p-8 text-center text-slate-400"><p>${ui.noResults}</p></div>` : ''}
                     ${this.searchResults.map(res => `
-                        <button class="btn-res w-full text-left p-4 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors group flex items-center justify-between border-b border-slate-50 dark:border-slate-800/50 last:border-0" data-id="${res.id}">
-                            <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-lg bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 flex items-center justify-center text-xl">${res.icon || '📄'}</div>
-                                <div><h3 class="font-bold text-slate-700 dark:text-slate-200">${res.name}</h3><p class="text-xs text-slate-400 line-clamp-1">${res.description || ''}</p></div>
+                        <button class="btn-res w-full text-left p-4 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors group flex items-center justify-between" data-id="${res.id}">
+                            <div class="flex items-center gap-4 min-w-0">
+                                <div class="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xl flex-shrink-0">${res.icon || '📄'}</div>
+                                <div class="min-w-0">
+                                    <h3 class="font-bold text-slate-700 dark:text-slate-200 truncate">${res.name}</h3>
+                                    <p class="text-xs text-slate-400 dark:text-slate-500 line-clamp-1">${res.path || ''}</p>
+                                </div>
+                            </div>
+                            <div class="flex-shrink-0 ml-4">
+                                ${this.renderSearchLabel(res.type)}
                             </div>
                         </button>
                     `).join('')}
