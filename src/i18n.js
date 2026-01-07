@@ -20,30 +20,30 @@ export const UI_LABELS = {
       
       welcomeSteps: [
         {
-            title: 'Hoot! I am the Sage.',
-            text: 'Welcome, traveler. I am the guardian of this forest. This is not a normal website; it is a living map of human knowledge.',
+            title: 'Hello! I\'m the Knowledge Guardian.',
+            text: 'Welcome to Arbor. We believe knowledge is a right, not a privilege. Here, every lesson you learn is a seed that helps this forest of wisdom grow for everyone.',
             icon: '🦉'
         },
         {
-            title: 'The Map is Alive',
-            text: 'Forget pages. Here, knowledge grows. <strong>Drag</strong> to fly through the forest. <strong>Click circles</strong> to grow new branches.',
+            title: 'Explore like a Map',
+            text: 'Navigation is simple. <strong>Drag</strong> the map to move around, and <strong>click on the circles</strong> to expand topics and reveal new lessons.',
             icon: '✨'
         },
         {
-            title: 'Harvest Knowledge',
-            text: 'Do not just read; gather. When you finish a module, you will harvest a unique <strong>Fruit</strong> for your basket. Consistency is your water.',
+            title: 'Harvest Your Wisdom',
+            text: 'As you complete modules, you\'ll harvest unique <strong>Fruits</strong> for your personal collection. Your garden will grow with every lesson you master!',
             icon: '🍎'
         },
         {
-            title: 'I Can Be Smarter...',
-            text: 'I am currently using my "Local Instincts" to guide you. But if you have a <strong>Gemini Key</strong>, you can grant me "True Sight" to answer complex questions.',
+            title: 'Activate my Superintelligence (AI)',
+            text: 'By default, I guide you with info from the lesson. By connecting a <strong>Gemini API Key</strong>, I become your personal tutor, able to solve complex questions and search the web.',
             icon: '🧠',
             isAiPitch: true
         }
       ],
       
-      aiPitchAction: 'How to awaken me?',
-      aiPitchSub: 'Click my icon in the sidebar anytime.',
+      aiPitchAction: 'Need help or want to activate me?',
+      aiPitchSub: 'Just click my icon 🦉 in the sidebar anytime.',
 
       close: 'Close',
       statsNodes: 'Modules',
@@ -264,30 +264,30 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       
       welcomeSteps: [
         {
-            title: '¡Huu! Soy el Sabio.',
-            text: 'Bienvenido, viajero. Soy el guardián de este bosque. Esto no es una web normal; es un mapa vivo del conocimiento humano.',
+            title: '¡Hola! Soy el Guardián del Conocimiento.',
+            text: 'Bienvenido a Arbor. Creemos que el conocimiento es un derecho, no un privilegio. Aquí, cada lección que aprendes es una semilla que ayuda a este bosque de sabiduría a crecer para todos.',
             icon: '🦉'
         },
         {
-            title: 'El Mapa está Vivo',
-            text: 'Olvida las páginas. Aquí el conocimiento crece. <strong>Arrastra</strong> para volar por el bosque. <strong>Clica círculos</strong> para brotar ramas.',
+            title: 'Explora como en un Mapa',
+            text: 'Navegar es fácil. <strong>Arrastra</strong> el mapa para moverte y <strong>haz clic en los círculos</strong> para expandir temas y descubrir nuevas lecciones.',
             icon: '✨'
         },
         {
-            title: 'Cosecha Sabiduría',
-            text: 'No solo leas; recolecta. Cuando termines un módulo, cosecharás un <strong>Fruto</strong> único para tu cesta. La constancia es tu agua.',
+            title: 'Cosecha tu Sabiduría',
+            text: 'Al completar módulos, cosecharás <strong>Frutos</strong> para tu colección personal. ¡Tu jardín crecerá con cada lección que domines!',
             icon: '🍎'
         },
         {
-            title: 'Puedo ser más listo...',
-            text: 'Ahora uso mi "Instinto Local" para guiarte. Pero si tienes una <strong>Llave Gemini</strong>, puedes otorgarme "Visión Verdadera" para responder preguntas complejas.',
+            title: 'Activa mi Superinteligencia (IA)',
+            text: 'Por defecto, te guío con la información de la lección. Si conectas una <strong>API Key de Gemini</strong>, me convierto en tu tutor personal para resolver dudas complejas y buscar en la web.',
             icon: '🧠',
             isAiPitch: true
         }
       ],
       
-      aiPitchAction: '¿Cómo despertarme?',
-      aiPitchSub: 'Pulsa mi icono en la barra lateral cuando quieras.',
+      aiPitchAction: '¿Necesitas ayuda o quieres activarme?',
+      aiPitchSub: 'Haz clic en mi icono 🦉 en la barra lateral en cualquier momento.',
 
       close: 'Cerrar',
       statsNodes: 'Módulos',
