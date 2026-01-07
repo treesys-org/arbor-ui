@@ -1,7 +1,5 @@
 
 
-
-
 import { store } from '../store.js';
 
 class ArborGraph extends HTMLElement {
@@ -50,6 +48,11 @@ class ArborGraph extends HTMLElement {
         store.addEventListener('focus-node', (e) => {
              // Wait for D3 render cycle to populate DOM
              setTimeout(() => this.focusNode(e.detail), 250);
+        });
+        
+        // Listen for reset-zoom (Home Button)
+        store.addEventListener('reset-zoom', () => {
+             this.resetZoom();
         });
         
         window.addEventListener('resize', () => {
@@ -178,11 +181,8 @@ class ArborGraph extends HTMLElement {
         this.updateZoomExtent();
 
         // Initial Position (Bottom Center)
-        const k = 0.85;
-        const tx = (this.width / 2) * (1 - k);
-        const ty = (this.height * 0.85) - (this.height - 100) * k;
-        this.svg.call(this.zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(k));
-
+        this.resetZoom(0); // Instant reset initially
+        
         if(store.value.data) this.updateGraph();
     }
 
@@ -196,6 +196,16 @@ class ArborGraph extends HTMLElement {
             [-horizontalPadding, -topPadding], 
             [horizontalPadding * 2, bottomPadding]
         ]);
+    }
+    
+    resetZoom(duration = 750) {
+        if (!this.svg || !this.zoom) return;
+        const k = 0.85;
+        const tx = (this.width / 2) * (1 - k);
+        const ty = (this.height * 0.85) - (this.height - 100) * k;
+        
+        this.svg.transition().duration(duration)
+            .call(this.zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(k));
     }
 
     drawGround() {

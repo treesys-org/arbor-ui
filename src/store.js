@@ -67,6 +67,14 @@ class Store extends EventTarget {
         this.checkStreak(); // Run daily check
         this.loadSources();
         
+        // Welcome Screen Check
+        const welcomeSeen = localStorage.getItem('arbor-welcome-seen');
+        if (!welcomeSeen) {
+            setTimeout(() => {
+                this.setModal('welcome');
+            }, 2000);
+        }
+        
         const ghToken = localStorage.getItem('arbor-gh-token') || sessionStorage.getItem('arbor-gh-token');
         if (ghToken) {
             github.initialize(ghToken).then(user => {
@@ -175,9 +183,6 @@ class Store extends EventTarget {
             if (!res.ok) throw new Error(`Failed to fetch data from ${source.name} (Status ${res.status}).`);
             const json = await res.json();
             
-            // NOTE: We no longer load search-index.json here. It was the bottleneck.
-            // We use lazy sharding via the search() method.
-
             let langData = json.languages?.[this.state.lang] || Object.values(json.languages)[0];
             
             if (json.universeName && json.universeName !== source.name) {
@@ -395,6 +400,8 @@ class Store extends EventTarget {
 
     goHome() {
         this.update({ viewMode: 'explore', selectedNode: null, previewNode: null, modal: null });
+        // Emit specific event to reset the graph camera/zoom
+        this.dispatchEvent(new CustomEvent('reset-zoom'));
     }
     enterLesson() {
         if (this.state.previewNode) this.update({ selectedNode: this.state.previewNode, previewNode: null });
@@ -424,7 +431,7 @@ class Store extends EventTarget {
                 if (res.ok) {
                     const shard = await res.json();
                     
-                    // Normalize shard data structure to match expected format if optimized
+                    // Normalize shard data structure
                     const normalized = shard.map(item => ({
                         id: item.id,
                         name: item.n || item.name,
@@ -437,7 +444,7 @@ class Store extends EventTarget {
                     
                     this.state.searchCache[cacheKey] = normalized;
                 } else {
-                    this.state.searchCache[cacheKey] = []; // Mark as empty to avoid refetch
+                    this.state.searchCache[cacheKey] = [];
                 }
             } catch (e) {
                 console.warn(`Search shard not found for prefix ${prefix}`);
@@ -445,15 +452,15 @@ class Store extends EventTarget {
             }
         }
 
-        // 3. Filter In-Memory
         const shard = this.state.searchCache[cacheKey] || [];
-        return shard.filter(n => 
-            this.cleanString(n.name).includes(q) || 
-            (n.description && this.cleanString(n.description).includes(q))
-        );
+        
+        // --- STRICT NAME SEARCH ONLY ---
+        return shard.filter(n => {
+            return this.cleanString(n.name).includes(q);
+        });
     }
 
-    // --- NEW: SINGLE LETTER SEARCH (BRUTE FORCE FETCH) ---
+    // --- SINGLE LETTER SEARCH (BRUTE FORCE FETCH) ---
     async searchBroad(char) {
         if (!char || char.length !== 1) return [];
         const c = this.cleanString(char);
@@ -469,7 +476,6 @@ class Store extends EventTarget {
         const promises = prefixes.map(async (prefix) => {
             const cacheKey = `${lang}_${prefix}`;
             
-            // Check cache first
             if (this.state.searchCache[cacheKey]) return this.state.searchCache[cacheKey];
 
             try {
@@ -489,21 +495,21 @@ class Store extends EventTarget {
                     this.state.searchCache[cacheKey] = normalized;
                     return normalized;
                 }
-            } catch(e) {
-                // Ignore errors (404s for prefixes that don't exist)
-            }
-            // Cache empty result to avoid re-fetching 404s in this session
+            } catch(e) { }
             this.state.searchCache[cacheKey] = [];
             return [];
         });
 
         const results = await Promise.all(promises);
         
-        // Flatten and Deduplicate
         const flat = results.flat();
         const seen = new Set();
         return flat.filter(item => {
             if(seen.has(item.id)) return false;
+            
+            // STRICT NAME CHECK (Filter out items that might have been indexed by description in the JSON)
+            if (!this.cleanString(item.name).includes(c)) return false; 
+            
             seen.add(item.id);
             return true;
         });

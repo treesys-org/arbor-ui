@@ -225,7 +225,16 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       sageUpgradeDesc: 'Enter your Gemini API Key to unlock full intelligence.',
       sageApiKeyLabel: 'Google Gemini API Key',
       sageSaveKey: 'Activate Super Brain 🧠',
-      sageBackToLocal: 'Switch back to Local (Free)'
+      sageBackToLocal: 'Switch back to Local (Free)',
+
+      // Welcome Screen
+      welcomeHello: 'Hoot hoot! Welcome to Arbor!',
+      welcomeRole: 'I am the Sage Owl, your personal guide.',
+      welcomeHelp: 'I live in the sidebar to the left. Click on me (🦉) whenever you are confused or want a summary of the lesson.',
+      welcomeLocal: 'I work locally by default (Private & Free).',
+      welcomeInvite: 'But if you want me to be a Genius...',
+      welcomeBtnSmart: 'Make me Smart (Activate Gemini)',
+      welcomeBtnLocal: 'Start Exploring (Local)'
     },
     ES: {
       appTitle: 'ARBOR',
@@ -457,7 +466,16 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       sageUpgradeDesc: 'Introduce tu Gemini API Key para desbloquear la inteligencia real.',
       sageApiKeyLabel: 'Google Gemini API Key',
       sageSaveKey: 'Activar Super Cerebro 🧠',
-      sageBackToLocal: 'Volver a Local (Gratis)'
+      sageBackToLocal: 'Volver a Local (Gratis)',
+
+      // Welcome Screen
+      welcomeHello: '¡Huu huu! ¡Bienvenido a Arbor!',
+      welcomeRole: 'Soy el Búho Sabio, tu guía personal.',
+      welcomeHelp: 'Vivo en la barra lateral izquierda. Haz clic en mí (🦉) cuando tengas dudas o quieras un resumen.',
+      welcomeLocal: 'Trabajo localmente por defecto (Privado y Gratis).',
+      welcomeInvite: 'Pero si quieres que sea un Genio...',
+      welcomeBtnSmart: 'Hazme Inteligente (Activar Gemini)',
+      welcomeBtnLocal: 'Empezar a Explorar (Local)'
     }
 };
 

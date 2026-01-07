@@ -1,4 +1,5 @@
 
+
 import { store } from '../store.js';
 import { github } from '../services/github.js';
 
@@ -63,6 +64,7 @@ class ArborModals extends HTMLElement {
         else if (type === 'impressum') content = this.renderImpressum(ui);
         else if (type === 'contributor') content = this.renderContributor(ui);
         else if (type === 'profile') content = this.renderProfile(ui);
+        else if (type === 'welcome') content = this.renderWelcome(ui);
         else if (type === 'certificate') {
             this.renderSingleCertificate(ui, modal.moduleId); 
             return; 
@@ -83,6 +85,7 @@ class ArborModals extends HTMLElement {
         if (type === 'sources') this.bindSourcesEvents();
         if (type === 'contributor') this.bindContributorEvents();
         if (type === 'profile') this.bindProfileEvents();
+        if (type === 'welcome') this.bindWelcomeEvents();
         
         if (type === 'impressum') {
             const btnImp = this.querySelector('#btn-show-impressum');
@@ -97,6 +100,51 @@ class ArborModals extends HTMLElement {
                 this.close();
             });
         }
+    }
+
+    renderWelcome(ui) {
+        return `
+        <div class="p-8 flex flex-col items-center text-center">
+             <div class="w-32 h-32 rounded-full bg-slate-100 dark:bg-slate-800 border-4 border-white dark:border-slate-700 shadow-xl flex items-center justify-center text-7xl mb-6 relative animate-bounce" style="animation-duration: 3s">
+                🦉
+                <div class="absolute -bottom-2 -right-2 bg-green-500 text-white text-xs font-bold px-2 py-1 rounded-full border-2 border-white dark:border-slate-900">SAGE</div>
+             </div>
+             <h2 class="text-3xl font-black text-slate-800 dark:text-white mb-2 leading-tight">${ui.welcomeHello}</h2>
+             <p class="text-lg font-bold text-slate-600 dark:text-slate-300 mb-6">${ui.welcomeRole}</p>
+             
+             <div class="bg-purple-50 dark:bg-purple-900/10 p-4 rounded-xl border border-purple-100 dark:border-purple-800 mb-6 text-left relative overflow-hidden">
+                <div class="absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-white dark:bg-slate-900 rotate-45 border-l border-b border-purple-100 dark:border-purple-800"></div>
+                <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                   ${ui.welcomeHelp}
+                </p>
+             </div>
+
+             <div class="space-y-3 w-full">
+                 <button id="btn-welcome-smart" class="w-full py-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-purple-500/30 transition-transform active:scale-95 flex items-center justify-center gap-2">
+                    <span class="text-xl">✨</span> ${ui.welcomeBtnSmart}
+                 </button>
+                 <button id="btn-welcome-local" class="w-full py-3 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white font-bold rounded-xl transition-colors">
+                    ${ui.welcomeBtnLocal}
+                 </button>
+             </div>
+             
+             <p class="text-[10px] text-slate-400 mt-4">${ui.welcomeLocal}</p>
+        </div>
+        `;
+    }
+
+    bindWelcomeEvents() {
+        // Save 'seen' flag
+        const markSeen = () => localStorage.setItem('arbor-welcome-seen', 'true');
+
+        this.querySelector('#btn-welcome-smart').onclick = () => {
+            markSeen();
+            store.setModal({ type: 'sage', mode: 'settings' });
+        };
+        this.querySelector('#btn-welcome-local').onclick = () => {
+            markSeen();
+            this.close();
+        };
     }
 
     // --- PROFILE & SYNC ---
@@ -250,13 +298,13 @@ class ArborModals extends HTMLElement {
 
     renderSearchLabel(type) {
         if (type === 'branch') {
-            return `<span class="flex-shrink-0 text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">Módulo</span>`;
+            return `<span class="flex-shrink-0 text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 tracking-wider">MÓDULO</span>`;
         }
         if (type === 'leaf') {
-            return `<span class="flex-shrink-0 text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/20 px-2 py-0.5 rounded border border-sky-100 dark:border-sky-800/30">Lección</span>`;
+            return `<span class="flex-shrink-0 text-[10px] uppercase font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/20 px-2 py-0.5 rounded border border-sky-100 dark:border-sky-800/30 tracking-wider">LECCIÓN</span>`;
         }
         if (type === 'exam') {
-            return `<span class="flex-shrink-0 text-[10px] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded border border-red-100 dark:border-red-800/30">Examen</span>`;
+            return `<span class="flex-shrink-0 text-[10px] uppercase font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded border border-red-100 dark:border-red-800/30 tracking-wider">EXAMEN</span>`;
         }
         return '';
     }
@@ -272,20 +320,48 @@ class ArborModals extends HTMLElement {
          } else if (this.searchResults.length === 0 && this.searchQuery.length >= 2) {
              resultsHtml = `<div class="p-8 text-center text-slate-400"><p>${ui.noResults}</p></div>`;
          } else {
-             resultsHtml = this.searchResults.map((res, index) => {
+             // SORTING & FILTERING
+             const q = this.searchQuery.toLowerCase();
+             
+             let displayResults = [...this.searchResults];
+
+             // STRICT FILTER for short queries (1-2 chars)
+             // This prevents "Linux" (desc "apps") showing up for query "ap"
+             if (q.length < 3) {
+                 displayResults = displayResults.filter(r => r.name.toLowerCase().includes(q));
+             }
+
+             displayResults.sort((a, b) => {
+                const nameA = a.name.toLowerCase();
+                const nameB = b.name.toLowerCase();
+                const startsA = nameA.startsWith(q);
+                const startsB = nameB.startsWith(q);
+                
+                // Exact start match gets top priority
+                if (startsA && !startsB) return -1;
+                if (!startsA && startsB) return 1;
+                
+                // Then name includes
+                const inNameA = nameA.includes(q);
+                const inNameB = nameB.includes(q);
+                
+                if (inNameA && !inNameB) return -1;
+                if (!inNameA && inNameB) return 1;
+                
+                return 0;
+             });
+
+             resultsHtml = displayResults.map((res, index) => {
                 // CLEAN PATH LOGIC
                 let pathParts = (res.path || '').split(' / ');
-                // Remove Root (e.g., "Arbor ES")
                 if (pathParts.length > 0 && pathParts[0].includes('Arbor')) pathParts.shift();
-                // Remove self (the last item is usually the node name)
                 if (pathParts.length > 0 && pathParts[pathParts.length-1] === res.name) pathParts.pop();
 
-                // Build Breadcrumbs
                 const displayPath = pathParts.length > 0
                     ? pathParts.join(' <span class="text-slate-300 dark:text-slate-600 px-0.5">›</span> ')
                     : '';
 
-                const borderClass = index !== this.searchResults.length - 1 ? 'border-b border-slate-50 dark:border-slate-800/50' : '';
+                const borderClass = index !== displayResults.length - 1 ? 'border-b border-slate-50 dark:border-slate-800/50' : '';
 
                 return `
                 <button class="btn-res w-full text-left p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group flex items-start gap-3 ${borderClass}" data-id="${res.id}">
@@ -322,12 +398,8 @@ class ArborModals extends HTMLElement {
          
          const inp = this.querySelector('#inp-search');
          inp.focus();
-         // Restore cursor position
          inp.setSelectionRange(inp.value.length, inp.value.length);
          
-         // -----------------------------------------------------------
-         // SEARCH LOGIC WITH DELAY FOR 1 LETTER
-         // -----------------------------------------------------------
          let debounceTimeout = null;
          let singleLetterTimeout = null;
 
@@ -338,7 +410,6 @@ class ArborModals extends HTMLElement {
              clearTimeout(debounceTimeout);
              clearTimeout(singleLetterTimeout);
              
-             // Reset UI states
              this.broadSearchMessage = null;
              this.isBroadSearchLoading = false;
 
@@ -349,12 +420,10 @@ class ArborModals extends HTMLElement {
              }
 
              if (val.length === 1) {
-                 // Case 1: Single Letter - Wait and Prompt
                  this.broadSearchMessage = ui.searchKeepTyping;
                  this.searchResults = [];
                  this.render();
                  
-                 // Wait 1.5 seconds. If user doesn't type more, fetch BROADLY
                  singleLetterTimeout = setTimeout(async () => {
                      if (this.searchQuery.length === 1) {
                          this.broadSearchMessage = null;
@@ -368,7 +437,6 @@ class ArborModals extends HTMLElement {
                      }
                  }, 1500);
              } else {
-                 // Case 2: Standard Search (2+ chars)
                  debounceTimeout = setTimeout(async () => {
                      this.searchResults = await store.search(val);
                      this.render();
