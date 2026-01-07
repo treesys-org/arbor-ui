@@ -40,7 +40,7 @@ class ArborSidebar extends HTMLElement {
 
                 <!-- Menu Items -->
                 <nav class="flex flex-col">
-                    <button class="js-btn-sage menu-item text-purple-600 dark:text-purple-400"><span>🦉</span> <span>Configurar IA</span></button>
+                    <button class="js-btn-sage menu-item text-purple-600 dark:text-purple-400"><span>🦉</span> <span>${ui.navSage}</span></button>
                     <button class="js-btn-lang menu-item"><span>${store.currentLangInfo.flag}</span> <span>${ui.languageTitle}</span></button>
                     <button class="js-btn-theme menu-item"><span>${store.value.theme === 'light' ? '🌙' : '☀️'}</span> <span>Toggle Theme</span></button>
                     <button class="js-btn-help menu-item"><span>?</span> <span>${ui.navHelp}</span></button>
@@ -136,10 +136,10 @@ class ArborSidebar extends HTMLElement {
 
                 <div class="relative group"><button class="js-btn-sources w-10 h-10 rounded-xl flex items-center justify-center bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-600 hover:text-white transition-colors"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18M13.5-18v18M9 6.75h6M9 11.25h6M9 15.75h6" /></svg></button><span class="tooltip">${ui.navSources}</span></div>
                 
-                <!-- THE SAGE CONFIG BUTTON (NOW SPECIFICALLY FOR SETTINGS) -->
+                <!-- THE SAGE CONFIG BUTTON -->
                 <div class="relative group">
                      <button class="js-btn-sage w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-purple-500 hover:text-white transition-all">🦉</button>
-                     <span class="tooltip">Configurar IA</span>
+                     <span class="tooltip">${ui.navSage}</span>
                 </div>
             </div>
 
@@ -191,9 +191,9 @@ class ArborSidebar extends HTMLElement {
         // Add listener for Mobile Basket Button to open Profile
         this.querySelectorAll('.js-btn-progress-mobile').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('profile')));
 
-        // SAGE AI Button Linked -> Opens Settings Mode
+        // SAGE AI Button -> Open Sage (Let Sage Modal decide view)
         this.querySelectorAll('.js-btn-sage').forEach(b => b.onclick = mobileMenuAction(() => {
-            store.setModal({ type: 'sage', mode: 'settings' });
+            store.setModal({ type: 'sage' }); 
         }));
 
         const homeBtn = this.querySelector('.js-btn-home');

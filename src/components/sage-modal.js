@@ -7,7 +7,7 @@ class ArborSage extends HTMLElement {
     constructor() {
         super();
         this.isVisible = false;
-        this.mode = 'chat'; // 'chat' | 'settings'
+        this.mode = 'chat'; // 'chat' | 'settings' | 'menu'
         
         // Historial de chat local (efímero, se borra al recargar)
         this.localMessages = []; 
@@ -27,7 +27,7 @@ class ArborSage extends HTMLElement {
 
         // El modal ahora puede ser un objeto { type: 'sage', mode: 'settings' }
         if (modal && (modal === 'sage' || modal.type === 'sage')) {
-            const requestedMode = modal.mode || 'chat';
+            const requestedMode = modal.mode;
             
             if (isNewRequest) {
                 // If the same mode is requested while visible, toggle close
@@ -36,15 +36,16 @@ class ArborSage extends HTMLElement {
                 } else {
                     // Open or switch mode
                     this.isVisible = true;
-                    this.mode = requestedMode;
-                    
-                    // Si piden chat y no hay key, forzar settings
-                    if (this.mode === 'chat' && !aiService.isSmartMode()) {
-                        this.mode = 'settings';
-                        this.localMessages.push({ role: 'assistant', content: "🦉 Para chatear conmigo sobre las lecciones, necesito que configures tu llave de Gemini primero." });
-                    }
 
-                    // NOTE: Do NOT clear global state here, or it will cause recursive closing issues.
+                    // Decision Logic:
+                    if (requestedMode) {
+                        this.mode = requestedMode;
+                    } else if (aiService.isSmartMode()) {
+                        this.mode = 'chat'; // Has Key -> Chat
+                    } else {
+                        this.mode = 'menu'; // No Key -> Show Options (Help or Config)
+                    }
+                    
                     this.render();
                 }
             }
@@ -101,9 +102,64 @@ class ArborSage extends HTMLElement {
 
         if (this.mode === 'settings') {
             this.renderSettings(isSmart);
+        } else if (this.mode === 'menu') {
+            this.renderMenu();
         } else {
             this.renderChat(isSmart);
         }
+    }
+
+    renderMenu() {
+        const ui = store.ui;
+        // Menu Mode: Simple Choice Center Screen
+        this.className = "fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4";
+
+        this.innerHTML = `
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-sm w-full relative overflow-hidden flex flex-col animate-in zoom-in duration-200 border border-slate-200 dark:border-slate-800">
+                <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950">
+                    <div class="flex items-center gap-3">
+                        <span class="text-3xl">🦉</span>
+                        <h3 class="font-black text-xl text-slate-800 dark:text-white">${ui.sageMenuTitle}</h3>
+                    </div>
+                    <button class="btn-close text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors">✕</button>
+                </div>
+                
+                <div class="p-6 space-y-4">
+                    <button id="btn-menu-help" class="w-full text-left p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group">
+                         <div class="flex items-center gap-4">
+                            <div class="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-600 flex items-center justify-center text-xl">🗺️</div>
+                            <div>
+                                <h4 class="font-bold text-slate-800 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">${ui.sageMenuHelp}</h4>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">${ui.sageMenuHelpDesc}</p>
+                            </div>
+                         </div>
+                    </button>
+
+                    <button id="btn-menu-ai" class="w-full text-left p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all group">
+                         <div class="flex items-center gap-4">
+                            <div class="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/40 text-purple-600 flex items-center justify-center text-xl">✨</div>
+                            <div>
+                                <h4 class="font-bold text-slate-800 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">${ui.sageMenuAi}</h4>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">${ui.sageMenuAiDesc}</p>
+                            </div>
+                         </div>
+                    </button>
+                </div>
+            </div>
+        `;
+
+        this.querySelector('.btn-close').onclick = () => this.close();
+        
+        this.querySelector('#btn-menu-help').onclick = () => {
+            this.close();
+            // Give a small delay to allow animation to close properly before opening next modal
+            setTimeout(() => store.setModal('tutorial'), 100);
+        };
+
+        this.querySelector('#btn-menu-ai').onclick = () => {
+            this.mode = 'settings';
+            this.render();
+        };
     }
 
     renderSettings(isSmart) {

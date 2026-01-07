@@ -1,4 +1,5 @@
 
+
 export const UI_LABELS = {
     EN: {
       appTitle: 'ARBOR',
@@ -220,6 +221,13 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       sageDisclaimer: 'Powered by Local Logic (Offline).',
       sageUnsupported: 'Connection failed.',
       
+      // Sage Menu
+      sageMenuTitle: 'How can I help?',
+      sageMenuHelp: 'Explain Arbor',
+      sageMenuHelpDesc: 'Learn how to navigate the tree.',
+      sageMenuAi: 'Activate Intelligence',
+      sageMenuAiDesc: 'Connect Gemini API for smart answers.',
+      
       // AI Upgrade
       sageUpgrade: 'Want to make me smart?',
       sageUpgradeDesc: 'Enter your Gemini API Key to unlock full intelligence.',
@@ -229,12 +237,15 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
 
       // Welcome Screen
       welcomeHello: 'Hoot hoot! Welcome to Arbor!',
-      welcomeRole: 'I am the Sage Owl, your personal guide.',
-      welcomeHelp: 'I live in the sidebar to the left. Click on me (🦉) whenever you are confused or want a summary of the lesson.',
-      welcomeLocal: 'I work locally by default (Private & Free).',
-      welcomeInvite: 'But if you want me to be a Genius...',
-      welcomeBtnSmart: 'Make me Smart (Activate Gemini)',
-      welcomeBtnLocal: 'Start Exploring (Local)'
+      welcomeIntro: 'Arbor is not a normal course. It is a visual map of knowledge.',
+      welcomeTip1: '1. Explore the Tree',
+      welcomeTip1Desc: 'Drag to move. Click circles to reveal new topics.',
+      welcomeTip2: '2. Grow your Garden',
+      welcomeTip2Desc: 'Complete lessons to earn fruits and keep your streak alive.',
+      welcomeOptional: 'Optional: Super Intelligence',
+      welcomeOptionalDesc: 'I can answer questions about any lesson if you connect a Gemini API Key later.',
+      welcomeBtnStart: 'Start Exploring',
+      welcomeBtnConfig: 'Configure AI (Advanced)'
     },
     ES: {
       appTitle: 'ARBOR',
@@ -461,6 +472,13 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       sageDisclaimer: 'Lógica Local (Gratis). Pulsa el icono para hacerlo Inteligente (API).',
       sageUnsupported: 'Conexión fallida.',
 
+      // Sage Menu
+      sageMenuTitle: '¿Cómo puedo ayudar?',
+      sageMenuHelp: 'Explícame Arbor',
+      sageMenuHelpDesc: 'Ayuda con navegación y conceptos.',
+      sageMenuAi: 'Activar Inteligencia',
+      sageMenuAiDesc: 'Conectar Gemini API para respuestas.',
+
       // AI Upgrade
       sageUpgrade: '¿Quieres hacerme inteligente?',
       sageUpgradeDesc: 'Introduce tu Gemini API Key para desbloquear la inteligencia real.',
@@ -470,12 +488,15 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
 
       // Welcome Screen
       welcomeHello: '¡Huu huu! ¡Bienvenido a Arbor!',
-      welcomeRole: 'Soy el Búho Sabio, tu guía personal.',
-      welcomeHelp: 'Vivo en la barra lateral izquierda. Haz clic en mí (🦉) cuando tengas dudas o quieras un resumen.',
-      welcomeLocal: 'Trabajo localmente por defecto (Privado y Gratis).',
-      welcomeInvite: 'Pero si quieres que sea un Genio...',
-      welcomeBtnSmart: 'Hazme Inteligente (Activar Gemini)',
-      welcomeBtnLocal: 'Empezar a Explorar (Local)'
+      welcomeIntro: 'Arbor no es un curso normal. Es un mapa visual de conocimiento.',
+      welcomeTip1: '1. Explora el Árbol',
+      welcomeTip1Desc: 'Arrastra para moverte. Haz clic en los círculos para revelar temas.',
+      welcomeTip2: '2. Cultiva tu Jardín',
+      welcomeTip2Desc: 'Completa lecciones para ganar frutos y mantener tu racha.',
+      welcomeOptional: 'Opcional: Super Inteligencia',
+      welcomeOptionalDesc: 'Puedo responder preguntas sobre cualquier lección si conectas una Gemini API Key más tarde.',
+      welcomeBtnStart: 'Empezar a Explorar',
+      welcomeBtnConfig: 'Configurar IA (Avanzado)'
     }
 };
 

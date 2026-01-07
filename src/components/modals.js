@@ -104,46 +104,70 @@ class ArborModals extends HTMLElement {
 
     renderWelcome(ui) {
         return `
-        <div class="p-8 flex flex-col items-center text-center">
-             <div class="w-32 h-32 rounded-full bg-slate-100 dark:bg-slate-800 border-4 border-white dark:border-slate-700 shadow-xl flex items-center justify-center text-7xl mb-6 relative animate-bounce" style="animation-duration: 3s">
-                🦉
-                <div class="absolute -bottom-2 -right-2 bg-green-500 text-white text-xs font-bold px-2 py-1 rounded-full border-2 border-white dark:border-slate-900">SAGE</div>
-             </div>
-             <h2 class="text-3xl font-black text-slate-800 dark:text-white mb-2 leading-tight">${ui.welcomeHello}</h2>
-             <p class="text-lg font-bold text-slate-600 dark:text-slate-300 mb-6">${ui.welcomeRole}</p>
-             
-             <div class="bg-purple-50 dark:bg-purple-900/10 p-4 rounded-xl border border-purple-100 dark:border-purple-800 mb-6 text-left relative overflow-hidden">
-                <div class="absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-white dark:bg-slate-900 rotate-45 border-l border-b border-purple-100 dark:border-purple-800"></div>
-                <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                   ${ui.welcomeHelp}
-                </p>
-             </div>
+        <div class="flex flex-col h-full bg-slate-50 dark:bg-slate-900">
+            <!-- Header Image / Icon -->
+            <div class="pt-8 pb-4 flex flex-col items-center justify-center bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 rounded-t-3xl">
+                <div class="text-6xl mb-2">🌳</div>
+                <h2 class="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ARBOR ACADEMY</h2>
+                <p class="text-slate-500 dark:text-slate-400 text-sm font-medium">${ui.welcomeIntro}</p>
+            </div>
+            
+            <!-- Features Scroll -->
+            <div class="flex-1 overflow-y-auto p-6 space-y-6">
+                <!-- Step 1 -->
+                <div class="flex gap-4 items-start">
+                    <div class="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xl flex-shrink-0">🚀</div>
+                    <div>
+                        <h3 class="font-bold text-slate-800 dark:text-white">${ui.welcomeTip1}</h3>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mt-1">${ui.welcomeTip1Desc}</p>
+                    </div>
+                </div>
 
-             <div class="space-y-3 w-full">
-                 <button id="btn-welcome-smart" class="w-full py-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-purple-500/30 transition-transform active:scale-95 flex items-center justify-center gap-2">
-                    <span class="text-xl">✨</span> ${ui.welcomeBtnSmart}
+                <!-- Step 2 -->
+                <div class="flex gap-4 items-start">
+                    <div class="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 flex items-center justify-center text-xl flex-shrink-0">🍎</div>
+                    <div>
+                        <h3 class="font-bold text-slate-800 dark:text-white">${ui.welcomeTip2}</h3>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mt-1">${ui.welcomeTip2Desc}</p>
+                    </div>
+                </div>
+
+                <!-- Optional AI Section -->
+                <div class="bg-purple-50 dark:bg-purple-900/10 p-4 rounded-xl border border-purple-100 dark:border-purple-800/30 mt-4">
+                    <div class="flex gap-3">
+                         <div class="text-2xl">🦉</div>
+                         <div>
+                             <h4 class="font-bold text-purple-700 dark:text-purple-300 text-sm">${ui.welcomeOptional}</h4>
+                             <p class="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">${ui.welcomeOptionalDesc}</p>
+                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer Actions -->
+            <div class="p-4 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 flex flex-col gap-2">
+                 <button id="btn-welcome-start" class="w-full py-4 bg-slate-800 dark:bg-white text-white dark:text-slate-900 font-bold rounded-xl shadow-lg transition-transform active:scale-95 text-lg">
+                    ${ui.welcomeBtnStart}
                  </button>
-                 <button id="btn-welcome-local" class="w-full py-3 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white font-bold rounded-xl transition-colors">
-                    ${ui.welcomeBtnLocal}
+                 <button id="btn-welcome-config" class="w-full py-3 text-purple-600 dark:text-purple-400 font-bold text-sm hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-xl transition-colors">
+                    ${ui.welcomeBtnConfig}
                  </button>
-             </div>
-             
-             <p class="text-[10px] text-slate-400 mt-4">${ui.welcomeLocal}</p>
+            </div>
         </div>
         `;
     }
 
     bindWelcomeEvents() {
-        // Save 'seen' flag
         const markSeen = () => localStorage.setItem('arbor-welcome-seen', 'true');
 
-        this.querySelector('#btn-welcome-smart').onclick = () => {
-            markSeen();
-            store.setModal({ type: 'sage', mode: 'settings' });
-        };
-        this.querySelector('#btn-welcome-local').onclick = () => {
+        this.querySelector('#btn-welcome-start').onclick = () => {
             markSeen();
             this.close();
+        };
+
+        this.querySelector('#btn-welcome-config').onclick = () => {
+            markSeen();
+            store.setModal({ type: 'sage', mode: 'settings' });
         };
     }
 
