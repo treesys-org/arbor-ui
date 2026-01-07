@@ -1,6 +1,5 @@
 
 
-
 import { store } from '../store.js';
 import { aiService } from '../services/ai.js';
 
@@ -10,9 +9,18 @@ class ArborSage extends HTMLElement {
         this.isVisible = false;
         this.mode = 'chat'; // 'chat' | 'settings' | 'menu'
         
-        // Historial de chat local (efímero, se borra al recargar)
-        this.localMessages = []; 
-        this.currentModalRef = null;
+        // UI State for Settings
+        this.settingsTab = this.determineInitialTab();
+        this.ollamaModels = [];
+        this.pullStatus = '';
+        this.webllmStatus = '';
+        this.hasTriedLoadingModels = false; // Prevents infinite loops
+    }
+    
+    determineInitialTab() {
+        if (aiService.config.provider === 'ollama') return 'ollama';
+        if (aiService.config.provider === 'webllm') return 'webllm';
+        return 'gemini';
     }
 
     connectedCallback() {
@@ -21,65 +29,129 @@ class ArborSage extends HTMLElement {
 
     checkState() {
         const modal = store.value.modal;
-        
-        // Check if this is a NEW request via reference equality
-        const isNewRequest = modal !== this.currentModalRef;
-        this.currentModalRef = modal;
+        const isSageReq = modal && (modal === 'sage' || modal.type === 'sage');
 
-        // El modal ahora puede ser un objeto { type: 'sage', mode: 'settings' }
-        if (modal && (modal === 'sage' || modal.type === 'sage')) {
-            const requestedMode = modal.mode;
-            
-            if (isNewRequest) {
-                // If the same mode is requested while visible, toggle close
-                if (this.isVisible && this.mode === requestedMode) {
-                    this.close();
-                } else {
-                    // Open or switch mode
-                    this.isVisible = true;
-
-                    // Decision Logic:
-                    if (requestedMode) {
-                        this.mode = requestedMode;
-                    } else if (aiService.isSmartMode()) {
-                        this.mode = 'chat'; // Has Key -> Chat
-                    } else {
-                        this.mode = 'menu'; // No Key -> Show Options (Help or Config)
-                    }
-                    
-                    this.render();
-                }
+        if (isSageReq) {
+            // Case 1: Opening for the first time
+            if (!this.isVisible) {
+                this.isVisible = true;
+                this.mode = modal.mode || (aiService.isSmartMode() ? 'chat' : 'menu');
+                this.settingsTab = this.determineInitialTab();
+            } 
+            // Case 2: Already open, but checking if mode switch requested
+            else if (modal.mode && modal.mode !== this.mode) {
+                this.mode = modal.mode;
             }
-            // If it's not a new request (unrelated state change), do nothing, keep current state
-        } else if (this.isVisible) {
-             // Si el modal global cambió a otra cosa (null o otro tipo), cerrar Sage
-             this.close();
+            
+            // ALWAYS Render if open (This fixes the issue of not seeing the response)
+            this.render();
+        } else {
+            // Case 3: Store says close, but we are open
+            if (this.isVisible) {
+                this.close();
+            }
         }
     }
     
     close() {
         this.isVisible = false;
         this.innerHTML = '';
-        this.className = ''; // IMPORTANT: Clear backdrop/position classes
-        // Explicitly clear global state on close
+        this.className = '';
         store.setModal(null);
     }
 
-    saveApiKey() {
-        const inp = this.querySelector('#inp-api-key');
-        if (inp && inp.value.trim()) {
-            aiService.setApiKey(inp.value.trim());
-            store.initSage();
-            // Ir al chat tras guardar
-            this.mode = 'chat';
+    saveConfig() {
+        if (this.settingsTab === 'gemini') {
+            const key = this.querySelector('#inp-api-key').value.trim();
+            if (key) {
+                aiService.setConfig({ provider: 'gemini', apiKey: key });
+                this.finishConfig();
+            }
+        } else if (this.settingsTab === 'ollama') {
+            const model = this.querySelector('#inp-ollama-model').value.trim();
+            if (model) {
+                aiService.setConfig({ provider: 'ollama', ollamaModel: model });
+                this.finishConfig();
+            }
+        } else if (this.settingsTab === 'webllm') {
+            const model = this.querySelector('#inp-webllm-model').value;
+            aiService.setConfig({ provider: 'webllm', webllmModel: model });
+            // Only finish config if engine is loaded, otherwise keep on setting screen or let load
+            if (aiService.webllmEngine) {
+                 this.finishConfig();
+            } else {
+                alert("Debes cargar el modelo en memoria primero.");
+            }
+        }
+    }
+    
+    finishConfig() {
+        store.initSage();
+        this.mode = 'chat';
+        this.render();
+    }
+
+    clearConfig() {
+        aiService.setConfig({ provider: 'none', apiKey: null });
+        this.mode = 'settings';
+        this.render();
+    }
+
+    async loadOllamaModels() {
+        this.hasTriedLoadingModels = true;
+        this.ollamaModels = await aiService.listOllamaModels();
+        this.render();
+    }
+    
+    async loadWebLLM() {
+        const model = this.querySelector('#inp-webllm-model').value;
+        aiService.setConfig({ provider: 'webllm', webllmModel: model });
+        
+        this.webllmStatus = 'Iniciando descarga (esto puede tardar unos minutos)...';
+        this.render();
+        
+        const success = await aiService.loadWebLLM((progressText) => {
+            this.webllmStatus = progressText;
+            const el = this.querySelector('#webllm-status-text');
+            if(el) el.textContent = progressText;
+        });
+        
+        if(success) {
+            this.webllmStatus = "Modelo cargado y listo para usar.";
+            this.finishConfig();
+        } else {
+            this.webllmStatus = "Error al cargar. Revisa la consola o intenta otro modelo.";
             this.render();
         }
     }
 
-    clearApiKey() {
-        aiService.setApiKey(null);
-        this.mode = 'settings';
+    async pullModel() {
+        const name = this.querySelector('#inp-pull-model').value.trim();
+        if(!name) return;
+
+        this.pullStatus = 'Iniciando descarga...';
         this.render();
+
+        const success = await aiService.pullOllamaModel(name, (status) => {
+            this.pullStatus = status;
+            const statusEl = this.querySelector('#pull-status');
+            if(statusEl) statusEl.textContent = status;
+        });
+
+        this.pullStatus = success ? '¡Descarga completada!' : 'Error en descarga.';
+        await this.loadOllamaModels();
+        // Update input to the downloaded model
+        if(success) {
+            aiService.setConfig({ provider: 'ollama', ollamaModel: name });
+            this.render();
+        }
+    }
+
+    async deleteModel(name) {
+        if(confirm(`¿Eliminar modelo ${name}?`)) {
+            await aiService.deleteOllamaModel(name);
+            await this.loadOllamaModels();
+        }
     }
     
     async runQuickAction(action) {
@@ -112,7 +184,6 @@ class ArborSage extends HTMLElement {
 
     renderMenu() {
         const ui = store.ui;
-        // Menu Mode: Simple Choice Center Screen
         this.className = "fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4";
 
         this.innerHTML = `
@@ -150,13 +221,10 @@ class ArborSage extends HTMLElement {
         `;
 
         this.querySelector('.btn-close').onclick = () => this.close();
-        
         this.querySelector('#btn-menu-help').onclick = () => {
             this.close();
-            // Opens the "Welcome" narrative which is now the main explanation
             setTimeout(() => store.setModal('welcome'), 100);
         };
-
         this.querySelector('#btn-menu-ai').onclick = () => {
             this.mode = 'settings';
             this.render();
@@ -164,80 +232,240 @@ class ArborSage extends HTMLElement {
     }
 
     renderSettings(isSmart) {
-        // Modal centrado para configuración
+        const ui = store.ui;
         this.className = "fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4";
         
+        const tab = this.settingsTab;
+        const isGemini = tab === 'gemini';
+        const isOllama = tab === 'ollama';
+        const isWebLLM = tab === 'webllm';
+
+        // Render Models List (Only for Ollama)
+        let modelsListHtml = '';
+        if (isOllama) {
+            // FIX: Prevent infinite loop by checking hasTriedLoadingModels
+            if (this.ollamaModels.length === 0 && !this.hasTriedLoadingModels && this.pullStatus === '') {
+                 // Trigger load if empty and haven't tried yet
+                 setTimeout(() => this.loadOllamaModels(), 0);
+                 modelsListHtml = `<div class="text-center p-4 text-slate-400 text-xs animate-pulse">Buscando modelos locales...</div>`;
+            } else if (this.ollamaModels.length === 0) {
+                 modelsListHtml = `
+                 <div class="text-center p-4 text-slate-400 text-xs border border-dashed border-slate-300 dark:border-slate-700 rounded-lg">
+                    <p class="mb-2">No se detectaron modelos.</p>
+                    <p class="mb-2">Asegúrate de que <strong class="text-slate-600 dark:text-slate-300">Ollama</strong> está corriendo en el puerto 11434.</p>
+                    <button id="btn-retry-models" class="text-blue-500 hover:text-blue-600 font-bold underline">Reintentar conexión</button>
+                 </div>`;
+            } else {
+                 modelsListHtml = this.ollamaModels.map(m => {
+                     const isSelected = aiService.config.ollamaModel === m.name;
+                     // Safe size calculation
+                     const sizeGB = m.size ? Math.round(m.size / 1024 / 1024 / 1024 * 10) / 10 : 0;
+                     return `
+                     <div class="flex items-center justify-between p-2 rounded-lg border ${isSelected ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20' : 'border-slate-100 dark:border-slate-700'}">
+                        <button class="flex-1 text-left btn-select-model truncate font-mono text-xs text-slate-700 dark:text-slate-300" data-name="${m.name}">
+                            ${isSelected ? '✅ ' : ''}${m.name} <span class="text-[9px] text-slate-400">(${sizeGB}GB)</span>
+                        </button>
+                        <button class="btn-delete-model p-1.5 text-slate-400 hover:text-red-500" data-name="${m.name}" title="Eliminar">🗑</button>
+                     </div>`;
+                 }).join('');
+            }
+        }
+
+        // WebLLM Available Models
+        const webLlmOptions = [
+            "Llama-3.2-1B-Instruct-q4f16_1-MLC",
+            "Llama-3.2-3B-Instruct-q4f16_1-MLC",
+            "Llama-3.1-8B-Instruct-q4f32_1-MLC",
+            "gemma-2-2b-it-q4f16_1-MLC",
+            "Phi-3.5-mini-instruct-q4f16_1-MLC"
+        ];
+
         this.innerHTML = `
-            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full relative overflow-hidden flex flex-col animate-in zoom-in duration-200 border border-slate-200 dark:border-slate-800">
-                <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950">
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full relative overflow-hidden flex flex-col animate-in zoom-in duration-200 border border-slate-200 dark:border-slate-800 max-h-[85vh]">
+                <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950 shrink-0">
                     <div class="flex items-center gap-3">
                         <span class="text-3xl">⚙️</span>
                         <div>
-                            <h3 class="font-black text-xl text-slate-800 dark:text-white">Configuración del Sabio</h3>
-                            <p class="text-xs text-slate-500">Conecta tu propia inteligencia</p>
+                            <h3 class="font-black text-xl text-slate-800 dark:text-white">${ui.sageConfigTitle}</h3>
+                            <p class="text-xs text-slate-500">${ui.sageConfigDesc}</p>
                         </div>
                     </div>
                     <button class="btn-close text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors">✕</button>
                 </div>
                 
-                <div class="p-8 space-y-6">
-                    <div class="bg-purple-50 dark:bg-purple-900/10 p-4 rounded-xl border border-purple-100 dark:border-purple-800/30">
-                        <p class="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase mb-2">Google Gemini API Key</p>
-                        <input id="inp-api-key" type="password" placeholder="Pegar API Key aquí..." class="w-full text-sm p-3 border-2 border-purple-200 dark:border-purple-800 rounded-xl bg-white dark:bg-slate-900 focus:ring-4 focus:ring-purple-200 outline-none transition-all font-mono text-slate-800 dark:text-white" value="${isSmart ? '****************' : ''}">
-                        <p class="text-[10px] text-slate-500 mt-2">
-                           La llave se guarda en tu navegador. Arbor no tiene servidores.
-                        </p>
+                <div class="flex border-b border-slate-100 dark:border-slate-800 shrink-0">
+                    <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${isGemini ? 'border-purple-500 text-purple-600 dark:text-purple-400' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-gemini">
+                        ☁️ ${ui.sageModeCloud}
+                    </button>
+                    <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${isOllama ? 'border-orange-500 text-orange-600 dark:text-orange-400' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-ollama">
+                        💻 ${ui.sageModeLocal}
+                    </button>
+                    <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${isWebLLM ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-webllm">
+                        🌐 WebGPU
+                    </button>
+                </div>
+                
+                <div class="p-6 space-y-6 overflow-y-auto custom-scrollbar">
+                    
+                    <!-- GEMINI TAB -->
+                    ${isGemini ? `
+                    <div class="bg-purple-50 dark:bg-purple-900/10 p-4 rounded-xl border border-purple-100 dark:border-purple-800/30 animate-in fade-in">
+                        <p class="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase mb-2">${ui.sageApiKeyLabel}</p>
+                        <input id="inp-api-key" type="password" placeholder="AIz..." class="w-full text-sm p-3 border-2 border-purple-200 dark:border-purple-800 rounded-xl bg-white dark:bg-slate-900 focus:ring-4 focus:ring-purple-200 outline-none transition-all font-mono text-slate-800 dark:text-white" value="${aiService.config.apiKey || ''}">
+                        <div class="text-center pt-2">
+                             <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-xs text-blue-500 hover:underline font-bold">Get API Key ↗</a>
+                        </div>
                     </div>
+                    ` : ''}
 
-                    <div class="space-y-3">
-                        <button id="btn-save-key" class="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2">
-                            <span>💾</span> GUARDAR Y ACTIVAR
+                    <!-- OLLAMA TAB -->
+                    ${isOllama ? `
+                    <div class="bg-orange-50 dark:bg-orange-900/10 p-4 rounded-xl border border-orange-100 dark:border-orange-800/30 animate-in fade-in">
+                        <p class="text-xs font-bold text-orange-600 dark:text-orange-400 uppercase mb-2">${ui.sageOllamaLabel}</p>
+                        
+                        <!-- Model Selection -->
+                        <input id="inp-ollama-model" type="text" placeholder="llama3" class="w-full text-sm p-3 border-2 border-orange-200 dark:border-orange-800 rounded-xl bg-white dark:bg-slate-900 focus:ring-4 focus:ring-orange-200 outline-none transition-all font-mono text-slate-800 dark:text-white mb-2" value="${aiService.config.ollamaModel}">
+                        <p class="text-[10px] text-slate-500 mb-4">${ui.sageOllamaHint}</p>
+                        
+                        <!-- Model Manager -->
+                        <div class="border-t border-orange-200 dark:border-orange-800 pt-4">
+                            <p class="text-xs font-bold text-slate-500 uppercase mb-2">Descargar Modelo</p>
+                            <div class="flex gap-2 mb-2">
+                                <input id="inp-pull-model" type="text" placeholder="ej: mistral" class="flex-1 text-xs p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                                <button id="btn-pull" class="px-3 py-1 bg-slate-800 text-white text-xs font-bold rounded-lg hover:bg-black">Pull</button>
+                            </div>
+                            <p id="pull-status" class="text-[10px] font-mono text-blue-500 h-4 mb-4">${this.pullStatus}</p>
+
+                            <p class="text-xs font-bold text-slate-500 uppercase mb-2">Modelos Disponibles</p>
+                            <div class="space-y-2 max-h-32 overflow-y-auto custom-scrollbar bg-white/50 dark:bg-slate-900/50 rounded-lg p-1">
+                                ${modelsListHtml}
+                            </div>
+                        </div>
+                    </div>
+                    ` : ''}
+
+                    <!-- WEBLLM TAB -->
+                    ${isWebLLM ? `
+                    <div class="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-800/30 animate-in fade-in">
+                         <div class="flex items-center gap-2 mb-2">
+                            <p class="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase">${ui.sageWebLlmModel}</p>
+                            <span class="text-[9px] bg-blue-100 text-blue-700 px-1.5 rounded font-bold">Experimental</span>
+                         </div>
+                         <select id="inp-webllm-model" class="w-full text-sm p-3 border-2 border-blue-200 dark:border-blue-800 rounded-xl bg-white dark:bg-slate-900 focus:ring-4 focus:ring-blue-200 outline-none transition-all font-mono text-slate-800 dark:text-white mb-4">
+                             ${webLlmOptions.map(m => `<option value="${m}" ${aiService.config.webllmModel === m ? 'selected' : ''}>${m}</option>`).join('')}
+                         </select>
+
+                         <p class="text-[11px] text-slate-500 leading-tight mb-4">
+                            Ejecuta modelos directamente en tu navegador. <strong>Requiere una GPU moderna</strong> y descargará ~2-4GB de datos la primera vez.
+                         </p>
+
+                         <div class="bg-white dark:bg-slate-900 p-3 rounded-lg border border-blue-200 dark:border-blue-800/50 mb-4">
+                            <p class="text-[10px] font-bold text-slate-400 uppercase mb-1">${ui.sageModelStatus}</p>
+                            <p id="webllm-status-text" class="text-xs font-mono text-slate-700 dark:text-slate-300 break-words">
+                                ${this.webllmStatus || (aiService.webllmEngine ? "Modelo cargado." : "No cargado.")}
+                            </p>
+                         </div>
+                         
+                         <button id="btn-load-webllm" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm transition-colors shadow-md">
+                            ${ui.sageLoadModel} (Download)
+                         </button>
+                    </div>
+                    ` : ''}
+
+                    <div class="space-y-3 pt-2">
+                        <button id="btn-save-config" class="w-full py-4 ${isGemini ? 'bg-purple-600 hover:bg-purple-500' : (isOllama ? 'bg-orange-600 hover:bg-orange-500' : 'bg-blue-600 hover:bg-blue-500')} text-white font-bold rounded-xl shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2">
+                            <span>💾</span> ${ui.sageSaveKey}
                         </button>
                         
                         ${isSmart ? `
-                        <button id="btn-clear-key" class="w-full py-3 border border-red-200 dark:border-red-900/30 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 font-bold rounded-xl transition-transform active:scale-95 text-xs">
-                            BORRAR LLAVE
-                        </button>` : `
-                        <div class="text-center pt-2">
-                             <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-xs text-blue-500 hover:underline font-bold">Obtener API Key gratis en Google AI Studio ↗</a>
-                        </div>
-                        `}
+                        <button id="btn-clear-config" class="w-full py-3 border border-red-200 dark:border-red-900/30 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 font-bold rounded-xl transition-transform active:scale-95 text-xs">
+                            ${ui.sageClearConfig}
+                        </button>` : ''}
                     </div>
                 </div>
             </div>
         `;
 
         this.querySelector('.btn-close').onclick = () => this.close();
-        this.querySelector('#btn-save-key').onclick = () => this.saveApiKey();
-        const btnClear = this.querySelector('#btn-clear-key');
-        if(btnClear) btnClear.onclick = () => this.clearApiKey();
+        this.querySelector('#tab-gemini').onclick = () => { this.settingsTab = 'gemini'; this.render(); };
+        this.querySelector('#tab-ollama').onclick = () => { this.settingsTab = 'ollama'; this.render(); };
+        this.querySelector('#tab-webllm').onclick = () => { this.settingsTab = 'webllm'; this.render(); };
+        
+        this.querySelector('#btn-save-config').onclick = () => this.saveConfig();
+        const btnClear = this.querySelector('#btn-clear-config');
+        if(btnClear) btnClear.onclick = () => this.clearConfig();
+
+        if (isOllama) {
+            this.querySelector('#btn-pull').onclick = () => this.pullModel();
+            
+            // Retry button binding
+            const btnRetry = this.querySelector('#btn-retry-models');
+            if(btnRetry) btnRetry.onclick = () => this.loadOllamaModels();
+            
+            this.querySelectorAll('.btn-delete-model').forEach(b => b.onclick = (e) => this.deleteModel(e.currentTarget.dataset.name));
+            this.querySelectorAll('.btn-select-model').forEach(b => {
+                 b.onclick = (e) => {
+                     this.querySelector('#inp-ollama-model').value = e.currentTarget.dataset.name;
+                     this.saveConfig(); // Auto save when clicking list
+                 };
+            });
+        }
+        
+        if (isWebLLM) {
+            this.querySelector('#btn-load-webllm').onclick = () => this.loadWebLLM();
+            // Allow changing model dropdown to update state immediately if wanted, 
+            // but usually we wait for Load button.
+        }
     }
 
     renderChat(isSmart) {
-        // Chat flotante estilo widget
         this.className = "fixed inset-x-0 bottom-0 z-[100] flex flex-col items-end md:bottom-6 md:right-6 md:w-auto pointer-events-none";
 
         const aiState = store.value.ai;
         const displayMessages = aiState.messages.length > 0 ? aiState.messages : [{ role: 'assistant', content: "🦉 Hola. Hazme preguntas sobre esta lección." }];
         const displayStatus = aiState.status;
+        
+        const isOllama = aiService.config.provider === 'ollama';
+        const isWebLLM = aiService.config.provider === 'webllm';
+        const isGemini = aiService.config.provider === 'gemini';
+        
+        const isThinking = displayStatus === 'thinking';
+        
+        let headerGradient = 'from-purple-600 to-indigo-600'; // Gemini Default
+        let providerName = 'Gemini Cloud';
+        let sendBtnColor = 'bg-purple-600';
+        
+        if (isOllama) {
+            headerGradient = 'from-orange-500 to-red-500';
+            providerName = 'Local CPU (Ollama)';
+            sendBtnColor = 'bg-orange-600';
+        } else if (isWebLLM) {
+            headerGradient = 'from-blue-500 to-cyan-500';
+            providerName = 'Browser GPU (WebLLM)';
+            sendBtnColor = 'bg-blue-600';
+        }
 
         this.innerHTML = `
             <div id="sage-backdrop" class="md:hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm pointer-events-auto transition-opacity"></div>
             <div class="pointer-events-auto transition-all duration-300 origin-bottom md:origin-bottom-right shadow-2xl md:rounded-2xl w-full md:w-[380px] h-[80dvh] md:h-[600px] bg-white dark:bg-slate-900 flex flex-col border border-slate-200 dark:border-slate-800 animate-in slide-in-from-bottom-10 fade-in rounded-t-2xl">
                 
                 <!-- Header -->
-                <div class="p-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white flex justify-between items-center shadow-md z-10 shrink-0 rounded-t-2xl">
+                <div class="p-4 bg-gradient-to-r ${headerGradient} text-white flex justify-between items-center shadow-md z-10 shrink-0 rounded-t-2xl">
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-xl backdrop-blur-sm shadow-inner">🦉</div>
                         <div>
                             <h3 class="font-black text-sm leading-none">Sabio de Arbor</h3>
                             <div class="flex items-center gap-1 mt-0.5">
                                 <span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
-                                <p class="text-[10px] opacity-80 font-medium">Gemini Online</p>
+                                <p class="text-[10px] opacity-80 font-medium">${providerName}</p>
                             </div>
                         </div>
                     </div>
-                    <button class="btn-close w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 transition-colors">✕</button>
+                    <div class="flex items-center gap-2">
+                        <button id="btn-clear" class="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 transition-colors" title="Limpiar Chat">🗑️</button>
+                        <button id="btn-settings" class="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 transition-colors" title="Configuración">⚙️</button>
+                        <button class="btn-close w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 transition-colors">✕</button>
+                    </div>
                 </div>
                 
                 <!-- Messages -->
@@ -246,7 +474,7 @@ class ArborSage extends HTMLElement {
                         <div class="flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 fade-in duration-300">
                             <div class="max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed shadow-sm relative group text-left
                                 ${m.role === 'user' 
-                                    ? 'bg-purple-600 text-white rounded-br-none' 
+                                    ? (sendBtnColor + ' text-white rounded-br-none') 
                                     : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-bl-none'
                                 }">
                                 ${this.formatMessage(m.content)}
@@ -254,7 +482,7 @@ class ArborSage extends HTMLElement {
                         </div>
                      `).join('')}
                      
-                     ${displayStatus === 'thinking' ? `
+                     ${isThinking ? `
                         <div class="flex justify-start">
                             <div class="bg-white dark:bg-slate-800 p-3 rounded-2xl rounded-bl-none border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-1.5 w-16 justify-center">
                                 <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
@@ -266,23 +494,40 @@ class ArborSage extends HTMLElement {
                 </div>
 
                 <!-- Quick Actions -->
+                ${!isThinking ? `
                 <div class="px-3 py-2 flex gap-2 overflow-x-auto custom-scrollbar bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0">
-                    <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 rounded-lg text-xs font-bold hover:bg-purple-100 transition-colors border border-purple-100 dark:border-purple-800" data-action="summarize">📝 Resumir Lección</button>
-                    <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-100 dark:border-blue-800" data-action="explain">🎓 Explicar Concepto</button>
-                    <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-lg text-xs font-bold hover:bg-green-100 transition-colors border border-green-100 dark:border-green-800" data-action="quiz">❓ Quiz Rápido</button>
+                    <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 rounded-lg text-xs font-bold hover:bg-purple-100 transition-colors border border-purple-100 dark:border-purple-800" data-action="summarize">📝 Resumir</button>
+                    <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-100 dark:border-blue-800" data-action="explain">🎓 Explicar</button>
+                    <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-lg text-xs font-bold hover:bg-green-100 transition-colors border border-green-100 dark:border-green-800" data-action="quiz">❓ Quiz</button>
                 </div>
+                ` : ''}
 
                 <!-- Input -->
                 <form id="sage-form" class="p-3 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex gap-2 shrink-0 pb-[calc(0.75rem+env(safe-area-inset-bottom,20px))] md:pb-3">
-                    <input id="sage-input" type="text" class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500 dark:text-white placeholder:text-slate-400" placeholder="Pregunta sobre la lección..." autocomplete="off">
-                    <button type="submit" class="w-11 h-11 bg-purple-600 text-white rounded-xl hover:bg-purple-50 transition-all flex items-center justify-center shadow-lg active:scale-95">
+                    <input id="sage-input" type="text" ${isThinking ? 'disabled' : ''} class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 ${isOllama ? 'focus:ring-orange-500' : (isWebLLM ? 'focus:ring-blue-500' : 'focus:ring-purple-500')} dark:text-white placeholder:text-slate-400 disabled:opacity-50" placeholder="Pregunta sobre la lección..." autocomplete="off">
+                    
+                    ${isThinking ? `
+                    <button type="button" id="btn-stop" class="w-11 h-11 bg-red-500 text-white rounded-xl hover:opacity-90 transition-all flex items-center justify-center shadow-lg active:scale-95 animate-pulse">
+                        <span class="w-4 h-4 bg-white rounded-sm"></span>
+                    </button>
+                    ` : `
+                    <button type="submit" class="w-11 h-11 ${sendBtnColor} text-white rounded-xl hover:opacity-90 transition-all flex items-center justify-center shadow-lg active:scale-95">
                         <svg class="w-5 h-5 translate-x-0.5 -translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>
                     </button>
+                    `}
                 </form>
             </div>
         `;
 
         this.querySelector('.btn-close').onclick = () => this.close();
+        this.querySelector('#btn-settings').onclick = () => {
+            this.mode = 'settings';
+            this.render();
+        };
+        this.querySelector('#btn-clear').onclick = () => {
+             store.clearSageChat();
+        };
+
         const backdrop = this.querySelector('#sage-backdrop');
         if(backdrop) backdrop.onclick = () => this.close();
         
@@ -298,6 +543,9 @@ class ArborSage extends HTMLElement {
                  inp.value = '';
              }
         };
+
+        const btnStop = this.querySelector('#btn-stop');
+        if(btnStop) btnStop.onclick = () => store.abortSage();
 
         this.querySelectorAll('.btn-qa').forEach(btn => {
             btn.onclick = () => this.runQuickAction(btn.dataset.action);

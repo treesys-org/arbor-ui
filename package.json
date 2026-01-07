@@ -19,6 +19,7 @@
     "vite": "^7.3.0",
     "octokit": "latest",
     "@google/genai": "latest",
+    "@mlc-ai/web-llm": "latest",
     "path": "^0.12.7",
     "@angular/build": "^21.0.0",
     "@angular/cli": "^21.0.0",

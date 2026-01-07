@@ -49,7 +49,7 @@ class Store extends EventTarget {
             },
             // AI State
             ai: {
-                status: 'idle', // idle, loading, ready, error
+                status: 'idle', // idle, loading, ready, error, thinking
                 progress: '',
                 messages: [] 
             },
@@ -271,10 +271,26 @@ class Store extends EventTarget {
                 await this.loadNodeChildren(currentNode);
             }
 
-            const nextNode = currentNode.children?.find(child => child.name === ancestorName);
+            // --- IMPROVED MATCHING LOGIC ---
+            // Try exact match first
+            let nextNode = currentNode.children?.find(child => child.name === ancestorName);
+
+            // If not found, try robust/fuzzy matching (handles "Exam: " prefix vs raw name)
+            if (!nextNode && currentNode.children) {
+                const cleanTarget = this.cleanString(ancestorName);
+                nextNode = currentNode.children.find(child => {
+                     const cleanChild = this.cleanString(child.name);
+                     // 1. Normalized match (ignores accents/case)
+                     if (cleanChild === cleanTarget) return true;
+                     // 2. Inclusion match (If path says "Final Exam" but Node says "Exam: Final Exam")
+                     if (child.name.includes(ancestorName)) return true;
+                     return false;
+                });
+            }
 
             if (!nextNode) {
-                console.error(`Navigation failed: Could not find child "${ancestorName}"`);
+                console.error(`Navigation failed: Could not find child "${ancestorName}" in ${currentNode.name}`);
+                // Abort navigation if branch is broken, but allow user to stay where they are
                 return;
             }
 
@@ -536,6 +552,16 @@ class Store extends EventTarget {
             console.error(e);
             this.update({ ai: { ...this.state.ai, status: 'error', progress: e.message } });
         }
+    }
+
+    abortSage() {
+        aiService.abort();
+        this.update({ ai: { ...this.state.ai, status: 'ready' } });
+    }
+
+    clearSageChat() {
+        const initial = [{ role: 'assistant', content: this.state.lang === 'ES' ? "🦉 ¡Huu huu! Estoy despierto. Pregúntame lo que quieras." : "🦉 Hoot hoot! I am awake. Ask me anything." }];
+        this.update({ ai: { ...this.state.ai, messages: initial, status: 'ready' } });
     }
 
     async chatWithSage(userText) {

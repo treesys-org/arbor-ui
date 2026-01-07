@@ -1,6 +1,4 @@
 
-
-
 export const UI_LABELS = {
     EN: {
       appTitle: 'ARBOR',
@@ -233,18 +231,22 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       sageMenuHelp: 'Explain Arbor',
       sageMenuHelpDesc: 'The Sage will guide you.',
       sageMenuAi: 'Enable True Sight',
-      sageMenuAiDesc: 'Connect Gemini API for smart answers.',
+      sageMenuAiDesc: 'Connect Local AI (Ollama/WebLLM) or Gemini.',
       
       // AI Upgrade
-      sageUpgrade: 'Grant me Sight',
-      sageUpgradeDesc: 'Enter your Gemini API Key to unlock full intelligence.',
+      sageConfigTitle: 'Sage Configuration',
+      sageConfigDesc: 'Choose how the Sage thinks.',
+      sageModeCloud: 'Cloud (Gemini)',
+      sageModeLocal: 'Local (Ollama)',
+      sageModeBrowser: 'Browser (WebGPU)',
       sageApiKeyLabel: 'Google Gemini API Key',
-      sageSaveKey: 'Activate Super Brain 🧠',
-      sageBackToLocal: 'Switch back to Local (Free)',
-
-      // Welcome Screen (Legacy strings removed, using welcomeSteps above)
-      welcomeBtnStart: 'Start Exploring',
-      welcomeBtnConfig: 'Configure AI (Advanced)'
+      sageOllamaLabel: 'Ollama Model Name',
+      sageWebLlmModel: 'WebGPU Model',
+      sageLoadModel: 'Load to Browser Cache',
+      sageModelStatus: 'Status',
+      sageOllamaHint: 'Ensure Ollama is running on localhost:11434',
+      sageSaveKey: 'Save Configuration',
+      sageClearConfig: 'Reset Configuration'
     },
     ES: {
       appTitle: 'ARBOR',
@@ -482,18 +484,22 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       sageMenuHelp: 'Explícame Arbor',
       sageMenuHelpDesc: 'El Sabio te guiará.',
       sageMenuAi: 'Activar Visión Verdadera',
-      sageMenuAiDesc: 'Conectar Gemini API para respuestas.',
+      sageMenuAiDesc: 'Conectar IA Local (Ollama/WebLLM) o Gemini Cloud.',
 
       // AI Upgrade
-      sageUpgrade: 'Dame Visión',
-      sageUpgradeDesc: 'Introduce tu Gemini API Key para desbloquear la inteligencia real.',
+      sageConfigTitle: 'Configuración del Sabio',
+      sageConfigDesc: 'Elige cómo piensa el sabio.',
+      sageModeCloud: 'Nube (Gemini)',
+      sageModeLocal: 'Local (Ollama)',
+      sageModeBrowser: 'Navegador (WebGPU)',
       sageApiKeyLabel: 'Google Gemini API Key',
-      sageSaveKey: 'Activar Super Cerebro 🧠',
-      sageBackToLocal: 'Volver a Local (Gratis)',
-
-      // Welcome Screen (Legacy strings removed, using welcomeSteps above)
-      welcomeBtnStart: 'Empezar a Explorar',
-      welcomeBtnConfig: 'Configurar IA (Avanzado)'
+      sageOllamaLabel: 'Nombre del Modelo Ollama',
+      sageWebLlmModel: 'Modelo WebGPU',
+      sageLoadModel: 'Cargar en caché del navegador',
+      sageModelStatus: 'Estado',
+      sageOllamaHint: 'Asegúrate de ejecutar Ollama en localhost:11434',
+      sageSaveKey: 'Guardar Configuración',
+      sageClearConfig: 'Restablecer Configuración'
     }
 };
 
