@@ -31,8 +31,8 @@ class Store extends EventTarget {
             lang: localStorage.getItem('arbor-lang') || 'EN',
             sources: [],
             activeSource: null,
-            data: null, // Current Tree Root
-            searchIndex: [],
+            data: null, // Current Tree Root (Lazy Loaded)
+            searchIndex: [], // Flat list of ALL nodes (The Oracle)
             path: [], 
             completedNodes: new Set(),
             // Gamification State
@@ -174,15 +174,36 @@ class Store extends EventTarget {
             
             const searchUrl = source.url.replace('data.json', 'search-index.json');
             const searchRes = await fetch(searchUrl).catch(() => null);
-            const searchIndex = searchRes && searchRes.ok ? await searchRes.json() : [];
+            let searchIndex = searchRes && searchRes.ok ? await searchRes.json() : [];
 
-            const langData = json.languages?.[this.state.lang] || Object.values(json.languages)[0];
+            let langData = json.languages?.[this.state.lang] || Object.values(json.languages)[0];
             
             if (json.universeName && json.universeName !== source.name) {
                 const updatedSources = this.state.sources.map(s => s.id === source.id ? {...s, name: json.universeName} : s);
                 this.update({ sources: updatedSources });
                 localStorage.setItem('arbor-sources', JSON.stringify(updatedSources));
             }
+            
+            // --- NEW: Apply i18n prefix to exam names ---
+            const examPrefix = this.ui.examLabelPrefix;
+            if (examPrefix) {
+                const applyPrefix = (node) => {
+                    if (node.type === 'exam' && !node.name.startsWith(examPrefix)) {
+                        node.name = examPrefix + node.name;
+                    }
+                };
+                
+                // Apply to main data tree
+                const traverse = (node) => {
+                    applyPrefix(node);
+                    if (node.children) node.children.forEach(traverse);
+                };
+                traverse(langData);
+
+                // Apply to search index
+                searchIndex.forEach(node => applyPrefix(node));
+            }
+            // --- END NEW ---
 
             this.update({ 
                 data: langData, 
@@ -200,6 +221,14 @@ class Store extends EventTarget {
         }
     }
 
+    // Helper: Strip accents and lowercase for robust comparison
+    cleanString(str) {
+        if (!str) return "";
+        return str.toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove accents
+            .replace(/[^a-z0-9]/g, ""); // Remove non-alphanumeric
+    }
+
     findNode(id, node = this.state.data) {
         if (!node) return null;
         if (node.id === id) return node;
@@ -212,22 +241,24 @@ class Store extends EventTarget {
         return null;
     }
     
-    // Helper to find the Top Level Module (Branch under Root) for any given node ID
     getTopLevelModule(nodeId) {
         let curr = this.findNode(nodeId);
-        if (!curr) return null;
-        
-        // Traverse upwards until we find a node whose parent is the root
-        // OR we hit the top.
+        if (!curr) {
+            return null;
+        }
+
+        // Traverse upwards until we find a node whose parent is the Root
         while(curr.parentId) {
             const parent = this.findNode(curr.parentId);
             if (!parent) break; 
-            // If parent is the language root (e.g., id ends in -root), then curr is the module
+            
+            // If the parent is the Language Root, then 'curr' is the Top Level Module
             if (parent.type === 'root') return curr; 
+            
             curr = parent;
         }
-        // If we are here, curr might be the root itself or a detached node
-        return null;
+        // Fallback: If we are already at top level or structure is flat
+        return curr;
     }
 
     async navigateTo(nodeId) {
@@ -353,6 +384,18 @@ class Store extends EventTarget {
                 let text = await res.text();
                 if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
                 node.children = JSON.parse(text.trim());
+
+                // --- NEW: Apply prefix to newly loaded children ---
+                const examPrefix = this.ui.examLabelPrefix;
+                if (examPrefix) {
+                    node.children.forEach(child => {
+                        if (child.type === 'exam' && !child.name.startsWith(examPrefix)) {
+                            child.name = examPrefix + child.name;
+                        }
+                    });
+                }
+                // --- END NEW ---
+
                 node.hasUnloadedChildren = false;
             } else {
                 throw new Error(`Failed to load children: ${node.apiPath}.json`);
@@ -377,8 +420,11 @@ class Store extends EventTarget {
     openEditor(node) { if (node) this.update({ modal: { type: 'editor', node: node } }); }
     search(query) {
         if (!query) return [];
-        const q = query.toLowerCase();
-        return this.state.searchIndex.filter(n => n.lang === this.state.lang && (n.name.toLowerCase().includes(q) || (n.description && n.description.toLowerCase().includes(q))));
+        const q = this.cleanString(query);
+        return this.state.searchIndex.filter(n => 
+            n.lang === this.state.lang && 
+            (this.cleanString(n.name).includes(q) || (n.description && this.cleanString(n.description).includes(q)))
+        );
     }
 
     // --- AI / SAGE LOGIC ---
@@ -533,65 +579,48 @@ class Store extends EventTarget {
         this.checkForModuleCompletion(nodeId);
     }
 
-    markBranchComplete(parentId) {
-        if (!parentId) return;
-        const parentNode = this.findNode(parentId);
-        if (!parentNode) return;
+    // PATH FLOODING STRATEGY (SIMPLIFIED)
+    markBranchComplete(branchId) {
+        if (!branchId) return;
         
-        let addedCount = 0;
-        const collectLeaves = (node) => {
-            if (node.type === 'leaf' || node.type === 'exam') {
-                if (!this.state.completedNodes.has(node.id)) {
-                    this.state.completedNodes.add(node.id);
-                    addedCount++;
-                }
-            }
-            if (node.children) node.children.forEach(collectLeaves);
-        };
-        collectLeaves(parentNode);
-
-        // Explicitly mark the Branch itself as complete so it turns green in graph
-        this.state.completedNodes.add(parentId);
+        // Find the Branch Node in the Search Index to get its path
+        const branchEntry = this.state.searchIndex.find(n => n.id === branchId && n.lang === this.state.lang);
         
-        // IMPORTANT: Force a fresh object reference to ensure watchers trigger
-        this.state.completedNodes = new Set(this.state.completedNodes);
-
-        if(addedCount > 0) this.addXP(addedCount * 10, true); // Silent XP add
-        this.persistProgress();
-        
-        const topLevelModule = this.getTopLevelModule(parentId);
-        if (topLevelModule) {
-            this.checkForModuleCompletion(topLevelModule.id);
+        if (branchEntry) {
+             const parentPath = branchEntry.path;
+             const parentPathPrefix = parentPath + ' / ';
+             
+             // Find all descendant nodes based on path
+             const descendants = this.state.searchIndex.filter(n => 
+                n.lang === this.state.lang && n.path && (n.path === parentPath || n.path.startsWith(parentPathPrefix))
+             );
+             
+             // Mark them all complete
+             descendants.forEach(d => this.state.completedNodes.add(d.id));
         } else {
-            this.checkForModuleCompletion(parentId);
+            // Fallback for safety: mark the branch ID itself anyway
+            this.state.completedNodes.add(branchId);
         }
         
-        const xpMsg = addedCount > 0 ? ` (+${addedCount * 10} ${this.ui.xpUnit})` : '';
-        this.update({ lastActionMessage: `Branch Mastered! 🎓${xpMsg}` });
-        setTimeout(() => this.update({ lastActionMessage: null }), 3000);
+        this.state.completedNodes = new Set(this.state.completedNodes); // Force update
         
-        // Force graph update
+        this.persistProgress(); 
         this.dispatchEvent(new CustomEvent('graph-update'));
     }
 
     checkForModuleCompletion(relatedNodeId) {
-        // Find the top-level module for this node
-        if (!relatedNodeId) return;
-        
-        const topModule = this.getTopLevelModule(relatedNodeId);
-        // If we can't find a top module (e.g. we are already at root), try to see if relatedNodeId is a module
-        const moduleIdToCheck = topModule ? topModule.id : relatedNodeId;
-
         const modules = this.getModulesStatus();
-        const targetModule = modules.find(m => m.id === moduleIdToCheck);
         
-        if (targetModule && targetModule.isComplete) {
-            // If complete, ensure the module ID itself is marked as complete in the set
-            if (!this.state.completedNodes.has(targetModule.id)) {
-                 this.state.completedNodes.add(targetModule.id);
+        modules.forEach(m => {
+            if (m.isComplete) {
+                if (!this.state.completedNodes.has(m.id)) {
+                     this.state.completedNodes.add(m.id);
+                     this.persistProgress(); 
+                }
+                // Don't auto-award certificate here, only harvest fruit
+                this.harvestFruit(m.id);
             }
-            this.harvestFruit(targetModule.id);
-        }
+        });
     }
 
     persistProgress() {
@@ -642,7 +671,6 @@ class Store extends EventTarget {
             this.update({ completedNodes: merged });
             this.persistProgress();
             
-            // Check for retrospective achievements
             const modules = this.getModulesStatus();
             modules.forEach(m => {
                 if (m.isComplete) this.checkForModuleCompletion(m.id);
@@ -656,67 +684,61 @@ class Store extends EventTarget {
 
     isCompleted(id) { return this.state.completedNodes.has(id); }
 
+    // MAJOR FIX: Use Robust Strategy for Status Calculation
     getModulesStatus() {
-        if (!this.state.data || !this.state.data.children) return [];
-        const modules = [];
-        
-        this.state.data.children.forEach(topLevelNode => {
-            if (topLevelNode.type !== 'branch') return;
-            let total = 0;
-            let completed = 0;
+        if (!this.state.searchIndex || this.state.searchIndex.length === 0) {
+             return [];
+        }
 
-            // Recalculate totals recursively to be safe against API inconsistencies
-            const countProgress = (node) => {
-                if (node.type === 'leaf' || node.type === 'exam') {
-                    total++;
-                    if (this.state.completedNodes.has(node.id)) completed++;
-                }
-                if (node.children) node.children.forEach(countProgress);
-            };
+        const allNodes = this.state.searchIndex.filter(n => n.lang === this.state.lang);
+        const branches = allNodes.filter(n => n.type === 'branch');
+        const leaves = allNodes.filter(n => n.type === 'leaf' || n.type === 'exam');
+
+        const modules = branches.map(branch => {
+            let branchLeavesIds = [];
             
-            // Use the pre-calculated totalLeaves if available and valid, otherwise count
-            if (typeof topLevelNode.totalLeaves === 'number' && topLevelNode.totalLeaves > 0) {
-                 total = topLevelNode.totalLeaves;
-                 // But we still need to count completed leaves recursively
-                 // Optimization: reuse recursive walker just for completion if needed, 
-                 // but for robustness we'll count both to ensure sync.
-                 let c = 0;
-                 const countCompleted = (node) => {
-                     // Check if leaf is complete OR if its parent branch is marked complete (skipped via exam)
-                     const isParentMarked = node.parentId && this.state.completedNodes.has(node.parentId);
-                     
-                     if ((node.type === 'leaf' || node.type === 'exam') && (this.state.completedNodes.has(node.id) || isParentMarked)) {
-                         c++;
-                     }
-                     if (node.children) node.children.forEach(countCompleted);
-                 };
-                 countCompleted(topLevelNode);
-                 completed = c;
+            // 1. Memory First: Try to find the live node to use accurate IDs from builder script
+            const liveNode = this.findNode(branch.id);
+            if (liveNode && liveNode.leafIds && liveNode.leafIds.length > 0) {
+                branchLeavesIds = liveNode.leafIds;
             } else {
-                 countProgress(topLevelNode);
+                // 2. Fallback: Path String Matching from Search Index (More Robust)
+                const branchPath = branch.path;
+                const branchPathPrefix = branchPath + ' / ';
+                const branchLeaves = leaves.filter(l => {
+                    return l.path && (l.path.startsWith(branchPathPrefix));
+                });
+                branchLeavesIds = branchLeaves.map(l => l.id);
             }
             
-            // Override: If the module root itself is marked complete (e.g. by a super-exam or import), treat as 100%
-            if (this.state.completedNodes.has(topLevelNode.id)) {
-                completed = total;
+            const total = branchLeavesIds.length;
+            
+            let isComplete = this.state.completedNodes.has(branch.id);
+            
+            let completedCount = 0;
+            if (isComplete) {
+                completedCount = total; 
+            } else {
+                completedCount = branchLeavesIds.filter(id => this.state.completedNodes.has(id)).length;
+                if (total > 0 && completedCount >= total) isComplete = true;
             }
 
-            if (total > 0) {
-                modules.push({
-                    id: topLevelNode.id,
-                    name: topLevelNode.name,
-                    icon: topLevelNode.icon,
-                    description: topLevelNode.description,
-                    totalLeaves: total,
-                    completedLeaves: completed,
-                    isComplete: completed >= total,
-                    path: topLevelNode.name
-                });
-            }
+            return {
+                id: branch.id,
+                name: branch.name,
+                icon: branch.icon,
+                description: branch.description,
+                totalLeaves: total,
+                completedLeaves: completedCount,
+                isComplete: isComplete,
+                path: branch.path,
+                isCertifiable: branch.isCertifiable || false // Use new flag
+            };
         });
-        return modules.sort((a,b) => b.isComplete === a.isComplete ? 0 : (b.isComplete ? 1 : -1));
+
+        return modules.filter(m => m.totalLeaves > 0 || m.isComplete)
+                      .sort((a,b) => b.isComplete === a.isComplete ? 0 : (b.isComplete ? 1 : -1));
     }
 }
 
 export const store = new Store();
-   
