@@ -1,5 +1,6 @@
 
 
+
 import { store } from '../store.js';
 import { parseContent } from '../utils/parser.js';
 
@@ -270,11 +271,12 @@ class ArborContent extends HTMLElement {
             "fixed", "z-[60]", "bg-white", "dark:bg-slate-900", "shadow-2xl", "flex", "flex-col",
             "transition-all", "duration-500", "ease-[cubic-bezier(0.25,0.8,0.25,1)]",
             "border-l", "border-transparent", "dark:border-slate-800", "no-print",
-            "top-0", "bottom-0", "right-0", "w-full", "max-w-full"
+            "top-0", "right-0", "w-full", "max-w-full",
+            "h-[100dvh]" // Fix for mobile Safari bottom bar
         ];
 
         if (!this.isExpanded) {
-            containerClasses.push("md:w-[80vw]", "md:max-w-[900px]", "md:top-4", "md:bottom-4", "md:rounded-l-3xl");
+            containerClasses.push("md:w-[80vw]", "md:max-w-[900px]", "md:top-4", "md:h-[calc(100vh-2rem)]", "md:rounded-l-3xl");
         } else {
             containerClasses.push("md:w-full", "md:max-w-full");
         }
@@ -409,9 +411,9 @@ class ArborContent extends HTMLElement {
                 </div>
             </div>
 
-            <!-- MOBILE FOOTER -->
+            <!-- MOBILE FOOTER (Safe Area Aware) -->
             ${toc.length > 0 && !isExam ? `
-            <div class="md:hidden flex-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800 p-3 z-20">
+            <div class="md:hidden flex-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800 px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,20px))] z-20">
                 <div class="flex items-center justify-between gap-3 max-w-3xl mx-auto">
                     <button id="btn-prev-mobile" class="w-1/4 justify-center px-4 py-3 rounded-xl font-bold flex items-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 active:scale-95" ${this.activeSectionIndex === 0 ? 'disabled' : ''}>
                         <span>←</span>
@@ -429,7 +431,7 @@ class ArborContent extends HTMLElement {
             ` : ''}
             
             ${onExamIntro ? `
-            <div class="md:hidden flex-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800 p-3 z-20">
+            <div class="md:hidden flex-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800 px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,20px))] z-20">
                  <button id="btn-start-exam-mobile" class="w-full justify-center text-center px-4 py-3 rounded-xl font-bold flex items-center gap-2 transition-all bg-red-600 text-white hover:bg-red-500 shadow-lg shadow-red-500/20 active:scale-95">
                      <span>${ui.quizStart} ${ui.quizLabel}</span>
                  </button>

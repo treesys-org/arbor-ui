@@ -1,5 +1,6 @@
 
 
+
 import { store } from '../store.js';
 import { github } from '../services/github.js';
 
@@ -462,8 +463,8 @@ class ArborModals extends HTMLElement {
          }
 
          this.innerHTML = `
-         <div class="fixed inset-0 z-[70] flex items-start justify-center pt-[15vh] bg-slate-900/60 backdrop-blur-sm p-4 animate-in" id="search-overlay">
-            <div class="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700 flex flex-col max-h-[60vh]">
+         <div class="fixed inset-0 z-[70] flex items-start justify-center pt-4 md:pt-[15vh] bg-slate-900/60 backdrop-blur-sm p-4 animate-in" id="search-overlay">
+            <div class="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700 flex flex-col max-h-[60vh] md:max-h-[60vh]">
                 <div class="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3">
                     <svg class="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
                     <input id="inp-search" type="text" placeholder="${ui.searchPlaceholder}" class="w-full bg-transparent text-xl font-bold text-slate-700 dark:text-white outline-none placeholder:text-slate-300 dark:placeholder:text-slate-600" autocomplete="off" value="${this.searchQuery}">

@@ -188,8 +188,10 @@ class ArborGraph extends HTMLElement {
 
     updateZoomExtent() {
         if (!this.zoom) return;
+        const isMobile = this.width < 768;
         const horizontalPadding = this.width * 2;
-        const topPadding = this.height * 10;
+        // On mobile, the totem gets very tall, so we need more top padding
+        const topPadding = this.height * (isMobile ? 20 : 10);
         const bottomPadding = this.height + 150;
 
         this.zoom.translateExtent([
@@ -200,8 +202,10 @@ class ArborGraph extends HTMLElement {
     
     resetZoom(duration = 750) {
         if (!this.svg || !this.zoom) return;
+        const isMobile = this.width < 768;
         const k = 0.85;
-        const tx = (this.width / 2) * (1 - k);
+        // Adjust center logic for mobile totem vs desktop fan
+        const tx = (this.width / 2) * (1 - k) - (isMobile ? 0 : 0); 
         const ty = (this.height * 0.85) - (this.height - 100) * k;
         
         this.svg.transition().duration(duration)
@@ -240,30 +244,47 @@ class ArborGraph extends HTMLElement {
     updateGraph() {
         if (!this.svg || !store.value.data) return;
 
+        const isMobile = this.width < 768;
         const harvestedFruits = store.value.gamification.fruits;
 
         // 1. Construct Hierarchy
         const root = d3.hierarchy(store.value.data, d => d.expanded ? d.children : null);
         
-        // 2. Tree Layout (ADJUSTED FOR COMPACTNESS)
-        let leaves = 0;
-        root.each(d => { if (!d.children) leaves++; });
-        
-        // Increased multiplier to space out nodes horizontally
-        const dynamicWidth = Math.max(this.width, leaves * 160); 
+        // 2. Compute Layout (Mobile Totem vs Desktop Fan)
+        if (isMobile) {
+            // --- MOBILE: TOTEM LAYOUT (Bottom-Up Indented List) ---
+            const nodeHeight = 100; // Vertical spacing
+            const indent = 30; // Indentation per level
+            const startX = 40; // Left padding inside the view
+            const startY = this.height - 150; // Bottom padding
 
-        const treeLayout = d3.tree().size([dynamicWidth, 1]);
-        treeLayout(root);
+            let index = 0;
+            // Pre-order traversal puts parent before children.
+            // Since we want bottom-up, the first visited (Root) goes to startY (Bottom).
+            // Subsequent nodes go higher (Y - index * height).
+            root.eachBefore(d => {
+                d.x = startX + (d.depth * indent); // Indent X based on depth
+                d.y = startY - (index * nodeHeight); // Stack Y upwards
+                index++;
+            });
 
-        // 3. Coordinate Transformation (ADJUSTED HEIGHT)
-        const levelHeight = 200; // Increased to space out nodes vertically
-        
-        root.descendants().forEach(d => {
-            d.y = (this.height - 150) - (d.depth * levelHeight);
-            if (dynamicWidth < this.width) {
-                d.x += (this.width - dynamicWidth) / 2;
-            }
-        });
+        } else {
+            // --- DESKTOP: FAN LAYOUT ---
+            let leaves = 0;
+            root.each(d => { if (!d.children) leaves++; });
+            const dynamicWidth = Math.max(this.width, leaves * 160); 
+
+            const treeLayout = d3.tree().size([dynamicWidth, 1]);
+            treeLayout(root);
+
+            const levelHeight = 200; 
+            root.descendants().forEach(d => {
+                d.y = (this.height - 150) - (d.depth * levelHeight);
+                if (dynamicWidth < this.width) {
+                    d.x += (this.width - dynamicWidth) / 2;
+                }
+            });
+        }
 
         const nodes = root.descendants();
         const links = root.links();
@@ -323,27 +344,27 @@ class ArborGraph extends HTMLElement {
 
         // Labels
         const labelGroup = nodeEnter.append("g")
-            .attr("class", "label-group")
-            .attr("transform", d => `translate(0, ${d.data.type === 'leaf' || d.data.type === 'exam' ? 65 : 55})`);
+            .attr("class", "label-group");
+            // Transform set in update loop for responsiveness
         
         labelGroup.append("rect")
-            .attr("rx", 10).attr("ry", 10).attr("height", 28) // Taller label background
+            .attr("rx", 10).attr("ry", 10).attr("height", 28) 
             .attr("fill", "rgba(255,255,255,0.95)")
             .attr("stroke", "#e2e8f0");
         
         labelGroup.append("text")
             .attr("class", "label-text")
-            .attr("text-anchor", "middle")
+            .attr("text-anchor", "middle") // Changed to middle by default, tweaked in update
             .attr("dy", 19)
             .attr("fill", "#334155")
-            .attr("font-size", "16px") // Larger Label Text
+            .attr("font-size", "16px") 
             .attr("font-weight", "800")
             .style("pointer-events", "none");
 
         // Badges (+/-)
         const badge = nodeEnter.append("g")
             .attr("class", "badge-group")
-            .attr("transform", d => `translate(${d.data.type === 'root' ? 45 : 35}, -${d.data.type === 'root' ? 45 : 35})`)
+            // Transform set in update loop
             .style("display", "none");
 
         badge.append("circle")
@@ -373,24 +394,20 @@ class ArborGraph extends HTMLElement {
         nodeUpdate.select(".node-body")
             .attr("fill", d => {
                 const isHarvested = harvestedFruits.find(f => f.id === d.data.id);
-                if (isHarvested) return '#FCD34D'; // Gold/Yellow for Fruits
+                if (isHarvested) return '#FCD34D'; 
 
                 if (d.data.type === 'root') return '#8D6E63';
-                if (store.isCompleted(d.data.id)) return '#22c55e'; // Completed is always green
-                if (d.data.type === 'exam') return '#ef4444'; // Exam is red
-                if (d.data.type === 'leaf') return '#a855f7'; // Lesson is purple
-                return '#F59E0B'; // Folder is orange
+                if (store.isCompleted(d.data.id)) return '#22c55e'; 
+                if (d.data.type === 'exam') return '#ef4444'; 
+                if (d.data.type === 'leaf') return '#a855f7'; 
+                return '#F59E0B'; 
             })
             .attr("d", d => {
                 const isHarvested = harvestedFruits.find(f => f.id === d.data.id);
-                // Increased visual radius for the shapes
                 const r = d.data.type === 'root' ? 60 : (isHarvested ? 50 : 45); 
                 
-                if (d.data.type === 'leaf') return "M0,0 C-35,15 -45,45 0,85 C45,45 35,15 0,0"; // Larger Leaf
-                // Diamond shape for Exam
+                if (d.data.type === 'leaf') return "M0,0 C-35,15 -45,45 0,85 C45,45 35,15 0,0"; 
                 if (d.data.type === 'exam') return `M0,${-r*1.2} L${r*1.2},0 L0,${r*1.2} L${-r*1.2},0 Z`;
-                
-                // Circle (Fruits / Folders)
                 return `M${-r},0 a${r},${r} 0 1,0 ${r*2},0 a${r},${r} 0 1,0 ${-r*2},0`;
             })
             .style("filter", d => {
@@ -403,11 +420,9 @@ class ArborGraph extends HTMLElement {
 
         nodeUpdate.select(".node-icon")
             .text(d => {
-                // If it is a harvested fruit module, show the fruit icon!
                 const fruit = harvestedFruits.find(f => f.id === d.data.id);
                 if (fruit) return fruit.icon;
 
-                // Standard logic
                 if ((d.data.type === 'leaf' || d.data.type === 'exam') && store.isCompleted(d.data.id)) {
                     return '✓';
                 }
@@ -415,15 +430,62 @@ class ArborGraph extends HTMLElement {
             })
             .attr("fill", d => {
                 const isHarvested = harvestedFruits.find(f => f.id === d.data.id);
-                if (isHarvested) return '#1e293b'; // Dark icon on Fruit
+                if (isHarvested) return '#1e293b'; 
                 if ((d.data.type === 'leaf' || d.data.type === 'exam') && store.isCompleted(d.data.id)) return '#fff';
                 return '#1e293b';
             })
             .attr("dy", d => d.data.type === 'leaf' || d.data.type === 'exam' ? (d.data.type === 'exam' ? "0.35em" : "48px") : "0.35em")
             .attr("font-weight", d => store.isCompleted(d.data.id) ? "900" : "normal");
         
+        // --- Responsive Label Positioning ---
+        nodeMerged.select(".label-group")
+            .attr("transform", d => {
+                if (isMobile) {
+                    // Mobile: Label to the right
+                    return `translate(60, -14)`;
+                } else {
+                    // Desktop: Label below
+                    return `translate(0, ${d.data.type === 'leaf' || d.data.type === 'exam' ? 65 : 55})`;
+                }
+            });
+
+        nodeMerged.select(".label-text")
+            .attr("text-anchor", isMobile ? "start" : "middle");
+
+        nodeMerged.select(".label-group text")
+            .text(d => d.data.name)
+            .each(function(d) {
+                const rectNode = d3.select(this.parentNode).select("rect");
+                const charCount = this.textContent.length;
+                const estimatedWidth = (charCount * 9) + 30;
+                let w = estimatedWidth;
+                
+                try {
+                    const computed = this.getComputedTextLength();
+                    if (computed > 0) w = Math.max(50, computed + 30);
+                } catch(e) {}
+
+                if (isMobile) {
+                     // Label background for mobile (Left aligned)
+                     rectNode.attr("x", -10).attr("width", w);
+                } else {
+                     // Label background for desktop (Centered)
+                     rectNode.attr("x", -w/2).attr("width", w);
+                }
+            });
+
+        // --- Responsive Badge Positioning ---
         nodeUpdate.select(".badge-group")
-            .style("display", d => (d.data.type === 'leaf' || d.data.type === 'exam') ? 'none' : 'block');
+            .style("display", d => (d.data.type === 'leaf' || d.data.type === 'exam') ? 'none' : 'block')
+            .attr("transform", d => {
+                if (isMobile) {
+                    // Mobile: Badge small, top-left
+                    return `translate(-35, -35)`; 
+                } else {
+                    // Desktop: Badge top-right
+                    return `translate(${d.data.type === 'root' ? 45 : 35}, -${d.data.type === 'root' ? 45 : 35})`;
+                }
+            });
         
         nodeUpdate.select(".badge-group circle")
             .attr("fill", d => d.data.expanded ? "#ef4444" : "#22c55e");
@@ -434,31 +496,6 @@ class ArborGraph extends HTMLElement {
         nodeUpdate.select(".spinner")
             .style("display", d => d.data.status === 'loading' ? 'block' : 'none');
 
-        // Label Sizing - Improved Logic with fallback for initial render
-        nodeMerged.select(".label-group text")
-            .text(d => d.data.name)
-            .each(function() {
-                const rectNode = d3.select(this.parentNode).select("rect");
-                const charCount = this.textContent.length;
-                
-                // Heuristic: ~9px per char (Nunito bold 16px) + 40px padding
-                // This prevents the "stretched/big" look (100px fixed) if getComputedTextLength fails/returns 0
-                const estimatedWidth = (charCount * 9) + 40;
-                
-                let w = estimatedWidth;
-                
-                try {
-                    const computed = this.getComputedTextLength();
-                    // If computed is available and valid (>0), use it. Otherwise use heuristic.
-                    if (computed > 0) {
-                        w = Math.max(50, computed + 40);
-                    }
-                } catch(e) {
-                    // Ignore error, use estimatedWidth
-                }
-
-                rectNode.attr("x", -w/2).attr("width", w);
-            });
 
         // EXIT
         nodeSelection.exit().transition().duration(this.duration)
@@ -476,7 +513,7 @@ class ArborGraph extends HTMLElement {
             .attr("class", "link")
             .attr("fill", "none")
             .attr("stroke", "#8D6E63")
-            .attr("stroke-width", d => Math.max(3, 16 - d.target.depth * 2.5)) // Thicker links
+            .attr("stroke-width", d => Math.max(3, 16 - d.target.depth * 2.5)) 
             .attr("d", d => {
                 const o = findOrigin(d.target);
                 return this.diagonal({source: o, target: o});
@@ -484,7 +521,7 @@ class ArborGraph extends HTMLElement {
 
         linkSelection.merge(linkEnter).transition().duration(this.duration)
             .attr("d", d => this.diagonal(d))
-            .attr("stroke", d => store.isCompleted(d.target.data.id) ? "#22c55e" : "#8D6E63"); // Green link if target is done
+            .attr("stroke", d => store.isCompleted(d.target.data.id) ? "#22c55e" : "#8D6E63"); 
 
         linkSelection.exit().transition().duration(this.duration)
             .attr("d", d => {
@@ -502,6 +539,7 @@ class ArborGraph extends HTMLElement {
     }
 
     diagonal(d) {
+        // Standard Cubic Bezier is robust enough for both Fan and Totem layouts
         const s = d.source;
         const t = d.target;
         const midY = (s.y + t.y) / 2;
@@ -524,7 +562,9 @@ class ArborGraph extends HTMLElement {
         
         const transform = d3.zoomTransform(this.svg.node());
         const currentScreenY = transform.apply([d.x, d.y])[1];
-        const targetScreenY = this.height * 0.75; 
+        
+        // Target a bit lower on screen for mobile to leave room for content above
+        const targetScreenY = this.height * (this.width < 768 ? 0.6 : 0.75); 
         const dy = targetScreenY - currentScreenY;
         
         if (Math.abs(dy) > 50) {

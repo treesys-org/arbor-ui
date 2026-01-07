@@ -1,5 +1,6 @@
 
 
+
 export const UI_LABELS = {
     EN: {
       appTitle: 'ARBOR',
@@ -43,7 +44,7 @@ export const UI_LABELS = {
       ],
       
       aiPitchAction: 'Need help or want to activate me?',
-      aiPitchSub: 'Just click my icon 🦉 in the sidebar anytime.',
+      aiPitchSub: 'Look for my icon 🦉 in the menu or top bar.',
 
       close: 'Close',
       statsNodes: 'Modules',
@@ -287,7 +288,7 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       ],
       
       aiPitchAction: '¿Necesitas ayuda o quieres activarme?',
-      aiPitchSub: 'Haz clic en mi icono 🦉 en la barra lateral en cualquier momento.',
+      aiPitchSub: 'Busca mi icono 🦉 en el menú o en la barra superior.',
 
       close: 'Cerrar',
       statsNodes: 'Módulos',

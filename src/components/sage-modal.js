@@ -1,5 +1,6 @@
 
 
+
 import { store } from '../store.js';
 import { aiService } from '../services/ai.js';
 
@@ -221,7 +222,8 @@ class ArborSage extends HTMLElement {
         const displayStatus = aiState.status;
 
         this.innerHTML = `
-            <div class="pointer-events-auto transition-all duration-300 origin-bottom md:origin-bottom-right shadow-2xl md:rounded-2xl w-full md:w-[380px] h-[85vh] md:h-[600px] bg-white dark:bg-slate-900 flex flex-col border border-slate-200 dark:border-slate-800 animate-in slide-in-from-bottom-10 fade-in">
+            <div id="sage-backdrop" class="md:hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm pointer-events-auto transition-opacity"></div>
+            <div class="pointer-events-auto transition-all duration-300 origin-bottom md:origin-bottom-right shadow-2xl md:rounded-2xl w-full md:w-[380px] h-[80dvh] md:h-[600px] bg-white dark:bg-slate-900 flex flex-col border border-slate-200 dark:border-slate-800 animate-in slide-in-from-bottom-10 fade-in rounded-t-2xl">
                 
                 <!-- Header -->
                 <div class="p-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white flex justify-between items-center shadow-md z-10 shrink-0 rounded-t-2xl">
@@ -271,7 +273,7 @@ class ArborSage extends HTMLElement {
                 </div>
 
                 <!-- Input -->
-                <form id="sage-form" class="p-3 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex gap-2 shrink-0">
+                <form id="sage-form" class="p-3 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex gap-2 shrink-0 pb-[calc(0.75rem+env(safe-area-inset-bottom,20px))] md:pb-3">
                     <input id="sage-input" type="text" class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500 dark:text-white placeholder:text-slate-400" placeholder="Pregunta sobre la lección..." autocomplete="off">
                     <button type="submit" class="w-11 h-11 bg-purple-600 text-white rounded-xl hover:bg-purple-50 transition-all flex items-center justify-center shadow-lg active:scale-95">
                         <svg class="w-5 h-5 translate-x-0.5 -translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>
@@ -281,6 +283,8 @@ class ArborSage extends HTMLElement {
         `;
 
         this.querySelector('.btn-close').onclick = () => this.close();
+        const backdrop = this.querySelector('#sage-backdrop');
+        if(backdrop) backdrop.onclick = () => this.close();
         
         const area = this.querySelector('#sage-chat-area');
         if(area) area.scrollTop = area.scrollHeight;

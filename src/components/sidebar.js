@@ -1,5 +1,6 @@
 
 
+
 import { store } from '../store.js';
 
 class ArborSidebar extends HTMLElement {
@@ -25,8 +26,8 @@ class ArborSidebar extends HTMLElement {
         let mobileMenuHtml = '';
         if (this.isMobileMenuOpen) {
             mobileMenuHtml = `
-            <div id="mobile-menu-backdrop" class="md:hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[80]"></div>
-            <div id="mobile-menu" class="md:hidden fixed top-16 right-4 w-[280px] bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 z-[90] p-2 animate-in fade-in slide-in-from-top-4 duration-200">
+            <div id="mobile-menu-backdrop" class="md:hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100]"></div>
+            <div id="mobile-menu" class="md:hidden fixed top-16 right-4 w-[280px] bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 z-[110] p-2 animate-in fade-in slide-in-from-top-4 duration-200">
                 <!-- User Profile -->
                 <div class="p-2 border-b border-slate-100 dark:border-slate-700 mb-2">
                     <button class="js-btn-profile w-full flex items-center gap-3 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-left">
@@ -40,10 +41,9 @@ class ArborSidebar extends HTMLElement {
 
                 <!-- Menu Items -->
                 <nav class="flex flex-col">
-                    <button class="js-btn-sage menu-item text-purple-600 dark:text-purple-400"><span>🦉</span> <span>${ui.navSage}</span></button>
+                    <!-- Removed Sage and Help from here as requested (redundant on mobile) -->
                     <button class="js-btn-lang menu-item"><span>${store.currentLangInfo.flag}</span> <span>${ui.languageTitle}</span></button>
                     <button class="js-btn-theme menu-item"><span>${store.value.theme === 'light' ? '🌙' : '☀️'}</span> <span>Toggle Theme</span></button>
-                    <button class="js-btn-help menu-item"><span>?</span> <span>${ui.navHelp}</span></button>
                     <div class="h-px bg-slate-100 dark:bg-slate-700 my-1 mx-2"></div>
                     <button class="js-btn-contrib menu-item"><span>🐙</span> <span>${ui.navContributor}</span></button>
                     <button class="js-btn-about menu-item"><span>ℹ️</span> <span>${ui.navAbout}</span></button>
@@ -91,7 +91,7 @@ class ArborSidebar extends HTMLElement {
 
         <!-- MOBILE HEADER -->
         <header class="md:hidden fixed top-0 left-0 right-0 h-16 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 z-50 flex items-center justify-between px-4 shadow-sm transition-transform duration-300">
-             <button class="js-btn-home flex items-center gap-2">
+             <button class="js-btn-home flex items-center gap-2 active:scale-95 transition-transform">
                  <span class="text-2xl">🌳</span>
                  <span class="font-black text-slate-800 dark:text-white tracking-tight">ARBOR</span>
              </button>
@@ -120,7 +120,7 @@ class ArborSidebar extends HTMLElement {
         <aside class="hidden md:flex flex-col w-[80px] bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 z-30 h-full items-center py-6 shadow-xl justify-between">
             <!-- TOP SECTION -->
             <div class="flex flex-col items-center gap-4 w-full">
-                <div class="w-12 h-12 flex items-center justify-center bg-gradient-to-br from-green-400 to-green-600 text-white rounded-xl text-2xl mb-2 shadow-lg shadow-green-500/30 cursor-pointer js-btn-home">🌳</div>
+                <div class="w-12 h-12 flex items-center justify-center bg-gradient-to-br from-green-400 to-green-600 text-white rounded-xl text-2xl mb-2 shadow-lg shadow-green-500/30 cursor-pointer js-btn-home hover:scale-105 transition-transform">🌳</div>
                 
                 <div class="w-8 h-px bg-slate-200 dark:bg-slate-700 my-1"></div>
 
@@ -196,8 +196,7 @@ class ArborSidebar extends HTMLElement {
             store.setModal({ type: 'sage' }); 
         }));
 
-        const homeBtn = this.querySelector('.js-btn-home');
-        if (homeBtn) homeBtn.onclick = () => store.goHome();
+        this.querySelectorAll('.js-btn-home').forEach(btn => btn.onclick = () => store.goHome());
         
         const mobileMenuToggle = this.querySelector('.js-btn-menu-mobile');
         if (mobileMenuToggle) {
