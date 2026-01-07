@@ -10,7 +10,7 @@ class ArborGraph extends HTMLElement {
         this.width = 0;
         this.height = 0;
         this.zoom = null;
-        this.duration = 750;
+        this.duration = 600; // Faster animations for snappy feel
         // Cache to store where nodes are, so we can animate FROM there or TO there
         this.nodePositions = new Map();
     }
@@ -190,8 +190,8 @@ class ArborGraph extends HTMLElement {
         if (!this.zoom) return;
         const isMobile = this.width < 768;
         const horizontalPadding = this.width * 2;
-        // On mobile, the totem gets very tall, so we need more top padding
-        const topPadding = this.height * (isMobile ? 20 : 10);
+        // Allows scrolling VERY high up for large trees
+        const topPadding = this.height * 50; 
         const bottomPadding = this.height + 150;
 
         this.zoom.translateExtent([
@@ -204,8 +204,7 @@ class ArborGraph extends HTMLElement {
         if (!this.svg || !this.zoom) return;
         const isMobile = this.width < 768;
         const k = 0.85;
-        // Adjust center logic for mobile totem vs desktop fan
-        const tx = (this.width / 2) * (1 - k) - (isMobile ? 0 : 0); 
+        const tx = (this.width / 2) * (1 - k); 
         const ty = (this.height * 0.85) - (this.height - 100) * k;
         
         this.svg.transition().duration(duration)
@@ -241,6 +240,56 @@ class ArborGraph extends HTMLElement {
             .attr("fill", color);
     }
 
+    // --- CUSTOM MOBILE LAYOUT ALGORITHM (THE VINE) ---
+    calculateMobileLayout(root) {
+        const startX = this.width / 2;
+        const startY = this.height - 150;
+        const colSpacing = this.width < 400 ? 90 : 110; // Left/Right spread
+        const rowHeight = 100; // Vertical gap between rows
+
+        // Map to keep track of the current "Height cursor" for each depth level
+        // depthY[0] is root, depthY[1] is children, etc.
+        const depthY = {}; 
+
+        // We traverse BFS to lay them out
+        root.each(node => {
+            // Default position (Root)
+            if (node.depth === 0) {
+                node.x = startX;
+                node.y = startY;
+                depthY[0] = startY;
+            } else {
+                // Determine Y based on parent's Y, but stack children in grid
+                const parentY = node.parent.y;
+                
+                // Index of this child among siblings
+                const index = node.parent.children.indexOf(node);
+                
+                // We create a Zig-Zag Grid (2 columns)
+                // Row 0: Child 0 (Left), Child 1 (Right)
+                // Row 1: Child 2 (Left), Child 3 (Right)
+                const row = Math.floor(index / 2);
+                const col = index % 2; // 0 = Left, 1 = Right
+                
+                // Calculate Offset
+                const xOffset = col === 0 ? -colSpacing : colSpacing;
+                const yOffset = (row + 1) * rowHeight; // +1 to start above parent
+                
+                // If it's a single child, center it
+                if (node.parent.children.length === 1) {
+                    node.x = node.parent.x;
+                } else {
+                    node.x = node.parent.x + xOffset;
+                }
+                
+                node.y = node.parent.y - yOffset;
+                
+                // Store alignment for text rendering later
+                node.side = (node.parent.children.length === 1) ? 'center' : (col === 0 ? 'left' : 'right');
+            }
+        });
+    }
+
     updateGraph() {
         if (!this.svg || !store.value.data) return;
 
@@ -250,26 +299,11 @@ class ArborGraph extends HTMLElement {
         // 1. Construct Hierarchy
         const root = d3.hierarchy(store.value.data, d => d.expanded ? d.children : null);
         
-        // 2. Compute Layout (Mobile Totem vs Desktop Fan)
+        // 2. Compute Layout
         if (isMobile) {
-            // --- MOBILE: TOTEM LAYOUT (Bottom-Up Indented List) ---
-            const nodeHeight = 100; // Vertical spacing
-            const indent = 30; // Indentation per level
-            const startX = 40; // Left padding inside the view
-            const startY = this.height - 150; // Bottom padding
-
-            let index = 0;
-            // Pre-order traversal puts parent before children.
-            // Since we want bottom-up, the first visited (Root) goes to startY (Bottom).
-            // Subsequent nodes go higher (Y - index * height).
-            root.eachBefore(d => {
-                d.x = startX + (d.depth * indent); // Indent X based on depth
-                d.y = startY - (index * nodeHeight); // Stack Y upwards
-                index++;
-            });
-
+            this.calculateMobileLayout(root);
         } else {
-            // --- DESKTOP: FAN LAYOUT ---
+            // Desktop Fan Layout
             let leaves = 0;
             root.each(d => { if (!d.children) leaves++; });
             const dynamicWidth = Math.max(this.width, leaves * 160); 
@@ -280,6 +314,7 @@ class ArborGraph extends HTMLElement {
             const levelHeight = 200; 
             root.descendants().forEach(d => {
                 d.y = (this.height - 150) - (d.depth * levelHeight);
+                d.side = 'center'; // Desktop always centered text
                 if (dynamicWidth < this.width) {
                     d.x += (this.width - dynamicWidth) / 2;
                 }
@@ -325,8 +360,8 @@ class ArborGraph extends HTMLElement {
             .on("mousedown", (e) => e.stopPropagation());
 
         nodeEnter.append("circle")
-            .attr("r", 80) // Larger hit area
-            .attr("cy", d => d.data.type === 'leaf' || d.data.type === 'exam' ? 30 : 0)
+            .attr("r", isMobile ? 60 : 80) // Slightly smaller touch target on mobile to reduce overlap
+            .attr("cy", d => d.data.type === 'leaf' || d.data.type === 'exam' ? (isMobile ? 25 : 30) : 0)
             .attr("fill", "transparent");
 
         nodeEnter.append("path")
@@ -338,15 +373,14 @@ class ArborGraph extends HTMLElement {
             .attr("class", "node-icon")
             .attr("text-anchor", "middle")
             .attr("dy", "0.35em")
-            .style("font-size", "38px") // Increased Icon Size
+            .style("font-size", isMobile ? "32px" : "38px")
             .style("user-select", "none")
             .style("pointer-events", "none");
 
         // Labels
         const labelGroup = nodeEnter.append("g")
             .attr("class", "label-group");
-            // Transform set in update loop for responsiveness
-        
+            
         labelGroup.append("rect")
             .attr("rx", 10).attr("ry", 10).attr("height", 28) 
             .attr("fill", "rgba(255,255,255,0.95)")
@@ -354,26 +388,24 @@ class ArborGraph extends HTMLElement {
         
         labelGroup.append("text")
             .attr("class", "label-text")
-            .attr("text-anchor", "middle") // Changed to middle by default, tweaked in update
             .attr("dy", 19)
             .attr("fill", "#334155")
-            .attr("font-size", "16px") 
+            .attr("font-size", "14px") // Slightly smaller text on mobile 
             .attr("font-weight", "800")
             .style("pointer-events", "none");
 
         // Badges (+/-)
         const badge = nodeEnter.append("g")
             .attr("class", "badge-group")
-            // Transform set in update loop
             .style("display", "none");
 
         badge.append("circle")
-            .attr("r", 16).attr("stroke", "#fff").attr("stroke-width", 2)
+            .attr("r", 14).attr("stroke", "#fff").attr("stroke-width", 2)
             .style("filter", "drop-shadow(0px 2px 3px rgba(0,0,0,0.3))");
 
         badge.append("text")
             .attr("dy", "0.35em").attr("text-anchor", "middle")
-            .attr("font-weight", "900").attr("font-size", "20px").attr("fill", "#ffffff");
+            .attr("font-weight", "900").attr("font-size", "18px").attr("fill", "#ffffff");
 
         // Spinner
         nodeEnter.append("path")
@@ -404,8 +436,10 @@ class ArborGraph extends HTMLElement {
             })
             .attr("d", d => {
                 const isHarvested = harvestedFruits.find(f => f.id === d.data.id);
-                const r = d.data.type === 'root' ? 60 : (isHarvested ? 50 : 45); 
-                
+                // Smaller nodes on mobile to fit the grid
+                let r = d.data.type === 'root' ? 60 : (isHarvested ? 50 : 45); 
+                if (isMobile && d.data.type !== 'root') r = r * 0.9;
+
                 if (d.data.type === 'leaf') return "M0,0 C-35,15 -45,45 0,85 C45,45 35,15 0,0"; 
                 if (d.data.type === 'exam') return `M0,${-r*1.2} L${r*1.2},0 L0,${r*1.2} L${-r*1.2},0 Z`;
                 return `M${-r},0 a${r},${r} 0 1,0 ${r*2},0 a${r},${r} 0 1,0 ${-r*2},0`;
@@ -437,40 +471,42 @@ class ArborGraph extends HTMLElement {
             .attr("dy", d => d.data.type === 'leaf' || d.data.type === 'exam' ? (d.data.type === 'exam' ? "0.35em" : "48px") : "0.35em")
             .attr("font-weight", d => store.isCompleted(d.data.id) ? "900" : "normal");
         
-        // --- Responsive Label Positioning ---
+        // --- SMART Label Positioning ---
         nodeMerged.select(".label-group")
             .attr("transform", d => {
                 if (isMobile) {
-                    // Mobile: Label to the right
-                    return `translate(60, -14)`;
+                    if (d.side === 'left') return `translate(-55, -10)`; // Text on left
+                    if (d.side === 'right') return `translate(55, -10)`; // Text on right
+                    return `translate(0, 55)`; // Center (single or root)
                 } else {
-                    // Desktop: Label below
                     return `translate(0, ${d.data.type === 'leaf' || d.data.type === 'exam' ? 65 : 55})`;
                 }
             });
 
         nodeMerged.select(".label-text")
-            .attr("text-anchor", isMobile ? "start" : "middle");
+            .attr("text-anchor", d => {
+                if (isMobile) {
+                    if (d.side === 'left') return 'end';
+                    if (d.side === 'right') return 'start';
+                }
+                return 'middle';
+            });
 
         nodeMerged.select(".label-group text")
             .text(d => d.data.name)
             .each(function(d) {
                 const rectNode = d3.select(this.parentNode).select("rect");
-                const charCount = this.textContent.length;
-                const estimatedWidth = (charCount * 9) + 30;
-                let w = estimatedWidth;
+                const computed = this.getComputedTextLength();
+                const w = Math.max(40, computed + 20);
                 
-                try {
-                    const computed = this.getComputedTextLength();
-                    if (computed > 0) w = Math.max(50, computed + 30);
-                } catch(e) {}
+                rectNode.attr("width", w);
 
                 if (isMobile) {
-                     // Label background for mobile (Left aligned)
-                     rectNode.attr("x", -10).attr("width", w);
+                    if (d.side === 'left') rectNode.attr("x", -w);
+                    else if (d.side === 'right') rectNode.attr("x", 0);
+                    else rectNode.attr("x", -w/2);
                 } else {
-                     // Label background for desktop (Centered)
-                     rectNode.attr("x", -w/2).attr("width", w);
+                    rectNode.attr("x", -w/2);
                 }
             });
 
@@ -479,10 +515,11 @@ class ArborGraph extends HTMLElement {
             .style("display", d => (d.data.type === 'leaf' || d.data.type === 'exam') ? 'none' : 'block')
             .attr("transform", d => {
                 if (isMobile) {
-                    // Mobile: Badge small, top-left
-                    return `translate(-35, -35)`; 
+                    // Place badge opposite to text or top-center
+                    if (d.side === 'left') return `translate(35, -35)`; 
+                    if (d.side === 'right') return `translate(-35, -35)`; 
+                    return `translate(35, -35)`; 
                 } else {
-                    // Desktop: Badge top-right
                     return `translate(${d.data.type === 'root' ? 45 : 35}, -${d.data.type === 'root' ? 45 : 35})`;
                 }
             });
@@ -539,7 +576,7 @@ class ArborGraph extends HTMLElement {
     }
 
     diagonal(d) {
-        // Standard Cubic Bezier is robust enough for both Fan and Totem layouts
+        // Standard Cubic Bezier
         const s = d.source;
         const t = d.target;
         const midY = (s.y + t.y) / 2;
@@ -552,25 +589,36 @@ class ArborGraph extends HTMLElement {
         
         store.toggleNode(d.data.id);
         
-        if (!d.data.expanded) { 
-            this.adjustVerticalView(d);
+        // Auto-Focus: Center the node and ensure children have space
+        if (!d.data.expanded) {
+             // Node is expanding, let's look at its children
+             this.smartFocus(d);
         }
     }
 
-    adjustVerticalView(d) {
+    // New "Ultra Easy" Auto-Focus Logic
+    smartFocus(d) {
         if (!this.svg || !this.zoom) return;
-        
-        const transform = d3.zoomTransform(this.svg.node());
-        const currentScreenY = transform.apply([d.x, d.y])[1];
-        
-        // Target a bit lower on screen for mobile to leave room for content above
-        const targetScreenY = this.height * (this.width < 768 ? 0.6 : 0.75); 
-        const dy = targetScreenY - currentScreenY;
-        
-        if (Math.abs(dy) > 50) {
-            this.svg.transition().duration(1000)
-                .call(this.zoom.transform, transform.translate(0, dy / transform.k));
-        }
+        const isMobile = this.width < 768;
+        if (!isMobile) return; // Desktop is fine
+
+        // Calculate where the node IS currently
+        const t = d3.zoomTransform(this.svg.node());
+        const currentX = t.applyX(d.x);
+        const currentY = t.applyY(d.y);
+
+        // We want the node to move to the BOTTOM CENTER of the screen,
+        // so its children (which appear above it) are visible.
+        const targetX = this.width / 2;
+        const targetY = this.height * 0.85; // Bottom area
+
+        // Calculate the difference required to move it there
+        const dx = targetX - currentX;
+        const dy = targetY - currentY;
+
+        // Animate the pan
+        this.svg.transition().duration(this.duration + 200)
+            .call(this.zoom.transform, t.translate(dx / t.k, dy / t.k));
     }
 
     focusNode(nodeId) {
