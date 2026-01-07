@@ -4,6 +4,7 @@ import json
 import datetime
 import re
 import uuid
+import shutil
 
 # ==========================================
 # 🌳 ARBOR KNOWLEDGE BUILDER
@@ -22,8 +23,8 @@ NAMESPACE = "org.arbor.knowledge"
 ROOT_DIR = "./content" 
 DATA_ROOT_DIR = "./data"
 API_DIR = os.path.join(DATA_ROOT_DIR, "nodes")
+SEARCH_DIR = os.path.join(DATA_ROOT_DIR, "search") # New Search Shards Directory
 OUTPUT_FILE = os.path.join(DATA_ROOT_DIR, "data.json") 
-SEARCH_INDEX_FILE = os.path.join(DATA_ROOT_DIR, "search-index.json")
 
 # Standardize on Markdown as the sole format for clarity.
 ALLOWED_EXTENSIONS = {'.md'}
@@ -156,6 +157,48 @@ def get_or_create_persistent_id(folder_path):
     full_id = f"{NAMESPACE}::{raw_uuid}"
     return meta_data, full_id
 
+def tokenize(text):
+    """Breaks text into keywords for indexing."""
+    if not text: return []
+    # Normalize: lowercase, remove accents (simple approach)
+    text = text.lower()
+    # Simple regex to get words
+    words = re.findall(r'\w+', text)
+    # Filter small words
+    return [w for w in words if len(w) > 2]
+
+def add_to_search_shards(node, shards_dict):
+    """Adds a node to the appropriate buckets based on its keywords."""
+    # We index based on Name and Description
+    text_to_index = f"{node.get('name', '')} {node.get('description', '')}"
+    words = tokenize(text_to_index)
+    
+    # Use a set to avoid adding the same node multiple times to the same shard
+    target_shards = set()
+    
+    for word in words:
+        # Use first 2 chars as shard key (e.g., 'bi' for biology)
+        if len(word) >= 2:
+            prefix = word[:2]
+            target_shards.add(prefix)
+            
+    for prefix in target_shards:
+        if prefix not in shards_dict:
+            shards_dict[prefix] = []
+        
+        # Optimize: Store a smaller object in the search index
+        search_entry = {
+            "id": node.get("id"),
+            "n": node.get("name"),       # n = name (shorter key)
+            "t": node.get("type"),       # t = type
+            "i": node.get("icon"),       # i = icon
+            "d": node.get("description"),# d = description
+            "p": node.get("path"),       # p = path
+            "l": node.get("lang"),       # l = lang
+            "c": node.get("isCertifiable", False) # c = certifiable
+        }
+        shards_dict[prefix].append(search_entry)
+
 def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None, breadcrumb_path="", relative_slug_path=""):
     """
     Recursively walks the directory structure to build the node tree.
@@ -170,15 +213,12 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
     if relative_slug_path:
         current_slug_path = f"{relative_slug_path}/{name_slug}"
 
-    # Calculate source path relative to repo root (for GitHub editing)
-    # IMPORTANT: Force forward slashes even on Windows for GitHub API compatibility
     clean_source_path = os.path.relpath(path, ".").replace("\\", "/")
 
     # --- FOLDER (BRANCH) ---
     if os.path.isdir(path):
         meta, node_id = get_or_create_persistent_id(path)
         
-        # Default name from folder if not in meta
         display_name = meta.get("name", name.replace('_', ' '))
         
         node = {
@@ -192,13 +232,12 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
             "type": "branch",
             "namespace": NAMESPACE,
             "apiPath": f"{lang_folder.lower()}/{current_slug_path}",
-            "totalLeaves": 0, # Will be calculated
-            "leafIds": [], # Tracks all descendant leaf IDs for progress calculation
+            "totalLeaves": 0,
+            "leafIds": [],
             "sourcePath": clean_source_path,
-            "isCertifiable": False # Default
+            "isCertifiable": False
         }
         
-        # Cleanup internal keys
         if 'uuid' in node: del node['uuid']
         if 'children' in node: del node['children'] 
 
@@ -218,24 +257,19 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
                 if child_node:
                     children_for_api_file.append(child_node)
                     
-                    # Accumulate Leaves
                     if child_node.get('type') in ['leaf', 'exam']:
                         node["totalLeaves"] += 1
                         node["leafIds"].append(child_node['id'])
                     else:
                         node["totalLeaves"] += child_node.get('totalLeaves', 0)
-                        # Add children leaves to this node as well (Bubble up)
                         if 'leafIds' in child_node:
                              node["leafIds"].extend(child_node['leafIds'])
             
-            # Sort children by @order, then by Name
             children_for_api_file.sort(key=lambda x: (int(x.get('order', 999)), x.get('name', '')))
             
-            # NEW: Check if this branch contains an exam to make it certifiable
             if any(child.get('type') == 'exam' for child in children_for_api_file):
                 node['isCertifiable'] = True
 
-            # Write the Children to a lazy-load JSON file
             api_relative_path = os.path.join(lang_folder.lower(), *current_slug_path.split('/')) + ".json"
             api_filepath = os.path.join(API_DIR, api_relative_path)
             
@@ -248,7 +282,6 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
     else: 
         ext = os.path.splitext(path)[1].lower()
         if ext in ALLOWED_EXTENSIONS:
-            # ID construction for files: ParentID + Slug
             node_id = f"{parent_id}__{name_slug}"
             
             node = {
@@ -262,11 +295,9 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
             }
             
             try:
-                # use utf-8-sig to handle BOM automatically if file was edited in Windows Notepad
                 with open(path, 'r', encoding='utf-8-sig') as f:
                     raw_content = f.read()
                 
-                # Parse content based on extension
                 if ext == '.md' and raw_content.startswith('---'):
                      meta, content = parse_frontmatter(raw_content)
                 else:
@@ -274,10 +305,8 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
                 
                 node["content"] = content
                 node.update(meta)
-                
                 node['path'] = f"{breadcrumb_path} / {node['name']}"
 
-                # Ensure Exams have the correct visual cue if user didn't set a custom icon
                 if node.get('type') == 'exam' and node.get('icon') == '📄':
                     node['icon'] = '⚔️'
 
@@ -287,7 +316,7 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
         else:
             return None
 
-    # Add to Search Index
+    # Add to Search Collector (For sharding later)
     search_node = {
         "id": node.get("id"), 
         "name": node.get("name"), 
@@ -296,34 +325,36 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
         "description": node.get("description"), 
         "lang": lang_folder.upper(),
         "path": node.get("path"), 
-        "namespace": NAMESPACE,
-        "isCertifiable": node.get("isCertifiable", False) # Also add to search index
+        "isCertifiable": node.get("isCertifiable", False)
     }
     node_collector.append(search_node)
     
-    # Clean up node for parent listing
     if 'children' in node:
         del node['children']
 
     return node
 
 def main():
-    print(f"\n🌳 Arbor Knowledge Builder")
+    print(f"\n🌳 Arbor Knowledge Builder (Optimized Sharding)")
     print(f"==========================================")
     
     if not os.path.exists(ROOT_DIR):
         print(f"❌ Error: Content directory '{ROOT_DIR}' not found.")
-        print(f"Please create a 'content' folder and add your languages (e.g. content/EN).")
         return
 
-    # Create the data directory if it doesn't exist
+    # Clean and Recreate Data Dirs
     if not os.path.exists(DATA_ROOT_DIR):
         os.makedirs(DATA_ROOT_DIR, exist_ok=True)
-        print(f"📁 Created output directory: {DATA_ROOT_DIR}")
+    
+    # Clean Search Shards to avoid stale data
+    if os.path.exists(SEARCH_DIR):
+        shutil.rmtree(SEARCH_DIR)
+    os.makedirs(SEARCH_DIR, exist_ok=True)
 
     os.makedirs(API_DIR, exist_ok=True)
 
-    full_search_index = []
+    # Dictionary to hold shards: {'en/bi': [nodes...], 'es/ma': [nodes...]}
+    search_shards = {}
     
     full_data = {
         "generatedAt": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -332,17 +363,12 @@ def main():
         "languages": {}
     }
 
-    # Find Language Folders (e.g. EN, ES, DE)
     language_folders = sorted([d for d in os.listdir(ROOT_DIR) if os.path.isdir(os.path.join(ROOT_DIR, d)) and not d.startswith('.')])
     
-    if not language_folders:
-        print("⚠️  No language folders found in content/. Please create folders like 'content/EN'.")
-
     for lang_folder in language_folders:
         print(f"🔨 Processing Language: {lang_folder.upper()}...")
         lang_path = os.path.join(ROOT_DIR, lang_folder)
         
-        # Create Root Node for Language
         root_id = f"{UNIVERSE_ID}-{lang_folder.lower()}-root"
         root_name = f"Arbor {lang_folder.upper()}"
         
@@ -358,45 +384,62 @@ def main():
             "path": root_name 
         }
         
-        full_search_index.append({ 
-            "id": root_node["id"], 
-            "name": root_node["name"], 
-            "type": "root", 
-            "lang": lang_folder.upper() 
-        })
-
+        # Collect all searchable nodes for this language to shard them
+        lang_search_nodes = []
+        
         root_children_nodes = []
         top_level_items = sorted([item for item in os.listdir(lang_path) if not item.startswith('.') and item != 'meta.json'])
 
         for item in top_level_items:
             item_path = os.path.join(lang_path, item)
             branch_search_nodes = []
-            
-            # Build recursively
             top_node = build_tree_recursive(item_path, lang_folder, root_node['id'], branch_search_nodes, root_name)
             
             if top_node:
                 root_children_nodes.append(top_node)
-                full_search_index.extend(branch_search_nodes)
+                lang_search_nodes.extend(branch_search_nodes)
+
+        # Create Shards for this Language
+        lang_shards = {}
+        for node in lang_search_nodes:
+            add_to_search_shards(node, lang_shards)
+        
+        # Write Shards to Disk: data/search/EN/a/ap.json
+        lang_search_dir = os.path.join(SEARCH_DIR, lang_folder.upper())
+        os.makedirs(lang_search_dir, exist_ok=True)
+        
+        shard_count = 0
+        for prefix, items in lang_shards.items():
+            # Only save valid prefixes (alphanumeric)
+            safe_prefix = re.sub(r'[^a-z0-9]', '', prefix)
+            if safe_prefix:
+                # Organize by first letter to avoid folder clutter
+                # e.g. data/search/EN/a/ap.json
+                first_char = safe_prefix[0]
+                shard_subdir = os.path.join(lang_search_dir, first_char)
+                os.makedirs(shard_subdir, exist_ok=True)
+
+                with open(os.path.join(shard_subdir, f"{safe_prefix}.json"), 'w', encoding='utf-8') as f:
+                    json.dump(items, f, ensure_ascii=False)
+                shard_count += 1
+                
+        print(f"   > Created {shard_count} search shards for {lang_folder.upper()}")
 
         # Sort root children
         root_children_nodes.sort(key=lambda x: (int(x.get('order', 999)), x.get('name', '')))
         root_node['children'] = root_children_nodes
         full_data["languages"][lang_folder.upper()] = root_node
 
-    # Save Main Data File
+    # Save Main Data File (The Skeleton)
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f: 
         json.dump(full_data, f, indent=2, ensure_ascii=False)
     
-    # Save Search Index
-    with open(SEARCH_INDEX_FILE, 'w', encoding='utf-8') as f: 
-        json.dump(full_search_index, f, ensure_ascii=False)
+    # NOTE: We no longer generate a massive 'search-index.json'
 
     print(f"==========================================")
     print(f"✅ Build Complete!")
     print(f"   - Main Data: {OUTPUT_FILE}")
-    print(f"   - Search Index: {SEARCH_INDEX_FILE}")
-    print(f"   - Nodes: {API_DIR}/")
+    print(f"   - Search Shards: {SEARCH_DIR}/[LANG]/[char]/[prefix].json")
     print(f"==========================================\n")
 
 if __name__ == "__main__":

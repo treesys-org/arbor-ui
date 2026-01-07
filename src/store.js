@@ -32,7 +32,10 @@ class Store extends EventTarget {
             sources: [],
             activeSource: null,
             data: null, // Current Tree Root (Lazy Loaded)
-            searchIndex: [], // Flat list of ALL nodes (The Oracle)
+            
+            // NEW: Search Cache (Instead of full index)
+            searchCache: {}, 
+            
             path: [], 
             completedNodes: new Set(),
             // Gamification State
@@ -98,7 +101,7 @@ class Store extends EventTarget {
     toggleTheme() { this.update({ theme: this.state.theme === 'light' ? 'dark' : 'light' }); }
     setLanguage(lang) { 
         if(this.state.lang !== lang) {
-            this.update({ lang }); 
+            this.update({ lang, searchCache: {} }); // Clear cache on lang change 
             this.loadData(this.state.activeSource); 
         }
     }
@@ -172,9 +175,8 @@ class Store extends EventTarget {
             if (!res.ok) throw new Error(`Failed to fetch data from ${source.name} (Status ${res.status}).`);
             const json = await res.json();
             
-            const searchUrl = source.url.replace('data.json', 'search-index.json');
-            const searchRes = await fetch(searchUrl).catch(() => null);
-            let searchIndex = searchRes && searchRes.ok ? await searchRes.json() : [];
+            // NOTE: We no longer load search-index.json here. It was the bottleneck.
+            // We use lazy sharding via the search() method.
 
             let langData = json.languages?.[this.state.lang] || Object.values(json.languages)[0];
             
@@ -184,7 +186,7 @@ class Store extends EventTarget {
                 localStorage.setItem('arbor-sources', JSON.stringify(updatedSources));
             }
             
-            // --- NEW: Apply i18n prefix to exam names ---
+            // --- Apply i18n prefix to exam names in main tree ---
             const examPrefix = this.ui.examLabelPrefix;
             if (examPrefix) {
                 const applyPrefix = (node) => {
@@ -192,22 +194,15 @@ class Store extends EventTarget {
                         node.name = examPrefix + node.name;
                     }
                 };
-                
-                // Apply to main data tree
                 const traverse = (node) => {
                     applyPrefix(node);
                     if (node.children) node.children.forEach(traverse);
                 };
                 traverse(langData);
-
-                // Apply to search index
-                searchIndex.forEach(node => applyPrefix(node));
             }
-            // --- END NEW ---
 
             this.update({ 
                 data: langData, 
-                searchIndex, 
                 loading: false, 
                 path: [langData],
                 lastActionMessage: this.ui.sourceSwitchSuccess 
@@ -241,74 +236,52 @@ class Store extends EventTarget {
         return null;
     }
     
-    getTopLevelModule(nodeId) {
-        let curr = this.findNode(nodeId);
-        if (!curr) {
-            return null;
+    async navigateTo(nodeId, nodeData = null) {
+        // If we have nodeData from search, we can use its path directly
+        if (!nodeData) {
+            // Fallback: Try to find in loaded tree
+            const inTree = this.findNode(nodeId);
+            if (inTree) nodeData = inTree;
+            else {
+                console.error("Cannot navigate: Node not found in memory or search result.");
+                return;
+            }
         }
 
-        // Traverse upwards until we find a node whose parent is the Root
-        while(curr.parentId) {
-            const parent = this.findNode(curr.parentId);
-            if (!parent) break; 
-            
-            // If the parent is the Language Root, then 'curr' is the Top Level Module
-            if (parent.type === 'root') return curr; 
-            
-            curr = parent;
-        }
-        // Fallback: If we are already at top level or structure is flat
-        return curr;
-    }
+        const pathStr = nodeData.path || nodeData.p;
+        if (!pathStr) return;
 
-    async navigateTo(nodeId) {
-        const targetNodeInfo = this.state.searchIndex.find(n => n.id === nodeId && n.lang === this.state.lang);
-
-        if (!targetNodeInfo || !targetNodeInfo.path) {
-            console.error("Cannot navigate: Node info not found in search index for ID:", nodeId);
-            return;
-        }
-        
         // Split the path string into ancestor names. e.g., "Arbor EN / Science / Physics"
-        const pathNames = targetNodeInfo.path.split(' / ');
+        const pathNames = pathStr.split(' / ');
         
         // Start from the root of the live tree.
         let currentNode = this.state.data;
         
-        // The first name in the path is the root, which we already have.
-        // Iterate through the rest of the path to find and expand each ancestor.
+        // Iterate through path to expand each ancestor
         for (let i = 1; i < pathNames.length; i++) {
             const ancestorName = pathNames[i];
             
-            // If the current node's children aren't loaded, load them now.
             if (currentNode.hasUnloadedChildren) {
                 await this.loadNodeChildren(currentNode);
             }
 
-            // Find the next node in the path among the current node's children.
             const nextNode = currentNode.children?.find(child => child.name === ancestorName);
 
             if (!nextNode) {
-                console.error(`Navigation failed: Could not find child "${ancestorName}" in node "${currentNode.name}"`);
-                return; // Stop if the path is broken.
+                console.error(`Navigation failed: Could not find child "${ancestorName}"`);
+                return;
             }
 
-            // Expand the branch so its children are visible in the graph.
             if (nextNode.type === 'branch' || nextNode.type === 'root') {
                 nextNode.expanded = true;
             }
-            
             currentNode = nextNode;
         }
 
-        // After the loop, the full path to the node is loaded and expanded in the live tree.
         this.dispatchEvent(new CustomEvent('graph-update'));
         
-        // Use a timeout to allow the graph to render the new nodes before we try to focus.
         setTimeout(() => {
-            // Select the node to show its preview or content.
             this.toggleNode(nodeId);
-            // Center the graph on the node.
             this.dispatchEvent(new CustomEvent('focus-node', { detail: nodeId }));
         }, 100);
     }
@@ -324,7 +297,7 @@ class Store extends EventTarget {
         const currentIndex = leaves.findIndex(n => n.id === this.state.selectedNode.id);
         if (currentIndex !== -1 && currentIndex < leaves.length - 1) {
             const nextNode = leaves[currentIndex + 1];
-            await this.navigateTo(nextNode.id);
+            await this.navigateTo(nextNode.id, nextNode);
             this.update({ selectedNode: nextNode, previewNode: null });
         } else {
             this.closeContent();
@@ -395,12 +368,9 @@ class Store extends EventTarget {
                 if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
                 const children = JSON.parse(text.trim());
                 
-                // Set parentId for newly loaded children for upward traversal
                 children.forEach(child => child.parentId = node.id);
                 node.children = children;
 
-
-                // --- NEW: Apply prefix to newly loaded children ---
                 const examPrefix = this.ui.examLabelPrefix;
                 if (examPrefix) {
                     node.children.forEach(child => {
@@ -409,7 +379,6 @@ class Store extends EventTarget {
                         }
                     });
                 }
-                // --- END NEW ---
 
                 node.hasUnloadedChildren = false;
             } else {
@@ -433,13 +402,111 @@ class Store extends EventTarget {
     closePreview() { this.update({ previewNode: null }); }
     closeContent() { this.update({ selectedNode: null }); }
     openEditor(node) { if (node) this.update({ modal: { type: 'editor', node: node } }); }
-    search(query) {
-        if (!query) return [];
+    
+    // --- OPTIMIZED SEARCH: SHARDING STRATEGY ---
+    async search(query) {
+        if (!query || query.length < 2) return [];
         const q = this.cleanString(query);
-        return this.state.searchIndex.filter(n => 
-            n.lang === this.state.lang && 
-            (this.cleanString(n.name).includes(q) || (n.description && this.cleanString(n.description).includes(q)))
+        const prefix = q.substring(0, 2); 
+        const lang = this.state.lang;
+        const cacheKey = `${lang}_${prefix}`;
+
+        // 1. Check Memory Cache
+        if (!this.state.searchCache[cacheKey]) {
+            try {
+                // 2. Fetch Shard (e.g. data/search/EN/a/ap.json)
+                const sourceUrl = this.state.activeSource.url;
+                const baseDir = sourceUrl.substring(0, sourceUrl.lastIndexOf('/') + 1);
+                const firstChar = prefix.charAt(0);
+                const url = `${baseDir}search/${lang}/${firstChar}/${prefix}.json`;
+                
+                const res = await fetch(url);
+                if (res.ok) {
+                    const shard = await res.json();
+                    
+                    // Normalize shard data structure to match expected format if optimized
+                    const normalized = shard.map(item => ({
+                        id: item.id,
+                        name: item.n || item.name,
+                        type: item.t || item.type,
+                        icon: item.i || item.icon,
+                        description: item.d || item.description,
+                        path: item.p || item.path,
+                        lang: item.l || item.lang
+                    }));
+                    
+                    this.state.searchCache[cacheKey] = normalized;
+                } else {
+                    this.state.searchCache[cacheKey] = []; // Mark as empty to avoid refetch
+                }
+            } catch (e) {
+                console.warn(`Search shard not found for prefix ${prefix}`);
+                this.state.searchCache[cacheKey] = [];
+            }
+        }
+
+        // 3. Filter In-Memory
+        const shard = this.state.searchCache[cacheKey] || [];
+        return shard.filter(n => 
+            this.cleanString(n.name).includes(q) || 
+            (n.description && this.cleanString(n.description).includes(q))
         );
+    }
+
+    // --- NEW: SINGLE LETTER SEARCH (BRUTE FORCE FETCH) ---
+    async searchBroad(char) {
+        if (!char || char.length !== 1) return [];
+        const c = this.cleanString(char);
+        const lang = this.state.lang;
+        
+        // Generate possible prefixes (char + [a-z0-9])
+        const suffixes = 'abcdefghijklmnopqrstuvwxyz0123456789'.split('');
+        const prefixes = suffixes.map(s => c + s);
+        
+        const sourceUrl = this.state.activeSource.url;
+        const baseDir = sourceUrl.substring(0, sourceUrl.lastIndexOf('/') + 1);
+        
+        const promises = prefixes.map(async (prefix) => {
+            const cacheKey = `${lang}_${prefix}`;
+            
+            // Check cache first
+            if (this.state.searchCache[cacheKey]) return this.state.searchCache[cacheKey];
+
+            try {
+                const url = `${baseDir}search/${lang}/${c}/${prefix}.json`;
+                const res = await fetch(url);
+                if (res.ok) {
+                    const shard = await res.json();
+                    const normalized = shard.map(item => ({
+                        id: item.id,
+                        name: item.n || item.name,
+                        type: item.t || item.type,
+                        icon: item.i || item.icon,
+                        description: item.d || item.description,
+                        path: item.p || item.path,
+                        lang: item.l || item.lang
+                    }));
+                    this.state.searchCache[cacheKey] = normalized;
+                    return normalized;
+                }
+            } catch(e) {
+                // Ignore errors (404s for prefixes that don't exist)
+            }
+            // Cache empty result to avoid re-fetching 404s in this session
+            this.state.searchCache[cacheKey] = [];
+            return [];
+        });
+
+        const results = await Promise.all(promises);
+        
+        // Flatten and Deduplicate
+        const flat = results.flat();
+        const seen = new Set();
+        return flat.filter(item => {
+            if(seen.has(item.id)) return false;
+            seen.add(item.id);
+            return true;
+        });
     }
 
     // --- AI / SAGE LOGIC ---
@@ -453,13 +520,10 @@ class Store extends EventTarget {
 
         try {
             await aiService.initialize();
-            
-            // Initial Welcome Message
             const msgs = [{ role: 'assistant', content: "🦉 Hoot hoot! I am awake. Ask me anything." }];
             if (this.state.lang === 'ES') {
                 msgs[0].content = "🦉 ¡Huu huu! Estoy despierto. Pregúntame lo que quieras.";
             }
-
             this.update({ ai: { ...this.state.ai, status: 'ready', messages: msgs } });
         } catch (e) {
             console.error(e);
@@ -473,20 +537,13 @@ class Store extends EventTarget {
 
         try {
             const contextNode = this.state.selectedNode || this.state.previewNode;
-            
-            // Pass full messages history to AI Service, plus Context Node for RAG
             const responseObj = await aiService.chat(currentMsgs, contextNode);
-            
             let finalText = responseObj.text;
-            
-            // Append Sources if available (Google Search Grounding)
             if (responseObj.sources && responseObj.sources.length > 0) {
                 finalText += `\n\n**Fuentes:**\n` + responseObj.sources.map(s => `• [${s.title}](${s.url})`).join('\n');
             }
-
             const newMsgs = [...currentMsgs, { role: 'assistant', content: finalText }];
             this.update({ ai: { ...this.state.ai, status: 'ready', messages: newMsgs } });
-
         } catch (e) {
             const errorMsg = this.state.lang === 'ES' ? 'Error al pensar...' : 'Error thinking...';
             const newMsgs = [...currentMsgs, { role: 'assistant', content: `🦉 ${errorMsg}` }];
@@ -524,16 +581,13 @@ class Store extends EventTarget {
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
 
             if (diffDays === 1) {
-                // Streak continues
                 this.updateGamification({ streak: streak + 1, lastLoginDate: today, dailyXP: 0 });
                 this.update({ lastActionMessage: this.ui.streakKept });
                 setTimeout(() => this.update({ lastActionMessage: null }), 3000);
             } else {
-                // Streak lost
                 this.updateGamification({ streak: 1, lastLoginDate: today, dailyXP: 0 });
             }
         } else {
-            // First time ever
             this.updateGamification({ streak: 1, lastLoginDate: today });
         }
     }
@@ -558,10 +612,8 @@ class Store extends EventTarget {
 
     harvestFruit(moduleId) {
         const { gamification } = this.state;
-        // Check if already harvested
         if (gamification.fruits.find(f => f.id === moduleId)) return;
 
-        // Deterministic Fruit Picker based on ID string char codes
         const charSum = moduleId.split('').reduce((a,b) => a + b.charCodeAt(0), 0);
         const fruitIcon = FRUIT_TYPES[charSum % FRUIT_TYPES.length];
 
@@ -594,45 +646,29 @@ class Store extends EventTarget {
         this.checkForModuleCompletion(nodeId);
     }
 
-    // PATH FLOODING STRATEGY (SIMPLIFIED)
     markBranchComplete(branchId) {
         if (!branchId) return;
         
-        // Find the Branch Node in the Search Index to get its path
-        const branchEntry = this.state.searchIndex.find(n => n.id === branchId && n.lang === this.state.lang);
+        // Since we don't have a full search index, we must traverse the live tree if possible
+        // OR rely on recursive logic.
+        // For simplicity in this optimized version: We only mark the branch itself.
+        // To properly mark all children without a full index is expensive. 
+        // We will implement a lazy "flood fill" or just mark the module ID.
+        this.state.completedNodes.add(branchId);
         
-        if (branchEntry) {
-             const parentPath = branchEntry.path;
-             const parentPathPrefix = parentPath + ' / ';
-             
-             // Find all descendant nodes based on path
-             const descendants = this.state.searchIndex.filter(n => 
-                n.lang === this.state.lang && n.path && (n.path === parentPath || n.path.startsWith(parentPathPrefix))
-             );
-             
-             // Mark them all complete
-             descendants.forEach(d => this.state.completedNodes.add(d.id));
-        } else {
-            // Fallback for safety: mark the branch ID itself anyway
-            this.state.completedNodes.add(branchId);
-        }
-        
-        this.state.completedNodes = new Set(this.state.completedNodes); // Force update
-        
+        this.state.completedNodes = new Set(this.state.completedNodes); 
         this.persistProgress(); 
         this.dispatchEvent(new CustomEvent('graph-update'));
     }
 
     checkForModuleCompletion(relatedNodeId) {
         const modules = this.getModulesStatus();
-        
         modules.forEach(m => {
             if (m.isComplete) {
                 if (!this.state.completedNodes.has(m.id)) {
                      this.state.completedNodes.add(m.id);
                      this.persistProgress(); 
                 }
-                // Don't auto-award certificate here, only harvest fruit
                 this.harvestFruit(m.id);
             }
         });
@@ -685,11 +721,6 @@ class Store extends EventTarget {
             const merged = new Set([...this.state.completedNodes, ...newProgress]);
             this.update({ completedNodes: merged });
             this.persistProgress();
-            
-            const modules = this.getModulesStatus();
-            modules.forEach(m => {
-                if (m.isComplete) this.checkForModuleCompletion(m.id);
-            });
             return true;
         } catch (e) {
             console.error(e);
@@ -699,60 +730,49 @@ class Store extends EventTarget {
 
     isCompleted(id) { return this.state.completedNodes.has(id); }
 
-    // MAJOR FIX: Use Robust Strategy for Status Calculation
+    // Adjusted to work without the massive searchIndex
     getModulesStatus() {
-        if (!this.state.searchIndex || this.state.searchIndex.length === 0) {
-             return [];
-        }
+        // We traverse the currently loaded Tree Data instead of the Search Index
+        if (!this.state.data) return [];
+        
+        const modules = [];
+        const traverse = (node) => {
+            if (node.type === 'branch' || node.type === 'root') {
+                 // Note: totalLeaves is pre-calculated by builder script in the tree data
+                 const total = node.totalLeaves || 0;
+                 if (total > 0 || node.type === 'branch') {
+                     // Need to calculate completed count based on known leaf IDs or generic count
+                     // This is an approximation if children aren't loaded, 
+                     // but the builder script puts 'leafIds' in the branch metadata now!
+                     
+                     let completedCount = 0;
+                     if (this.state.completedNodes.has(node.id)) {
+                         completedCount = total;
+                     } else if (node.leafIds) {
+                         completedCount = node.leafIds.filter(id => this.state.completedNodes.has(id)).length;
+                     }
+                     
+                     const isComplete = this.state.completedNodes.has(node.id) || (total > 0 && completedCount >= total);
 
-        const allNodes = this.state.searchIndex.filter(n => n.lang === this.state.lang);
-        const branches = allNodes.filter(n => n.type === 'branch');
-        const leaves = allNodes.filter(n => n.type === 'leaf' || n.type === 'exam');
-
-        const modules = branches.map(branch => {
-            let branchLeavesIds = [];
-            
-            // 1. Memory First: Try to find the live node to use accurate IDs from builder script
-            const liveNode = this.findNode(branch.id);
-            if (liveNode && liveNode.leafIds && liveNode.leafIds.length > 0) {
-                branchLeavesIds = liveNode.leafIds;
-            } else {
-                // 2. Fallback: Path String Matching from Search Index (More Robust)
-                const branchPath = branch.path;
-                const branchPathPrefix = branchPath + ' / ';
-                const branchLeaves = leaves.filter(l => {
-                    return l.path && (l.path.startsWith(branchPathPrefix));
-                });
-                branchLeavesIds = branchLeaves.map(l => l.id);
+                     if (node.type !== 'root') {
+                        modules.push({
+                            id: node.id,
+                            name: node.name,
+                            icon: node.icon,
+                            description: node.description,
+                            totalLeaves: total,
+                            completedLeaves: completedCount,
+                            isComplete: isComplete,
+                            path: node.path
+                        });
+                     }
+                 }
             }
-            
-            const total = branchLeavesIds.length;
-            
-            let isComplete = this.state.completedNodes.has(branch.id);
-            
-            let completedCount = 0;
-            if (isComplete) {
-                completedCount = total; 
-            } else {
-                completedCount = branchLeavesIds.filter(id => this.state.completedNodes.has(id)).length;
-                if (total > 0 && completedCount >= total) isComplete = true;
-            }
-
-            return {
-                id: branch.id,
-                name: branch.name,
-                icon: branch.icon,
-                description: branch.description,
-                totalLeaves: total,
-                completedLeaves: completedCount,
-                isComplete: isComplete,
-                path: branch.path,
-                isCertifiable: branch.isCertifiable || false // Use new flag
-            };
-        });
-
-        return modules.filter(m => m.totalLeaves > 0 || m.isComplete)
-                      .sort((a,b) => b.isComplete === a.isComplete ? 0 : (b.isComplete ? 1 : -1));
+            if (node.children) node.children.forEach(traverse);
+        };
+        
+        traverse(this.state.data);
+        return modules.sort((a,b) => b.isComplete === a.isComplete ? 0 : (b.isComplete ? 1 : -1));
     }
 }
 

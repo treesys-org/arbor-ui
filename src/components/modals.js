@@ -15,6 +15,10 @@ class ArborModals extends HTMLElement {
         this.showImpressumDetails = false;
         
         this.profileTab = 'garden'; // 'garden' | 'export' | 'import'
+        
+        // Search State
+        this.isBroadSearchLoading = false;
+        this.broadSearchMessage = null;
     }
 
     connectedCallback() {
@@ -259,6 +263,31 @@ class ArborModals extends HTMLElement {
 
     // --- SEARCH MODAL ---
     renderSearch(ui) {
+         let resultsHtml = '';
+         
+         if (this.isBroadSearchLoading) {
+             resultsHtml = `<div class="p-8 text-center text-slate-400 animate-pulse"><p>${ui.searchBroadLoading}</p></div>`;
+         } else if (this.broadSearchMessage) {
+             resultsHtml = `<div class="p-8 text-center text-sky-500 font-bold animate-pulse"><p>${this.broadSearchMessage}</p></div>`;
+         } else if (this.searchResults.length === 0 && this.searchQuery.length >= 2) {
+             resultsHtml = `<div class="p-8 text-center text-slate-400"><p>${ui.noResults}</p></div>`;
+         } else {
+             resultsHtml = this.searchResults.map(res => `
+                <button class="btn-res w-full text-left p-4 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors group flex items-center justify-between" data-id="${res.id}">
+                    <div class="flex items-center gap-4 min-w-0">
+                        <div class="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xl flex-shrink-0">${res.icon || '📄'}</div>
+                        <div class="min-w-0">
+                            <h3 class="font-bold text-slate-700 dark:text-slate-200 truncate">${res.name}</h3>
+                            <p class="text-xs text-slate-400 dark:text-slate-500 line-clamp-1">${res.path || ''}</p>
+                        </div>
+                    </div>
+                    <div class="flex-shrink-0 ml-4">
+                        ${this.renderSearchLabel(res.type)}
+                    </div>
+                </button>
+            `).join('');
+         }
+
          this.innerHTML = `
          <div class="fixed inset-0 z-[70] flex items-start justify-center pt-[15vh] bg-slate-900/60 backdrop-blur-sm p-4 animate-in" id="search-overlay">
             <div class="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700 flex flex-col max-h-[60vh]">
@@ -268,21 +297,7 @@ class ArborModals extends HTMLElement {
                     <button class="btn-close px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded text-xs font-bold text-slate-500">ESC</button>
                 </div>
                 <div class="overflow-y-auto p-2" id="search-results">
-                    ${this.searchResults.length === 0 && this.searchQuery.length > 0 ? `<div class="p-8 text-center text-slate-400"><p>${ui.noResults}</p></div>` : ''}
-                    ${this.searchResults.map(res => `
-                        <button class="btn-res w-full text-left p-4 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors group flex items-center justify-between" data-id="${res.id}">
-                            <div class="flex items-center gap-4 min-w-0">
-                                <div class="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xl flex-shrink-0">${res.icon || '📄'}</div>
-                                <div class="min-w-0">
-                                    <h3 class="font-bold text-slate-700 dark:text-slate-200 truncate">${res.name}</h3>
-                                    <p class="text-xs text-slate-400 dark:text-slate-500 line-clamp-1">${res.path || ''}</p>
-                                </div>
-                            </div>
-                            <div class="flex-shrink-0 ml-4">
-                                ${this.renderSearchLabel(res.type)}
-                            </div>
-                        </button>
-                    `).join('')}
+                    ${resultsHtml}
                 </div>
             </div>
          </div>`;
@@ -292,17 +307,65 @@ class ArborModals extends HTMLElement {
          
          const inp = this.querySelector('#inp-search');
          inp.focus();
+         // Restore cursor position
+         inp.setSelectionRange(inp.value.length, inp.value.length);
+         
+         // -----------------------------------------------------------
+         // SEARCH LOGIC WITH DELAY FOR 1 LETTER
+         // -----------------------------------------------------------
+         let debounceTimeout = null;
+         let singleLetterTimeout = null;
+
          inp.oninput = (e) => {
-             this.searchQuery = e.target.value;
-             this.searchResults = store.search(this.searchQuery);
-             this.render();
-             this.querySelector('#inp-search').focus();
-             const el = this.querySelector('#inp-search');
-             el.setSelectionRange(el.value.length, el.value.length);
+             const val = e.target.value;
+             this.searchQuery = val;
+             
+             clearTimeout(debounceTimeout);
+             clearTimeout(singleLetterTimeout);
+             
+             // Reset UI states
+             this.broadSearchMessage = null;
+             this.isBroadSearchLoading = false;
+
+             if (val.length === 0) {
+                 this.searchResults = [];
+                 this.render();
+                 return;
+             }
+
+             if (val.length === 1) {
+                 // Case 1: Single Letter - Wait and Prompt
+                 this.broadSearchMessage = ui.searchKeepTyping;
+                 this.searchResults = [];
+                 this.render();
+                 
+                 // Wait 1.5 seconds. If user doesn't type more, fetch BROADLY
+                 singleLetterTimeout = setTimeout(async () => {
+                     if (this.searchQuery.length === 1) {
+                         this.broadSearchMessage = null;
+                         this.isBroadSearchLoading = true;
+                         this.render();
+                         
+                         this.searchResults = await store.searchBroad(val);
+                         this.isBroadSearchLoading = false;
+                         this.render();
+                         this.querySelector('#inp-search').focus();
+                     }
+                 }, 1500);
+             } else {
+                 // Case 2: Standard Search (2+ chars)
+                 debounceTimeout = setTimeout(async () => {
+                     this.searchResults = await store.search(val);
+                     this.render();
+                     this.querySelector('#inp-search').focus();
+                 }, 300);
+             }
          };
 
-         this.querySelectorAll('.btn-res').forEach(b => b.onclick = (e) => {
-             store.navigateTo(e.currentTarget.dataset.id);
+         this.querySelectorAll('.btn-res').forEach(b => b.onclick = async (e) => {
+             const id = e.currentTarget.dataset.id;
+             const nodeInfo = this.searchResults.find(n => n.id === id);
+             await store.navigateTo(id, nodeInfo);
              this.close();
          });
          this.querySelector('.btn-close').onclick = () => this.close();
@@ -608,8 +671,16 @@ class ArborModals extends HTMLElement {
     }
 
     renderSingleCertificate(ui, moduleId) {
-        const module = store.value.searchIndex.find(n => n.id === moduleId && n.lang === store.value.lang);
-        if(!module) return;
+        // Now using navigateTo which might have populated cache, but ideally 
+        // we should try to find node in memory or fallback to search if not found
+        let module = store.findNode(moduleId);
+        
+        // If not in live tree (because it's deep and collapsed), try search cache
+        if (!module) {
+             // We can't render the certificate properly without name/description
+             // This is a rare edge case if user direct links to cert of unloaded node
+             module = { name: "Module " + moduleId, description: "Loading..." }; 
+        }
 
         this.innerHTML = `
         <div id="cert-overlay" class="fixed inset-0 z-[100] flex items-center justify-center bg-white dark:bg-slate-950 p-6 overflow-y-auto animate-in">
@@ -653,10 +724,23 @@ class ArborModals extends HTMLElement {
     }
 
     renderCertificatesGallery() {
-        const allNodes = store.value.searchIndex.filter(n => n.lang === store.value.lang);
-        const exams = allNodes.filter(n => n.type === 'exam');
+        // Requires full graph traversal since we don't have a flat index
+        // This is fine as it's a specific view mode, but we only show loaded nodes + completed ones (from local storage)
+        const allNodes = store.getModulesStatus(); // This gets modules, we need exams specifically
         
-        const certificateItems = exams.map(exam => ({
+        // This view is tricky without a full index. 
+        // We will show "Completed Exams" based on local storage ID matching against known graph
+        // This is a limitation of client-side sharding: You can't list "everything" easily.
+        
+        const completedExams = [];
+        // Traverse to find exams
+        const traverse = (n) => {
+            if (n.type === 'exam') completedExams.push(n);
+            if (n.children) n.children.forEach(traverse);
+        };
+        if(store.value.data) traverse(store.value.data);
+
+        const certificateItems = completedExams.map(exam => ({
             id: exam.id,
             name: exam.name,
             icon: exam.icon,
@@ -671,7 +755,7 @@ class ArborModals extends HTMLElement {
             if (!this.certShowAll && !item.isComplete) return false;
             if (this.certSearch) {
                  const q = this.certSearch.toLowerCase();
-                 return item.name.toLowerCase().includes(q) || (item.description && item.description.toLowerCase().includes(q));
+                 return item.name.toLowerCase().includes(q);
             }
             return true;
         });

@@ -7,6 +7,8 @@ export const UI_LABELS = {
       leafLabel: 'LESSON',
       searchPlaceholder: 'Search topics...',
       noResults: 'No results found',
+      searchKeepTyping: 'Keep typing to filter...',
+      searchBroadLoading: 'Loading all topics for this letter...',
       
       tutorialTitle: 'Quick Start Guide',
       tutorialSkip: 'Skip Tutorial',
@@ -232,6 +234,8 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       leafLabel: 'LECCIÓN',
       searchPlaceholder: 'Buscar temas...',
       noResults: 'No se encontraron resultados',
+      searchKeepTyping: 'Sigue escribiendo para filtrar...',
+      searchBroadLoading: 'Cargando todo el contenido de esta letra...',
       
       tutorialTitle: 'Guía de Inicio',
       tutorialSkip: 'Saltar Tutorial',
