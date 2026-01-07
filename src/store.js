@@ -210,7 +210,7 @@ class Store extends EventTarget {
             this.update({ 
                 data: langData, 
                 loading: false, 
-                path: [langData],
+                path: [langData], 
                 lastActionMessage: this.ui.sourceSwitchSuccess 
             });
             
@@ -659,13 +659,28 @@ class Store extends EventTarget {
         // 1. Mark the branch folder itself
         this.state.completedNodes.add(branchId);
 
-        // 2. Find the branch in memory to mark its children (siblings of the exam)
         const branchNode = this.findNode(branchId);
-        if (branchNode && branchNode.children) {
-            branchNode.children.forEach(child => {
-                // Add all children (lessons, other exams, sub-branches) to completed
-                this.state.completedNodes.add(child.id);
-            });
+        
+        if (branchNode) {
+            // Helper to recursively mark loaded nodes
+            const markLoadedRecursive = (node) => {
+                this.state.completedNodes.add(node.id);
+                if (node.children) {
+                    node.children.forEach(markLoadedRecursive);
+                }
+            };
+            
+            // 2. Recursively mark everything currently loaded in this branch
+            // This ensures siblings (branches/leaves) and their currently loaded children are marked.
+            if (branchNode.children) {
+                branchNode.children.forEach(markLoadedRecursive);
+            }
+
+            // 3. Mark all descendant leaves (Deep) using metadata
+            // This ensures even unloaded leaves deep in sibling branches are marked.
+            if (branchNode.leafIds && Array.isArray(branchNode.leafIds)) {
+                branchNode.leafIds.forEach(id => this.state.completedNodes.add(id));
+            }
         }
         
         this.state.completedNodes = new Set(this.state.completedNodes); 
