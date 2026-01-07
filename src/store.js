@@ -176,6 +176,9 @@ class Store extends EventTarget {
     async loadData(source) {
         this.update({ loading: true, error: null, activeSource: source });
         localStorage.setItem('arbor-active-source-id', source.id);
+        
+        // Critical: Update GitHub Service Context
+        github.setContext(source.url);
 
         try {
             const url = `${source.url}?t=${Date.now()}`;
