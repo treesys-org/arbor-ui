@@ -250,13 +250,13 @@ class ArborModals extends HTMLElement {
 
     renderSearchLabel(type) {
         if (type === 'branch') {
-            return `<span class="text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/30 px-2 py-1 rounded-full border border-amber-200 dark:border-amber-800/50">Módulo</span>`;
+            return `<span class="flex-shrink-0 text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">Módulo</span>`;
         }
         if (type === 'leaf') {
-            return `<span class="text-[10px] font-bold text-purple-700 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/30 px-2 py-1 rounded-full border border-purple-200 dark:border-purple-800/50">Lección</span>`;
+            return `<span class="flex-shrink-0 text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/20 px-2 py-0.5 rounded border border-sky-100 dark:border-sky-800/30">Lección</span>`;
         }
         if (type === 'exam') {
-            return `<span class="text-[10px] font-bold text-red-700 dark:text-red-400 bg-red-100 dark:bg-red-900/30 px-2 py-1 rounded-full border border-red-200 dark:border-red-800/50">Examen</span>`;
+            return `<span class="flex-shrink-0 text-[10px] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded border border-red-100 dark:border-red-800/30">Examen</span>`;
         }
         return '';
     }
@@ -272,20 +272,35 @@ class ArborModals extends HTMLElement {
          } else if (this.searchResults.length === 0 && this.searchQuery.length >= 2) {
              resultsHtml = `<div class="p-8 text-center text-slate-400"><p>${ui.noResults}</p></div>`;
          } else {
-             resultsHtml = this.searchResults.map(res => `
-                <button class="btn-res w-full text-left p-4 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors group flex items-center justify-between" data-id="${res.id}">
-                    <div class="flex items-center gap-4 min-w-0">
-                        <div class="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xl flex-shrink-0">${res.icon || '📄'}</div>
-                        <div class="min-w-0">
-                            <h3 class="font-bold text-slate-700 dark:text-slate-200 truncate">${res.name}</h3>
-                            <p class="text-xs text-slate-400 dark:text-slate-500 line-clamp-1">${res.path || ''}</p>
+             resultsHtml = this.searchResults.map((res, index) => {
+                // CLEAN PATH LOGIC
+                let pathParts = (res.path || '').split(' / ');
+                // Remove Root (e.g., "Arbor ES")
+                if (pathParts.length > 0 && pathParts[0].includes('Arbor')) pathParts.shift();
+                // Remove self (the last item is usually the node name)
+                if (pathParts.length > 0 && pathParts[pathParts.length-1] === res.name) pathParts.pop();
+
+                // Build Breadcrumbs
+                const displayPath = pathParts.length > 0
+                    ? pathParts.join(' <span class="text-slate-300 dark:text-slate-600 px-0.5">›</span> ')
+                    : '';
+
+                const borderClass = index !== this.searchResults.length - 1 ? 'border-b border-slate-50 dark:border-slate-800/50' : '';
+
+                return `
+                <button class="btn-res w-full text-left p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group flex items-start gap-3 ${borderClass}" data-id="${res.id}">
+                    <div class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-lg flex-shrink-0 mt-0.5 shadow-sm border border-slate-200 dark:border-slate-700">${res.icon || '📄'}</div>
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-2 mb-0.5">
+                            <h3 class="font-bold text-slate-700 dark:text-slate-200 truncate text-sm">${res.name}</h3>
+                            ${this.renderSearchLabel(res.type)}
                         </div>
-                    </div>
-                    <div class="flex-shrink-0 ml-4">
-                        ${this.renderSearchLabel(res.type)}
+                        <p class="text-xs text-slate-400 dark:text-slate-500 truncate flex items-center leading-tight">
+                           ${displayPath}
+                        </p>
                     </div>
                 </button>
-            `).join('');
+            `}).join('');
          }
 
          this.innerHTML = `
@@ -296,7 +311,7 @@ class ArborModals extends HTMLElement {
                     <input id="inp-search" type="text" placeholder="${ui.searchPlaceholder}" class="w-full bg-transparent text-xl font-bold text-slate-700 dark:text-white outline-none placeholder:text-slate-300 dark:placeholder:text-slate-600" autocomplete="off" value="${this.searchQuery}">
                     <button class="btn-close px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded text-xs font-bold text-slate-500">ESC</button>
                 </div>
-                <div class="overflow-y-auto p-2" id="search-results">
+                <div class="overflow-y-auto custom-scrollbar" id="search-results">
                     ${resultsHtml}
                 </div>
             </div>
