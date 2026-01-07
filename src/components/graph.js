@@ -59,7 +59,7 @@ class ArborGraph extends HTMLElement {
                 this.height = container.clientHeight;
                 if(this.svg) {
                     this.svg.attr("viewBox", [0, 0, this.width, this.height]);
-                    this.updateZoomExtent();
+                    // Extent updates happen inside updateGraph now
                     this.drawGround();
                     this.updateGraph();
                 }
@@ -176,23 +176,13 @@ class ArborGraph extends HTMLElement {
             });
         
         this.svg.call(this.zoom).on("dblclick.zoom", null);
-        this.updateZoomExtent();
+        
+        // Initial generic extent, updated later in updateGraph
+        this.zoom.translateExtent([[-4000, -4000], [4000, 4000]]);
 
         this.resetZoom(0);
         
         if(store.value.data) this.updateGraph();
-    }
-
-    updateZoomExtent() {
-        if (!this.zoom) return;
-        const horizontalPadding = this.width * 2;
-        const topPadding = this.height * 50; 
-        const bottomPadding = this.height + 150;
-
-        this.zoom.translateExtent([
-            [-horizontalPadding, -topPadding], 
-            [horizontalPadding * 2, bottomPadding]
-        ]);
     }
     
     resetZoom(duration = 750) {
@@ -233,26 +223,16 @@ class ArborGraph extends HTMLElement {
     }
 
     // --- ALGORITMO ESTRATOS (STRATUM) ---
-    // Fixes the layout to the center stem, drawing clusters above floors.
     calculateMobileLayout(root) {
         const centerX = this.width / 2;
         const startY = this.height - 150;
         const levelHeight = 220; // Height between floors
         
-        // 1. Identify the Active Spine (The path of expanded nodes)
-        // We do this by traversing down from root along 'expanded' children
         const spine = [];
         let cursor = root;
         while(cursor) {
             spine.push(cursor);
             if (cursor.children && cursor.data.expanded) {
-                // Find the child that continues the expansion (if any)
-                // In D3 hierarchy, 'expanded' logic in store might differ from d3 object
-                // We rely on the fact that if a node is expanded, we want to show its children.
-                // The 'active path' is conceptually the node you last clicked and its ancestors.
-                
-                // For layout purposes, we treat the 'expanded' node as the base of the next floor.
-                // But we need to find which child is *also* expanded to continue the spine.
                 const nextActive = cursor.children.find(c => c.data.expanded);
                 cursor = nextActive;
             } else {
@@ -260,41 +240,30 @@ class ArborGraph extends HTMLElement {
             }
         }
 
-        // 2. Position the Spine (Central Stem)
         spine.forEach((node, levelIndex) => {
             node.x = centerX;
             node.y = startY - (levelIndex * levelHeight);
             node.isSpine = true;
-            node.floorY = node.y - (levelHeight * 0.4); // The "Green Line" Y position
+            node.floorY = node.y - (levelHeight * 0.4); 
         });
 
-        // 3. Position the "Clouds" (Children of spine nodes that are NOT in the spine)
         spine.forEach((parent) => {
             if (!parent.children) return;
 
             const siblings = parent.children.filter(c => !spine.includes(c));
             if (siblings.length === 0) return;
 
-            // Algorithm: Compact Spiral above the Floor Line
-            // Center of the cloud is directly above the parent
             const cloudCenterY = parent.floorY - 60; 
-            
-            // Adjust spiral tightness based on count
             const count = siblings.length;
-            const spread = Math.min(this.width * 0.4, 160); // Max spread radius
+            const spread = Math.min(this.width * 0.4, 160); 
             
             siblings.forEach((child, i) => {
-                // Golden Angle Spiral
                 const angle = i * 2.4; 
-                // Radius grows with index to spiral outwards
-                // We dampen it so it doesn't explode
                 const dist = 60 + (Math.sqrt(i) * 35); 
                 
-                // Constrain X to viewport (Fixed Width requirement)
                 let tx = centerX + Math.cos(angle) * dist;
-                let ty = cloudCenterY - Math.sin(angle) * (dist * 0.8); // Flatten slightly vertically
+                let ty = cloudCenterY - Math.sin(angle) * (dist * 0.8); 
 
-                // Hard Clamp X to keep inside mobile screen
                 const padding = 50;
                 tx = Math.max(padding, Math.min(this.width - padding, tx));
                 
@@ -304,9 +273,8 @@ class ArborGraph extends HTMLElement {
             });
         });
         
-        // Mark spine nodes for visual treatment
         root.descendants().forEach(d => {
-             if (!d.x) { // Safety for detached nodes
+             if (!d.x) { 
                  d.x = centerX; 
                  d.y = startY; 
              }
@@ -321,7 +289,7 @@ class ArborGraph extends HTMLElement {
 
         const root = d3.hierarchy(store.value.data, d => d.expanded ? d.children : null);
         
-        // --- LAYOUT ---
+        // --- LAYOUT CALCULATION ---
         if (isMobile) {
             this.calculateMobileLayout(root);
         } else {
@@ -346,7 +314,31 @@ class ArborGraph extends HTMLElement {
         const nodes = root.descendants();
         const links = root.links();
 
-        // 4. Separator Lines (Visual Floors for Mobile)
+        // --- DYNAMIC BOUNDING BOX & CONSTRAINT ---
+        // Calculate the extent of the visible tree
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        nodes.forEach(d => {
+            if (d.x < minX) minX = d.x;
+            if (d.x > maxX) maxX = d.x;
+            if (d.y < minY) minY = d.y;
+            if (d.y > maxY) maxY = d.y;
+        });
+
+        // Add generous padding so nodes aren't stuck to the edge
+        const padX = Math.max(this.width * 0.5, 300);
+        const padY = Math.max(this.height * 0.5, 400);
+
+        // Update the zoom constraint strictly to the tree area
+        if (this.zoom && nodes.length > 0) {
+            this.zoom.translateExtent([
+                [minX - padX, minY - padY], 
+                [maxX + padX, maxY + padY]
+            ]);
+        }
+
+        // --- RENDER VISUALS ---
+
+        // Separator Lines (Visual Floors for Mobile)
         const spineNodes = nodes.filter(n => n.isSpine && n.children && isMobile);
         
         const sepSelection = this.separatorGroup.selectAll(".floor-line")
@@ -358,10 +350,7 @@ class ArborGraph extends HTMLElement {
             .attr("x2", this.width - 20)
             .attr("y1", d => d.floorY)
             .attr("y2", d => d.floorY)
-            .attr("stroke", d => {
-                // Match the color of the node (green if complete, brown if not)
-                return store.isCompleted(d.data.id) ? "#22c55e" : "#8D6E63";
-            })
+            .attr("stroke", d => store.isCompleted(d.data.id) ? "#22c55e" : "#8D6E63")
             .attr("stroke-width", 2)
             .attr("stroke-dasharray", "5,5")
             .attr("opacity", 0)
@@ -376,8 +365,6 @@ class ArborGraph extends HTMLElement {
 
         sepSelection.exit().transition().duration(this.duration).attr("opacity", 0).remove();
 
-
-        // Animation Helpers
         const findOrigin = (d) => {
             if (d.parent && this.nodePositions.has(d.parent.data.id)) {
                 return this.nodePositions.get(d.parent.data.id);
@@ -476,9 +463,8 @@ class ArborGraph extends HTMLElement {
             })
             .attr("d", d => {
                 const isHarvested = harvestedFruits.find(f => f.id === d.data.id);
-                // Dynamic sizing for cloud density
                 let r = d.data.type === 'root' ? 60 : (isHarvested ? 50 : 45); 
-                if (isMobile && !d.isSpine) r = r * 0.8; // Smaller bubbles in the cloud
+                if (isMobile && !d.isSpine) r = r * 0.8; 
 
                 if (d.data.type === 'leaf') return "M0,0 C-35,15 -45,45 0,85 C45,45 35,15 0,0"; 
                 if (d.data.type === 'exam') return `M0,${-r*1.2} L${r*1.2},0 L0,${r*1.2} L${-r*1.2},0 Z`;
@@ -501,11 +487,9 @@ class ArborGraph extends HTMLElement {
             })
             .attr("dy", d => d.data.type === 'leaf' || d.data.type === 'exam' ? (d.data.type === 'exam' ? "0.35em" : "48px") : "0.35em");
         
-        // --- Labels ---
         nodeMerged.select(".label-group")
             .attr("transform", d => {
                 if (isMobile) {
-                    // If in cloud, compact label below. If spine, below too.
                     return `translate(0, 45)`;
                 } else {
                     return `translate(0, ${d.data.type === 'leaf' || d.data.type === 'exam' ? 65 : 55})`;
@@ -516,7 +500,6 @@ class ArborGraph extends HTMLElement {
 
         nodeMerged.select(".label-group text")
             .text(d => {
-                // Shorten labels on mobile clouds
                 if (isMobile && !d.isSpine && d.data.name.length > 15) return d.data.name.substring(0, 12) + '...';
                 return d.data.name;
             })
@@ -527,7 +510,6 @@ class ArborGraph extends HTMLElement {
                 rectNode.attr("width", w).attr("x", -w/2);
             });
 
-        // --- Badges ---
         nodeUpdate.select(".badge-group")
             .style("display", d => (d.data.type === 'leaf' || d.data.type === 'exam') ? 'none' : 'block')
             .attr("transform", d => `translate(${isMobile ? 25 : 35}, -${isMobile ? 25 : 35})`);
@@ -581,7 +563,6 @@ class ArborGraph extends HTMLElement {
     }
 
     diagonal(d) {
-        // Standard Cubic Bezier
         const s = d.source;
         const t = d.target;
         const midY = (s.y + t.y) / 2;
@@ -594,32 +575,36 @@ class ArborGraph extends HTMLElement {
         
         store.toggleNode(d.data.id);
         
-        // Auto-Camera for Stratum Layout
-        if (!d.data.expanded) {
-             this.smartFocus(d);
+        // Auto-scroll vertical logic
+        if (d.data.type === 'branch' || d.data.type === 'root') {
+             this.adjustCameraToActiveNode(d);
         }
     }
 
-    smartFocus(d) {
+    // Auto-scrolls the camera to maintain context
+    adjustCameraToActiveNode(d) {
         if (!this.svg || !this.zoom) return;
-        const isMobile = this.width < 768;
-        if (!isMobile) return; 
-
-        // In Stratum layout, the new cluster appears ABOVE the clicked node.
-        // We want to put the clicked node near the bottom of the screen.
         
+        // Use current transform to calculate absolute position
         const t = d3.zoomTransform(this.svg.node());
-        const currentX = t.applyX(d.x);
         const currentY = t.applyY(d.y);
+        
+        let targetY;
 
-        const targetX = this.width / 2;
-        const targetY = this.height * 0.8; // Bottom 20%
+        if (!d.data.expanded) {
+             // EXPANDING: Move camera DOWN (node moves up) to reveal children below
+             // Target position for the node: Top 20% of screen
+             targetY = this.height * 0.2;
+        } else {
+             // COLLAPSING: Move camera UP (node moves down) to recenter parent
+             // Target position for the node: Center or Bottom-Third
+             targetY = this.height * 0.6;
+        }
 
-        const dx = targetX - currentX;
         const dy = targetY - currentY;
 
         this.svg.transition().duration(this.duration + 200)
-            .call(this.zoom.transform, t.translate(dx / t.k, dy / t.k));
+            .call(this.zoom.transform, t.translate(0, dy / t.k));
     }
 
     focusNode(nodeId) {
@@ -630,7 +615,7 @@ class ArborGraph extends HTMLElement {
 
         if(target && this.zoom) {
              const transform = d3.zoomIdentity
-                .translate(this.width/2, this.height * 0.7)
+                .translate(this.width/2, this.height * 0.5)
                 .scale(1.2)
                 .translate(-target.x, -target.y);
              
