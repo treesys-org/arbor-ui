@@ -10,9 +10,10 @@ class ArborGraph extends HTMLElement {
         this.width = 0;
         this.height = 0;
         this.zoom = null;
-        this.duration = 600; // Faster animations for snappy feel
+        this.duration = 600; 
         // Cache to store where nodes are, so we can animate FROM there or TO there
         this.nodePositions = new Map();
+        this.activePathIds = new Set();
     }
 
     connectedCallback() {
@@ -31,7 +32,6 @@ class ArborGraph extends HTMLElement {
              this.renderOverlays();
         });
 
-        // Ensure fonts are loaded to calculate BBox correctly
         if (document.fonts) {
             document.fonts.ready.then(() => {
                 if(store.value.data) this.updateGraph();
@@ -44,13 +44,10 @@ class ArborGraph extends HTMLElement {
              this.renderOverlays();
         });
         
-        // External focus request (search, deep link)
         store.addEventListener('focus-node', (e) => {
-             // Wait for D3 render cycle to populate DOM
              setTimeout(() => this.focusNode(e.detail), 250);
         });
         
-        // Listen for reset-zoom (Home Button)
         store.addEventListener('reset-zoom', () => {
              this.resetZoom();
         });
@@ -140,14 +137,13 @@ class ArborGraph extends HTMLElement {
             .style("width", "100%")
             .style("height", "100%");
 
-        // --- Filters ---
         const defs = this.svg.append("defs");
         
         // 1. Drop Shadow
         const filter = defs.append("filter").attr("id", "drop-shadow");
         filter.append("feGaussianBlur").attr("in", "SourceAlpha").attr("stdDeviation", 3);
         filter.append("feOffset").attr("dx", 0).attr("dy", 3);
-        filter.append("feComponentTransfer").append("feFuncA").attr("type","linear").attr("slope",0.3); // Softer shadow
+        filter.append("feComponentTransfer").append("feFuncA").attr("type","linear").attr("slope",0.3);
         const merge = filter.append("feMerge");
         merge.append("feMergeNode");
         merge.append("feMergeNode").attr("in", "SourceGraphic");
@@ -162,15 +158,17 @@ class ArborGraph extends HTMLElement {
         lgMerge.append("feMergeNode").attr("in", "coloredBlur");
         lgMerge.append("feMergeNode").attr("in", "SourceGraphic");
 
-        // --- Layers ---
         this.g = this.svg.append("g");
         this.groundGroup = this.g.append("g").attr("class", "ground");
+        
+        // New: Separator Lines Layer (Behind links)
+        this.separatorGroup = this.g.append("g").attr("class", "separators");
+        
         this.linkGroup = this.g.append("g").attr("class", "links");
         this.nodeGroup = this.g.append("g").attr("class", "nodes");
 
         this.drawGround();
 
-        // --- Zoom Behavior ---
         this.zoom = d3.zoom()
             .scaleExtent([0.1, 4])
             .on("zoom", (e) => {
@@ -180,17 +178,14 @@ class ArborGraph extends HTMLElement {
         this.svg.call(this.zoom).on("dblclick.zoom", null);
         this.updateZoomExtent();
 
-        // Initial Position (Bottom Center)
-        this.resetZoom(0); // Instant reset initially
+        this.resetZoom(0);
         
         if(store.value.data) this.updateGraph();
     }
 
     updateZoomExtent() {
         if (!this.zoom) return;
-        const isMobile = this.width < 768;
         const horizontalPadding = this.width * 2;
-        // Allows scrolling VERY high up for large trees
         const topPadding = this.height * 50; 
         const bottomPadding = this.height + 150;
 
@@ -202,7 +197,6 @@ class ArborGraph extends HTMLElement {
     
     resetZoom(duration = 750) {
         if (!this.svg || !this.zoom) return;
-        const isMobile = this.width < 768;
         const k = 0.85;
         const tx = (this.width / 2) * (1 - k); 
         const ty = (this.height * 0.85) - (this.height - 100) * k;
@@ -222,7 +216,6 @@ class ArborGraph extends HTMLElement {
         const groundWidth = Math.max(this.width * 1.5, 3000); 
         const groundDepth = 4000;
 
-        // Back Hill
         this.groundGroup.append("path")
             .attr("d", `M${cx - groundWidth},${groundY} 
                         C${cx - 500},${groundY - 180} ${cx + 500},${groundY - 60} ${cx + groundWidth},${groundY} 
@@ -231,7 +224,6 @@ class ArborGraph extends HTMLElement {
             .attr("fill", backColor)
             .style("opacity", 0.7);
 
-        // Front Hill
         this.groundGroup.append("path")
             .attr("d", `M${cx - groundWidth},${groundY} 
                         Q${cx},${groundY - 120} ${cx + groundWidth},${groundY} 
@@ -240,53 +232,84 @@ class ArborGraph extends HTMLElement {
             .attr("fill", color);
     }
 
-    // --- CUSTOM MOBILE LAYOUT ALGORITHM (THE VINE) ---
+    // --- ALGORITMO ESTRATOS (STRATUM) ---
+    // Fixes the layout to the center stem, drawing clusters above floors.
     calculateMobileLayout(root) {
-        const startX = this.width / 2;
+        const centerX = this.width / 2;
         const startY = this.height - 150;
-        const colSpacing = this.width < 400 ? 90 : 110; // Left/Right spread
-        const rowHeight = 100; // Vertical gap between rows
-
-        // Map to keep track of the current "Height cursor" for each depth level
-        // depthY[0] is root, depthY[1] is children, etc.
-        const depthY = {}; 
-
-        // We traverse BFS to lay them out
-        root.each(node => {
-            // Default position (Root)
-            if (node.depth === 0) {
-                node.x = startX;
-                node.y = startY;
-                depthY[0] = startY;
+        const levelHeight = 220; // Height between floors
+        
+        // 1. Identify the Active Spine (The path of expanded nodes)
+        // We do this by traversing down from root along 'expanded' children
+        const spine = [];
+        let cursor = root;
+        while(cursor) {
+            spine.push(cursor);
+            if (cursor.children && cursor.data.expanded) {
+                // Find the child that continues the expansion (if any)
+                // In D3 hierarchy, 'expanded' logic in store might differ from d3 object
+                // We rely on the fact that if a node is expanded, we want to show its children.
+                // The 'active path' is conceptually the node you last clicked and its ancestors.
+                
+                // For layout purposes, we treat the 'expanded' node as the base of the next floor.
+                // But we need to find which child is *also* expanded to continue the spine.
+                const nextActive = cursor.children.find(c => c.data.expanded);
+                cursor = nextActive;
             } else {
-                // Determine Y based on parent's Y, but stack children in grid
-                const parentY = node.parent.y;
-                
-                // Index of this child among siblings
-                const index = node.parent.children.indexOf(node);
-                
-                // We create a Zig-Zag Grid (2 columns)
-                // Row 0: Child 0 (Left), Child 1 (Right)
-                // Row 1: Child 2 (Left), Child 3 (Right)
-                const row = Math.floor(index / 2);
-                const col = index % 2; // 0 = Left, 1 = Right
-                
-                // Calculate Offset
-                const xOffset = col === 0 ? -colSpacing : colSpacing;
-                const yOffset = (row + 1) * rowHeight; // +1 to start above parent
-                
-                // If it's a single child, center it
-                if (node.parent.children.length === 1) {
-                    node.x = node.parent.x;
-                } else {
-                    node.x = node.parent.x + xOffset;
-                }
-                
-                node.y = node.parent.y - yOffset;
-                
-                // Store alignment for text rendering later
-                node.side = (node.parent.children.length === 1) ? 'center' : (col === 0 ? 'left' : 'right');
+                cursor = null;
             }
+        }
+
+        // 2. Position the Spine (Central Stem)
+        spine.forEach((node, levelIndex) => {
+            node.x = centerX;
+            node.y = startY - (levelIndex * levelHeight);
+            node.isSpine = true;
+            node.floorY = node.y - (levelHeight * 0.4); // The "Green Line" Y position
+        });
+
+        // 3. Position the "Clouds" (Children of spine nodes that are NOT in the spine)
+        spine.forEach((parent) => {
+            if (!parent.children) return;
+
+            const siblings = parent.children.filter(c => !spine.includes(c));
+            if (siblings.length === 0) return;
+
+            // Algorithm: Compact Spiral above the Floor Line
+            // Center of the cloud is directly above the parent
+            const cloudCenterY = parent.floorY - 60; 
+            
+            // Adjust spiral tightness based on count
+            const count = siblings.length;
+            const spread = Math.min(this.width * 0.4, 160); // Max spread radius
+            
+            siblings.forEach((child, i) => {
+                // Golden Angle Spiral
+                const angle = i * 2.4; 
+                // Radius grows with index to spiral outwards
+                // We dampen it so it doesn't explode
+                const dist = 60 + (Math.sqrt(i) * 35); 
+                
+                // Constrain X to viewport (Fixed Width requirement)
+                let tx = centerX + Math.cos(angle) * dist;
+                let ty = cloudCenterY - Math.sin(angle) * (dist * 0.8); // Flatten slightly vertically
+
+                // Hard Clamp X to keep inside mobile screen
+                const padding = 50;
+                tx = Math.max(padding, Math.min(this.width - padding, tx));
+                
+                child.x = tx;
+                child.y = ty;
+                child.isSpine = false;
+            });
+        });
+        
+        // Mark spine nodes for visual treatment
+        root.descendants().forEach(d => {
+             if (!d.x) { // Safety for detached nodes
+                 d.x = centerX; 
+                 d.y = startY; 
+             }
         });
     }
 
@@ -296,14 +319,13 @@ class ArborGraph extends HTMLElement {
         const isMobile = this.width < 768;
         const harvestedFruits = store.value.gamification.fruits;
 
-        // 1. Construct Hierarchy
         const root = d3.hierarchy(store.value.data, d => d.expanded ? d.children : null);
         
-        // 2. Compute Layout
+        // --- LAYOUT ---
         if (isMobile) {
             this.calculateMobileLayout(root);
         } else {
-            // Desktop Fan Layout
+            // Desktop Fan
             let leaves = 0;
             root.each(d => { if (!d.children) leaves++; });
             const dynamicWidth = Math.max(this.width, leaves * 160); 
@@ -314,7 +336,7 @@ class ArborGraph extends HTMLElement {
             const levelHeight = 200; 
             root.descendants().forEach(d => {
                 d.y = (this.height - 150) - (d.depth * levelHeight);
-                d.side = 'center'; // Desktop always centered text
+                d.side = 'center'; 
                 if (dynamicWidth < this.width) {
                     d.x += (this.width - dynamicWidth) / 2;
                 }
@@ -324,7 +346,38 @@ class ArborGraph extends HTMLElement {
         const nodes = root.descendants();
         const links = root.links();
 
-        // 4. Animation Origin Logic
+        // 4. Separator Lines (Visual Floors for Mobile)
+        const spineNodes = nodes.filter(n => n.isSpine && n.children && isMobile);
+        
+        const sepSelection = this.separatorGroup.selectAll(".floor-line")
+            .data(spineNodes, d => d.data.id);
+
+        sepSelection.enter().append("line")
+            .attr("class", "floor-line")
+            .attr("x1", 20)
+            .attr("x2", this.width - 20)
+            .attr("y1", d => d.floorY)
+            .attr("y2", d => d.floorY)
+            .attr("stroke", d => {
+                // Match the color of the node (green if complete, brown if not)
+                return store.isCompleted(d.data.id) ? "#22c55e" : "#8D6E63";
+            })
+            .attr("stroke-width", 2)
+            .attr("stroke-dasharray", "5,5")
+            .attr("opacity", 0)
+            .transition().duration(this.duration)
+            .attr("opacity", 0.6);
+
+        sepSelection.transition().duration(this.duration)
+            .attr("y1", d => d.floorY)
+            .attr("y2", d => d.floorY)
+            .attr("x2", this.width - 20)
+            .attr("stroke", d => store.isCompleted(d.data.id) ? "#22c55e" : "#8D6E63");
+
+        sepSelection.exit().transition().duration(this.duration).attr("opacity", 0).remove();
+
+
+        // Animation Helpers
         const findOrigin = (d) => {
             if (d.parent && this.nodePositions.has(d.parent.data.id)) {
                 return this.nodePositions.get(d.parent.data.id);
@@ -344,11 +397,10 @@ class ArborGraph extends HTMLElement {
             return { x: this.width / 2, y: this.height };
         };
 
-        // --- NODES RENDER ---
+        // --- NODES ---
         const nodeSelection = this.nodeGroup.selectAll("g.node")
             .data(nodes, d => d.data.id);
 
-        // ENTER
         const nodeEnter = nodeSelection.enter().append("g")
             .attr("class", "node")
             .attr("transform", d => {
@@ -360,9 +412,9 @@ class ArborGraph extends HTMLElement {
             .on("mousedown", (e) => e.stopPropagation());
 
         nodeEnter.append("circle")
-            .attr("r", isMobile ? 60 : 80) // Slightly smaller touch target on mobile to reduce overlap
-            .attr("cy", d => d.data.type === 'leaf' || d.data.type === 'exam' ? (isMobile ? 25 : 30) : 0)
-            .attr("fill", "transparent");
+            .attr("r", isMobile ? 50 : 80)
+            .attr("cy", d => d.data.type === 'leaf' || d.data.type === 'exam' ? (isMobile ? 0 : 30) : 0)
+            .attr("fill", "transparent"); // Hit area
 
         nodeEnter.append("path")
             .attr("class", "node-body")
@@ -373,39 +425,30 @@ class ArborGraph extends HTMLElement {
             .attr("class", "node-icon")
             .attr("text-anchor", "middle")
             .attr("dy", "0.35em")
-            .style("font-size", isMobile ? "32px" : "38px")
+            .style("font-size", isMobile ? "28px" : "38px")
             .style("user-select", "none")
             .style("pointer-events", "none");
 
         // Labels
-        const labelGroup = nodeEnter.append("g")
-            .attr("class", "label-group");
+        const labelGroup = nodeEnter.append("g").attr("class", "label-group");
             
         labelGroup.append("rect")
-            .attr("rx", 10).attr("ry", 10).attr("height", 28) 
-            .attr("fill", "rgba(255,255,255,0.95)")
+            .attr("rx", 10).attr("ry", 10).attr("height", 24) 
+            .attr("fill", "rgba(255,255,255,0.9)")
             .attr("stroke", "#e2e8f0");
         
         labelGroup.append("text")
             .attr("class", "label-text")
-            .attr("dy", 19)
+            .attr("dy", 17)
             .attr("fill", "#334155")
-            .attr("font-size", "14px") // Slightly smaller text on mobile 
+            .attr("font-size", "12px") 
             .attr("font-weight", "800")
             .style("pointer-events", "none");
 
-        // Badges (+/-)
-        const badge = nodeEnter.append("g")
-            .attr("class", "badge-group")
-            .style("display", "none");
-
-        badge.append("circle")
-            .attr("r", 14).attr("stroke", "#fff").attr("stroke-width", 2)
-            .style("filter", "drop-shadow(0px 2px 3px rgba(0,0,0,0.3))");
-
-        badge.append("text")
-            .attr("dy", "0.35em").attr("text-anchor", "middle")
-            .attr("font-weight", "900").attr("font-size", "18px").attr("fill", "#ffffff");
+        // Badges
+        const badge = nodeEnter.append("g").attr("class", "badge-group").style("display", "none");
+        badge.append("circle").attr("r", 12).attr("stroke", "#fff").attr("stroke-width", 2).style("filter", "drop-shadow(0px 2px 3px rgba(0,0,0,0.3))");
+        badge.append("text").attr("dy", "0.35em").attr("text-anchor", "middle").attr("font-weight", "900").attr("font-size", "16px").attr("fill", "#ffffff");
 
         // Spinner
         nodeEnter.append("path")
@@ -413,9 +456,7 @@ class ArborGraph extends HTMLElement {
             .attr("d", "M-14,0 a14,14 0 0,1 28,0")
             .attr("fill", "none").attr("stroke", "#fff").attr("stroke-width", 4)
             .style("display", "none")
-            .append("animateTransform")
-            .attr("attributeName", "transform").attr("type", "rotate")
-            .attr("from", "0 0 0").attr("to", "360 0 0").attr("dur", "1s").attr("repeatCount", "indefinite");
+            .append("animateTransform").attr("attributeName", "transform").attr("type", "rotate").attr("from", "0 0 0").attr("to", "360 0 0").attr("dur", "1s").attr("repeatCount", "indefinite");
 
         // UPDATE
         const nodeMerged = nodeSelection.merge(nodeEnter);
@@ -427,7 +468,6 @@ class ArborGraph extends HTMLElement {
             .attr("fill", d => {
                 const isHarvested = harvestedFruits.find(f => f.id === d.data.id);
                 if (isHarvested) return '#FCD34D'; 
-
                 if (d.data.type === 'root') return '#8D6E63';
                 if (store.isCompleted(d.data.id)) return '#22c55e'; 
                 if (d.data.type === 'exam') return '#ef4444'; 
@@ -436,9 +476,9 @@ class ArborGraph extends HTMLElement {
             })
             .attr("d", d => {
                 const isHarvested = harvestedFruits.find(f => f.id === d.data.id);
-                // Smaller nodes on mobile to fit the grid
+                // Dynamic sizing for cloud density
                 let r = d.data.type === 'root' ? 60 : (isHarvested ? 50 : 45); 
-                if (isMobile && d.data.type !== 'root') r = r * 0.9;
+                if (isMobile && !d.isSpine) r = r * 0.8; // Smaller bubbles in the cloud
 
                 if (d.data.type === 'leaf') return "M0,0 C-35,15 -45,45 0,85 C45,45 35,15 0,0"; 
                 if (d.data.type === 'exam') return `M0,${-r*1.2} L${r*1.2},0 L0,${r*1.2} L${-r*1.2},0 Z`;
@@ -456,85 +496,50 @@ class ArborGraph extends HTMLElement {
             .text(d => {
                 const fruit = harvestedFruits.find(f => f.id === d.data.id);
                 if (fruit) return fruit.icon;
-
-                if ((d.data.type === 'leaf' || d.data.type === 'exam') && store.isCompleted(d.data.id)) {
-                    return '✓';
-                }
+                if ((d.data.type === 'leaf' || d.data.type === 'exam') && store.isCompleted(d.data.id)) return '✓';
                 return d.data.icon || (d.data.type === 'exam' ? '⚔️' : '🌱');
             })
-            .attr("fill", d => {
-                const isHarvested = harvestedFruits.find(f => f.id === d.data.id);
-                if (isHarvested) return '#1e293b'; 
-                if ((d.data.type === 'leaf' || d.data.type === 'exam') && store.isCompleted(d.data.id)) return '#fff';
-                return '#1e293b';
-            })
-            .attr("dy", d => d.data.type === 'leaf' || d.data.type === 'exam' ? (d.data.type === 'exam' ? "0.35em" : "48px") : "0.35em")
-            .attr("font-weight", d => store.isCompleted(d.data.id) ? "900" : "normal");
+            .attr("dy", d => d.data.type === 'leaf' || d.data.type === 'exam' ? (d.data.type === 'exam' ? "0.35em" : "48px") : "0.35em");
         
-        // --- SMART Label Positioning ---
+        // --- Labels ---
         nodeMerged.select(".label-group")
             .attr("transform", d => {
                 if (isMobile) {
-                    if (d.side === 'left') return `translate(-55, -10)`; // Text on left
-                    if (d.side === 'right') return `translate(55, -10)`; // Text on right
-                    return `translate(0, 55)`; // Center (single or root)
+                    // If in cloud, compact label below. If spine, below too.
+                    return `translate(0, 45)`;
                 } else {
                     return `translate(0, ${d.data.type === 'leaf' || d.data.type === 'exam' ? 65 : 55})`;
                 }
             });
 
-        nodeMerged.select(".label-text")
-            .attr("text-anchor", d => {
-                if (isMobile) {
-                    if (d.side === 'left') return 'end';
-                    if (d.side === 'right') return 'start';
-                }
-                return 'middle';
-            });
+        nodeMerged.select(".label-text").attr("text-anchor", "middle");
 
         nodeMerged.select(".label-group text")
-            .text(d => d.data.name)
+            .text(d => {
+                // Shorten labels on mobile clouds
+                if (isMobile && !d.isSpine && d.data.name.length > 15) return d.data.name.substring(0, 12) + '...';
+                return d.data.name;
+            })
             .each(function(d) {
                 const rectNode = d3.select(this.parentNode).select("rect");
                 const computed = this.getComputedTextLength();
                 const w = Math.max(40, computed + 20);
-                
-                rectNode.attr("width", w);
-
-                if (isMobile) {
-                    if (d.side === 'left') rectNode.attr("x", -w);
-                    else if (d.side === 'right') rectNode.attr("x", 0);
-                    else rectNode.attr("x", -w/2);
-                } else {
-                    rectNode.attr("x", -w/2);
-                }
+                rectNode.attr("width", w).attr("x", -w/2);
             });
 
-        // --- Responsive Badge Positioning ---
+        // --- Badges ---
         nodeUpdate.select(".badge-group")
             .style("display", d => (d.data.type === 'leaf' || d.data.type === 'exam') ? 'none' : 'block')
-            .attr("transform", d => {
-                if (isMobile) {
-                    // Place badge opposite to text or top-center
-                    if (d.side === 'left') return `translate(35, -35)`; 
-                    if (d.side === 'right') return `translate(-35, -35)`; 
-                    return `translate(35, -35)`; 
-                } else {
-                    return `translate(${d.data.type === 'root' ? 45 : 35}, -${d.data.type === 'root' ? 45 : 35})`;
-                }
-            });
+            .attr("transform", d => `translate(${isMobile ? 25 : 35}, -${isMobile ? 25 : 35})`);
         
         nodeUpdate.select(".badge-group circle")
             .attr("fill", d => d.data.expanded ? "#ef4444" : "#22c55e");
-
         nodeUpdate.select(".badge-group text")
             .text(d => d.data.expanded ? '-' : '+');
 
         nodeUpdate.select(".spinner")
             .style("display", d => d.data.status === 'loading' ? 'block' : 'none');
 
-
-        // EXIT
         nodeSelection.exit().transition().duration(this.duration)
             .attr("transform", d => {
                  const dest = findDest(d); 
@@ -542,7 +547,7 @@ class ArborGraph extends HTMLElement {
             })
             .remove();
 
-        // --- LINKS RENDER ---
+        // --- LINKS ---
         const linkSelection = this.linkGroup.selectAll(".link")
             .data(links, d => d.target.data.id);
 
@@ -568,7 +573,7 @@ class ArborGraph extends HTMLElement {
             })
             .remove();
 
-        // --- Cache Positions ---
+        // --- Cache ---
         this.nodePositions.clear();
         nodes.forEach(d => {
             this.nodePositions.set(d.data.id, {x: d.x, y: d.y});
@@ -589,34 +594,30 @@ class ArborGraph extends HTMLElement {
         
         store.toggleNode(d.data.id);
         
-        // Auto-Focus: Center the node and ensure children have space
+        // Auto-Camera for Stratum Layout
         if (!d.data.expanded) {
-             // Node is expanding, let's look at its children
              this.smartFocus(d);
         }
     }
 
-    // New "Ultra Easy" Auto-Focus Logic
     smartFocus(d) {
         if (!this.svg || !this.zoom) return;
         const isMobile = this.width < 768;
-        if (!isMobile) return; // Desktop is fine
+        if (!isMobile) return; 
 
-        // Calculate where the node IS currently
+        // In Stratum layout, the new cluster appears ABOVE the clicked node.
+        // We want to put the clicked node near the bottom of the screen.
+        
         const t = d3.zoomTransform(this.svg.node());
         const currentX = t.applyX(d.x);
         const currentY = t.applyY(d.y);
 
-        // We want the node to move to the BOTTOM CENTER of the screen,
-        // so its children (which appear above it) are visible.
         const targetX = this.width / 2;
-        const targetY = this.height * 0.85; // Bottom area
+        const targetY = this.height * 0.8; // Bottom 20%
 
-        // Calculate the difference required to move it there
         const dx = targetX - currentX;
         const dy = targetY - currentY;
 
-        // Animate the pan
         this.svg.transition().duration(this.duration + 200)
             .call(this.zoom.transform, t.translate(dx / t.k, dy / t.k));
     }
