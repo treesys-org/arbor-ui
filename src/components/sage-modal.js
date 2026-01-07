@@ -271,13 +271,13 @@ class ArborSage extends HTMLElement {
             }
         }
 
-        // WebLLM Available Models
+        // Updated WebLLM Models (Prioritizing small/compatible ones)
         const webLlmOptions = [
-            "Llama-3.2-1B-Instruct-q4f16_1-MLC",
-            "Llama-3.2-3B-Instruct-q4f16_1-MLC",
-            "Llama-3.1-8B-Instruct-q4f32_1-MLC",
-            "gemma-2-2b-it-q4f16_1-MLC",
-            "Phi-3.5-mini-instruct-q4f16_1-MLC"
+            { id: "SmolLM2-135M-Instruct-q0f16-MLC", name: "SmolLM2 135M (Super Rápido - 100MB)" },
+            { id: "SmolLM2-360M-Instruct-q0f16-MLC", name: "SmolLM2 360M (Equilibrado)" },
+            { id: "Llama-3.2-1B-Instruct-q4f16_1-MLC", name: "Llama 3.2 1B (Recomendado)" },
+            { id: "Llama-3.1-8B-Instruct-q4f32_1-MLC", name: "Llama 3.1 8B (Requiere GPU potente)" },
+            { id: "gemma-2-2b-it-q4f16_1-MLC", name: "Gemma 2 2B (Google)" }
         ];
 
         this.innerHTML = `
@@ -349,14 +349,13 @@ class ArborSage extends HTMLElement {
                     <div class="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-800/30 animate-in fade-in">
                          <div class="flex items-center gap-2 mb-2">
                             <p class="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase">${ui.sageWebLlmModel}</p>
-                            <span class="text-[9px] bg-blue-100 text-blue-700 px-1.5 rounded font-bold">Experimental</span>
                          </div>
                          <select id="inp-webllm-model" class="w-full text-sm p-3 border-2 border-blue-200 dark:border-blue-800 rounded-xl bg-white dark:bg-slate-900 focus:ring-4 focus:ring-blue-200 outline-none transition-all font-mono text-slate-800 dark:text-white mb-4">
-                             ${webLlmOptions.map(m => `<option value="${m}" ${aiService.config.webllmModel === m ? 'selected' : ''}>${m}</option>`).join('')}
+                             ${webLlmOptions.map(m => `<option value="${m.id}" ${aiService.config.webllmModel === m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
                          </select>
 
                          <p class="text-[11px] text-slate-500 leading-tight mb-4">
-                            Ejecuta modelos directamente en tu navegador. <strong>Requiere una GPU moderna</strong> y descargará ~2-4GB de datos la primera vez.
+                            Ejecuta modelos directamente en tu navegador. Si Llama 3 falla, prueba <strong>SmolLM2</strong>.
                          </p>
 
                          <div class="bg-white dark:bg-slate-900 p-3 rounded-lg border border-blue-200 dark:border-blue-800/50 mb-4">
@@ -367,7 +366,7 @@ class ArborSage extends HTMLElement {
                          </div>
                          
                          <button id="btn-load-webllm" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm transition-colors shadow-md">
-                            ${ui.sageLoadModel} (Download)
+                            ${ui.sageLoadModel} (Descargar)
                          </button>
                     </div>
                     ` : ''}

@@ -68,6 +68,19 @@ class HybridAIService {
     // Explicitly load WebLLM (triggered by UI button)
     async loadWebLLM(progressCallback) {
         if (this.webllmEngine) return true; // Already loaded
+
+        // SECURITY CHECK
+        if (!window.crossOriginIsolated) {
+            const warning = "⚠️ ADVERTENCIA: Tu navegador no tiene activado 'Cross-Origin Isolation'. WebGPU fallará o será muy lento. Si estás en local, usa 'python -m http.server' o una extensión que habilite COOP/COEP.";
+            console.warn(warning);
+            if(progressCallback) progressCallback(warning);
+            // We attempt anyway, but it often fails
+        }
+        
+        if (!navigator.gpu) {
+            if (progressCallback) progressCallback("❌ ERROR: Tu navegador no soporta WebGPU.");
+            return false;
+        }
         
         try {
             this.webllmEngine = await CreateMLCEngine(
@@ -309,7 +322,7 @@ class HybridAIService {
 
              } catch (e) {
                  console.error("WebLLM Error", e);
-                 return { text: "🦉 Error WebLLM. Es posible que tu GPU no sea compatible o la memoria esté llena." };
+                 return { text: "🦉 Error WebLLM. Revisa si tu GPU soporta 'SmolLM2' o modelos pequeños." };
              }
         }
 
