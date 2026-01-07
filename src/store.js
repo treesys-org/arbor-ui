@@ -179,8 +179,18 @@ class Store extends EventTarget {
         localStorage.setItem('arbor-active-source-id', source.id);
 
         try {
-            const url = `${source.url}?t=${Date.now()}`;
-            const res = await fetch(url);
+            // OPTIMIZATION: Removed aggressive cache busting (Date.now())
+            // This allows the browser to cache the main tree skeleton.
+            // Only add timestamp if explicit reload is requested (future feature).
+            const url = source.url; 
+            
+            // Add Timeout to prevent "Eternity" hanging
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
+            const res = await fetch(url, { signal: controller.signal });
+            clearTimeout(timeoutId);
+
             if (!res.ok) throw new Error(`Failed to fetch data from ${source.name} (Status ${res.status}).`);
             const json = await res.json();
             
@@ -218,7 +228,8 @@ class Store extends EventTarget {
             setTimeout(() => this.update({ lastActionMessage: null }), 3000);
         } catch (e) {
             console.error(e);
-            this.update({ loading: false, error: e.message });
+            const msg = e.name === 'AbortError' ? 'Connection timed out (15s).' : e.message;
+            this.update({ loading: false, error: msg });
         }
     }
 
@@ -382,7 +393,8 @@ class Store extends EventTarget {
         try {
             const sourceUrl = this.state.activeSource.url;
             const baseDir = sourceUrl.substring(0, sourceUrl.lastIndexOf('/') + 1);
-            const url = `${baseDir}nodes/${node.apiPath}.json?t=${Date.now()}`;
+            // OPTIMIZATION: Removed cache busting here too for children
+            const url = `${baseDir}nodes/${node.apiPath}.json`;
             
             const res = await fetch(url);
             if (res.ok) {

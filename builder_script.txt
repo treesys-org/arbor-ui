@@ -1,4 +1,5 @@
 
+
 import os
 import json
 import datetime
@@ -275,8 +276,9 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
             
             if api_filepath:
                 os.makedirs(os.path.dirname(api_filepath), exist_ok=True)
+                # MINIFICATION CHANGE: Using separators to remove whitespace for production
                 with open(api_filepath, 'w', encoding='utf-8') as f:
-                    json.dump(children_for_api_file, f, indent=2, ensure_ascii=False)
+                    json.dump(children_for_api_file, f, ensure_ascii=False, separators=(',', ':'))
 
     # --- FILE (LEAF) ---
     else: 
@@ -419,8 +421,9 @@ def main():
                 shard_subdir = os.path.join(lang_search_dir, first_char)
                 os.makedirs(shard_subdir, exist_ok=True)
 
+                # MINIFICATION CHANGE: Using separators to remove whitespace for production
                 with open(os.path.join(shard_subdir, f"{safe_prefix}.json"), 'w', encoding='utf-8') as f:
-                    json.dump(items, f, ensure_ascii=False)
+                    json.dump(items, f, ensure_ascii=False, separators=(',', ':'))
                 shard_count += 1
                 
         print(f"   > Created {shard_count} search shards for {lang_folder.upper()}")
@@ -431,8 +434,9 @@ def main():
         full_data["languages"][lang_folder.upper()] = root_node
 
     # Save Main Data File (The Skeleton)
+    # MINIFICATION CHANGE: Using separators to remove whitespace for production
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f: 
-        json.dump(full_data, f, indent=2, ensure_ascii=False)
+        json.dump(full_data, f, ensure_ascii=False, separators=(',', ':'))
     
     # NOTE: We no longer generate a massive 'search-index.json'
 
