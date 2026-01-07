@@ -1,4 +1,5 @@
 
+
 import { store } from '../store.js';
 import { github } from '../services/github.js';
 
@@ -589,7 +590,7 @@ class ArborModals extends HTMLElement {
     }
 
     renderSingleCertificate(ui, moduleId) {
-        const module = store.getModulesStatus().find(m => m.id === moduleId);
+        const module = store.value.searchIndex.find(n => n.id === moduleId && n.lang === store.value.lang);
         if(!module) return;
 
         this.innerHTML = `
@@ -634,14 +635,25 @@ class ArborModals extends HTMLElement {
     }
 
     renderCertificatesGallery() {
-        const modules = store.getModulesStatus();
+        const allNodes = store.value.searchIndex.filter(n => n.lang === store.value.lang);
+        const exams = allNodes.filter(n => n.type === 'exam');
+        
+        const certificateItems = exams.map(exam => ({
+            id: exam.id,
+            name: exam.name,
+            icon: exam.icon,
+            description: exam.description,
+            isComplete: store.isCompleted(exam.id),
+            path: exam.path ? exam.path.split(' / ').slice(0, -1).join(' / ') : '',
+        }));
+
         const ui = store.ui;
 
-        const filtered = modules.filter(m => {
-            if (!this.certShowAll && !m.isComplete) return false;
+        const filtered = certificateItems.filter(item => {
+            if (!this.certShowAll && !item.isComplete) return false;
             if (this.certSearch) {
                  const q = this.certSearch.toLowerCase();
-                 return m.name.toLowerCase().includes(q) || (m.description && m.description.toLowerCase().includes(q));
+                 return item.name.toLowerCase().includes(q) || (item.description && item.description.toLowerCase().includes(q));
             }
             return true;
         });
@@ -681,9 +693,7 @@ class ArborModals extends HTMLElement {
                     </div>` : ''}
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20 md:pb-0">
-                    ${filtered.map((module, i) => {
-                        const pct = module.totalLeaves ? Math.round((module.completedLeaves / module.totalLeaves) * 100) : 0;
-                        return `
+                    ${filtered.map((module, i) => `
                         <div class="relative group overflow-hidden rounded-2xl border-2 transition-all duration-300 bg-white dark:bg-slate-900
                              ${module.isComplete ? 'border-green-600 shadow-xl shadow-green-600/20' : 'border-slate-200 dark:border-slate-800 opacity-75'}">
                             
@@ -691,7 +701,7 @@ class ArborModals extends HTMLElement {
                                 <div class="flex justify-between items-start mb-4">
                                     <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-4xl shadow-inner border border-white dark:border-slate-700
                                          ${module.isComplete ? 'bg-gradient-to-br from-green-100 to-white dark:from-green-900/20 dark:to-slate-900' : 'bg-slate-100 dark:bg-slate-800 grayscale'}">
-                                        ${module.icon || '📦'}
+                                        ${module.icon || '⚔️'}
                                     </div>
                                     ${module.isComplete 
                                         ? `<div class="bg-green-600 text-white text-[10px] font-black px-2 py-1 rounded uppercase tracking-wider shadow-sm">${ui.lessonFinished}</div>`
@@ -702,17 +712,7 @@ class ArborModals extends HTMLElement {
                                 <h3 class="text-xl font-black text-slate-800 dark:text-white mb-2 leading-tight">${module.name}</h3>
                                 <p class="text-sm text-slate-500 dark:text-slate-400 mb-4 line-clamp-2 min-h-[2.5em]">${module.description || module.path}</p>
 
-                                <div class="mt-auto">
-                                    <div class="flex justify-between text-xs font-bold text-slate-400 mb-1">
-                                        <span>${module.completedLeaves} / ${module.totalLeaves}</span>
-                                        <span>${pct}%</span>
-                                    </div>
-                                    <div class="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                        <div class="h-full bg-green-600 transition-all duration-500" style="width: ${pct}%"></div>
-                                    </div>
-                                </div>
-
-                                <div class="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+                                <div class="mt-auto pt-4 border-t border-slate-100 dark:border-slate-800">
                                     ${module.isComplete 
                                         ? `<button class="btn-cert-view w-full py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl shadow-lg shadow-green-600/30 transition-all active:scale-95 flex items-center justify-center gap-2" data-id="${module.id}">
                                             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -723,7 +723,7 @@ class ArborModals extends HTMLElement {
                                 </div>
                             </div>
                         </div>
-                    `; }).join('')}
+                    `).join('')}
                 </div>
             </div>
           </div>
