@@ -1,3 +1,4 @@
+
 import os
 import json
 import datetime
@@ -192,7 +193,9 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
             "namespace": NAMESPACE,
             "apiPath": f"{lang_folder.lower()}/{current_slug_path}",
             "totalLeaves": 0, # Will be calculated
-            "sourcePath": clean_source_path
+            "leafIds": [], # Tracks all descendant leaf IDs for progress calculation
+            "sourcePath": clean_source_path,
+            "isCertifiable": False # Default
         }
         
         # Cleanup internal keys
@@ -214,15 +217,23 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
                 child_node = build_tree_recursive(item_path, lang_folder, node_id, node_collector, current_breadcrumb, current_slug_path)
                 if child_node:
                     children_for_api_file.append(child_node)
-                    # Count leaves for progress tracking
-                    # Note: We count 'exam' nodes as leaves so they contribute to the module progress bar
+                    
+                    # Accumulate Leaves
                     if child_node.get('type') in ['leaf', 'exam']:
                         node["totalLeaves"] += 1
+                        node["leafIds"].append(child_node['id'])
                     else:
                         node["totalLeaves"] += child_node.get('totalLeaves', 0)
+                        # Add children leaves to this node as well (Bubble up)
+                        if 'leafIds' in child_node:
+                             node["leafIds"].extend(child_node['leafIds'])
             
             # Sort children by @order, then by Name
             children_for_api_file.sort(key=lambda x: (int(x.get('order', 999)), x.get('name', '')))
+            
+            # NEW: Check if this branch contains an exam to make it certifiable
+            if any(child.get('type') == 'exam' for child in children_for_api_file):
+                node['isCertifiable'] = True
 
             # Write the Children to a lazy-load JSON file
             api_relative_path = os.path.join(lang_folder.lower(), *current_slug_path.split('/')) + ".json"
@@ -263,6 +274,7 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
                 
                 node["content"] = content
                 node.update(meta)
+                
                 node['path'] = f"{breadcrumb_path} / {node['name']}"
 
                 # Ensure Exams have the correct visual cue if user didn't set a custom icon
@@ -284,7 +296,8 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
         "description": node.get("description"), 
         "lang": lang_folder.upper(),
         "path": node.get("path"), 
-        "namespace": NAMESPACE
+        "namespace": NAMESPACE,
+        "isCertifiable": node.get("isCertifiable", False) # Also add to search index
     }
     node_collector.append(search_node)
     
