@@ -152,8 +152,8 @@ class ArborSage extends HTMLElement {
         
         this.querySelector('#btn-menu-help').onclick = () => {
             this.close();
-            // Give a small delay to allow animation to close properly before opening next modal
-            setTimeout(() => store.setModal('tutorial'), 100);
+            // Opens the "Welcome" narrative which is now the main explanation
+            setTimeout(() => store.setModal('welcome'), 100);
         };
 
         this.querySelector('#btn-menu-ai').onclick = () => {
@@ -273,7 +273,7 @@ class ArborSage extends HTMLElement {
                 <!-- Input -->
                 <form id="sage-form" class="p-3 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex gap-2 shrink-0">
                     <input id="sage-input" type="text" class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500 dark:text-white placeholder:text-slate-400" placeholder="Pregunta sobre la lección..." autocomplete="off">
-                    <button type="submit" class="w-11 h-11 bg-purple-600 text-white rounded-xl hover:bg-purple-500 transition-all flex items-center justify-center shadow-lg active:scale-95">
+                    <button type="submit" class="w-11 h-11 bg-purple-600 text-white rounded-xl hover:bg-purple-50 transition-all flex items-center justify-center shadow-lg active:scale-95">
                         <svg class="w-5 h-5 translate-x-0.5 -translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>
                     </button>
                 </form>

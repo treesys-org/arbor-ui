@@ -11,33 +11,39 @@ export const UI_LABELS = {
       searchKeepTyping: 'Keep typing to filter...',
       searchBroadLoading: 'Loading all topics for this letter...',
       
-      tutorialTitle: 'Quick Start Guide',
-      tutorialSkip: 'Skip Tutorial',
+      // MERGED WELCOME & TUTORIAL (Narrated by Owl)
+      tutorialTitle: 'The Guardian\'s Guide',
+      tutorialSkip: 'Skip Intro',
       tutorialNext: 'Next',
       tutorialPrev: 'Previous',
-      tutorialFinish: 'Start Exploring!',
-      tutorialSteps: [
+      tutorialFinish: 'Enter the Garden',
+      
+      welcomeSteps: [
         {
-            title: 'Welcome to Arbor',
-            text: 'You are about to enter a decentralized universe of knowledge. Arbor is not a linear course, it is a living map. Here, you choose your own learning path.',
-            icon: '🚀'
+            title: 'Hoot! I am the Sage.',
+            text: 'Welcome, traveler. I am the guardian of this forest. This is not a normal website; it is a living map of human knowledge.',
+            icon: '🦉'
         },
         {
-            title: 'How to Navigate',
-            text: 'Knowledge is represented as an infinite tree. Drag to move, scroll to zoom. Click circles (branches) to expand new topics.',
-            icon: '🖱️'
+            title: 'The Map is Alive',
+            text: 'Forget pages. Here, knowledge grows. <strong>Drag</strong> to fly through the forest. <strong>Click circles</strong> to grow new branches.',
+            icon: '✨'
         },
         {
-            title: 'Grow Your Garden',
-            text: 'Consistency is key. Water your tree daily to keep your streak. Collect "Sunlight" (XP) by reading lessons to reach your daily photosynthesis goal.',
-            icon: '🌱'
-        },
-        {
-            title: 'Harvest Fruits',
-            text: 'When you master a whole module, you will harvest a unique Fruit of Knowledge. Collect them all in your profile!',
+            title: 'Harvest Knowledge',
+            text: 'Do not just read; gather. When you finish a module, you will harvest a unique <strong>Fruit</strong> for your basket. Consistency is your water.',
             icon: '🍎'
+        },
+        {
+            title: 'I Can Be Smarter...',
+            text: 'I am currently using my "Local Instincts" to guide you. But if you have a <strong>Gemini Key</strong>, you can grant me "True Sight" to answer complex questions.',
+            icon: '🧠',
+            isAiPitch: true
         }
       ],
+      
+      aiPitchAction: 'How to awaken me?',
+      aiPitchSub: 'Click my icon in the sidebar anytime.',
 
       close: 'Close',
       statsNodes: 'Modules',
@@ -224,26 +230,18 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       // Sage Menu
       sageMenuTitle: 'How can I help?',
       sageMenuHelp: 'Explain Arbor',
-      sageMenuHelpDesc: 'Learn how to navigate the tree.',
-      sageMenuAi: 'Activate Intelligence',
+      sageMenuHelpDesc: 'The Sage will guide you.',
+      sageMenuAi: 'Enable True Sight',
       sageMenuAiDesc: 'Connect Gemini API for smart answers.',
       
       // AI Upgrade
-      sageUpgrade: 'Want to make me smart?',
+      sageUpgrade: 'Grant me Sight',
       sageUpgradeDesc: 'Enter your Gemini API Key to unlock full intelligence.',
       sageApiKeyLabel: 'Google Gemini API Key',
       sageSaveKey: 'Activate Super Brain 🧠',
       sageBackToLocal: 'Switch back to Local (Free)',
 
-      // Welcome Screen
-      welcomeHello: 'Hoot hoot! Welcome to Arbor!',
-      welcomeIntro: 'Arbor is not a normal course. It is a visual map of knowledge.',
-      welcomeTip1: '1. Explore the Tree',
-      welcomeTip1Desc: 'Drag to move. Click circles to reveal new topics.',
-      welcomeTip2: '2. Grow your Garden',
-      welcomeTip2Desc: 'Complete lessons to earn fruits and keep your streak alive.',
-      welcomeOptional: 'Optional: Super Intelligence',
-      welcomeOptionalDesc: 'I can answer questions about any lesson if you connect a Gemini API Key later.',
+      // Welcome Screen (Legacy strings removed, using welcomeSteps above)
       welcomeBtnStart: 'Start Exploring',
       welcomeBtnConfig: 'Configure AI (Advanced)'
     },
@@ -257,33 +255,39 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       searchKeepTyping: 'Sigue escribiendo para filtrar...',
       searchBroadLoading: 'Cargando todo el contenido de esta letra...',
       
-      tutorialTitle: 'Guía de Inicio',
-      tutorialSkip: 'Saltar Tutorial',
+      // MERGED WELCOME & TUTORIAL
+      tutorialTitle: 'La Guía del Guardián',
+      tutorialSkip: 'Saltar Intro',
       tutorialNext: 'Siguiente',
       tutorialPrev: 'Anterior',
-      tutorialFinish: '¡Empezar a Explorar!',
-      tutorialSteps: [
+      tutorialFinish: 'Entrar al Jardín',
+      
+      welcomeSteps: [
         {
-            title: 'Bienvenido a Arbor',
-            text: 'Estás a punto de entrar en un universo de conocimiento descentralizado. Arbor no es un curso lineal, es un mapa vivo. Aquí, tú eliges tu propio camino de aprendizaje.',
-            icon: '🚀'
+            title: '¡Huu! Soy el Sabio.',
+            text: 'Bienvenido, viajero. Soy el guardián de este bosque. Esto no es una web normal; es un mapa vivo del conocimiento humano.',
+            icon: '🦉'
         },
         {
-            title: 'Cómo Navegar',
-            text: 'El conocimiento se representa como un árbol infinito. Arrastra para moverte, usa la rueda del mouse para hacer zoom. Haz clic en los círculos (ramas) para desplegar nuevos temas.',
-            icon: '🖱️'
+            title: 'El Mapa está Vivo',
+            text: 'Olvida las páginas. Aquí el conocimiento crece. <strong>Arrastra</strong> para volar por el bosque. <strong>Clica círculos</strong> para brotar ramas.',
+            icon: '✨'
         },
         {
-            title: 'Cuida tu Jardín',
-            text: 'La constancia es clave. "Riega" tu árbol entrando a diario para mantener tu racha. Acumula "Luz Solar" (XP) leyendo lecciones para hacer la fotosíntesis.',
-            icon: '🌱'
-        },
-        {
-            title: 'Cosecha Frutos',
-            text: 'Cuando domines un módulo completo, cosecharás un Fruto del Conocimiento único. ¡Colecciónalos todos en tu perfil!',
+            title: 'Cosecha Sabiduría',
+            text: 'No solo leas; recolecta. Cuando termines un módulo, cosecharás un <strong>Fruto</strong> único para tu cesta. La constancia es tu agua.',
             icon: '🍎'
+        },
+        {
+            title: 'Puedo ser más listo...',
+            text: 'Ahora uso mi "Instinto Local" para guiarte. Pero si tienes una <strong>Llave Gemini</strong>, puedes otorgarme "Visión Verdadera" para responder preguntas complejas.',
+            icon: '🧠',
+            isAiPitch: true
         }
       ],
+      
+      aiPitchAction: '¿Cómo despertarme?',
+      aiPitchSub: 'Pulsa mi icono en la barra lateral cuando quieras.',
 
       close: 'Cerrar',
       statsNodes: 'Módulos',
@@ -475,26 +479,18 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       // Sage Menu
       sageMenuTitle: '¿Cómo puedo ayudar?',
       sageMenuHelp: 'Explícame Arbor',
-      sageMenuHelpDesc: 'Ayuda con navegación y conceptos.',
-      sageMenuAi: 'Activar Inteligencia',
+      sageMenuHelpDesc: 'El Sabio te guiará.',
+      sageMenuAi: 'Activar Visión Verdadera',
       sageMenuAiDesc: 'Conectar Gemini API para respuestas.',
 
       // AI Upgrade
-      sageUpgrade: '¿Quieres hacerme inteligente?',
+      sageUpgrade: 'Dame Visión',
       sageUpgradeDesc: 'Introduce tu Gemini API Key para desbloquear la inteligencia real.',
       sageApiKeyLabel: 'Google Gemini API Key',
       sageSaveKey: 'Activar Super Cerebro 🧠',
       sageBackToLocal: 'Volver a Local (Gratis)',
 
-      // Welcome Screen
-      welcomeHello: '¡Huu huu! ¡Bienvenido a Arbor!',
-      welcomeIntro: 'Arbor no es un curso normal. Es un mapa visual de conocimiento.',
-      welcomeTip1: '1. Explora el Árbol',
-      welcomeTip1Desc: 'Arrastra para moverte. Haz clic en los círculos para revelar temas.',
-      welcomeTip2: '2. Cultiva tu Jardín',
-      welcomeTip2Desc: 'Completa lecciones para ganar frutos y mantener tu racha.',
-      welcomeOptional: 'Opcional: Super Inteligencia',
-      welcomeOptionalDesc: 'Puedo responder preguntas sobre cualquier lección si conectas una Gemini API Key más tarde.',
+      // Welcome Screen (Legacy strings removed, using welcomeSteps above)
       welcomeBtnStart: 'Empezar a Explorar',
       welcomeBtnConfig: 'Configurar IA (Avanzado)'
     }

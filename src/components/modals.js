@@ -57,14 +57,16 @@ class ArborModals extends HTMLElement {
         }
 
         let content = '';
-        if (type === 'tutorial') content = this.renderTutorial(ui);
+        
+        // FUSED WELCOME & TUTORIAL: Both map to the same narrative renderer
+        if (type === 'welcome' || type === 'tutorial') content = this.renderWelcome(ui);
+        
         else if (type === 'sources') content = this.renderSources(ui);
         else if (type === 'about') content = this.renderAbout(ui);
         else if (type === 'language') content = this.renderLanguage(ui);
         else if (type === 'impressum') content = this.renderImpressum(ui);
         else if (type === 'contributor') content = this.renderContributor(ui);
         else if (type === 'profile') content = this.renderProfile(ui);
-        else if (type === 'welcome') content = this.renderWelcome(ui);
         else if (type === 'certificate') {
             this.renderSingleCertificate(ui, modal.moduleId); 
             return; 
@@ -81,11 +83,12 @@ class ArborModals extends HTMLElement {
         const closeBtn = this.querySelector('.btn-close');
         if(closeBtn) closeBtn.onclick = () => this.close();
         
-        if (type === 'tutorial') this.bindTutorialEvents();
+        // FUSED EVENTS
+        if (type === 'welcome' || type === 'tutorial') this.bindWelcomeEvents(ui);
+        
         if (type === 'sources') this.bindSourcesEvents();
         if (type === 'contributor') this.bindContributorEvents();
         if (type === 'profile') this.bindProfileEvents();
-        if (type === 'welcome') this.bindWelcomeEvents();
         
         if (type === 'impressum') {
             const btnImp = this.querySelector('#btn-show-impressum');
@@ -103,72 +106,127 @@ class ArborModals extends HTMLElement {
     }
 
     renderWelcome(ui) {
+        // Build language buttons
+        const langButtons = store.availableLanguages.map(l => `
+            <button class="btn-welcome-lang text-xl transition-all duration-200 p-1.5 rounded-lg ${store.value.lang === l.code ? 'bg-white dark:bg-slate-800 shadow-sm scale-110 ring-1 ring-slate-200 dark:ring-slate-700' : 'opacity-40 hover:opacity-100 hover:bg-slate-100 dark:hover:bg-slate-800'}" data-code="${l.code}" title="${l.nativeName}">
+                ${l.flag}
+            </button>
+        `).join('');
+
+        const steps = ui.welcomeSteps;
+        const currentStep = steps[this.tutorialStep];
+        const isLast = this.tutorialStep === steps.length - 1;
+
+        // Custom Visuals for the AI Pitch Step
+        const isAiPitch = currentStep.isAiPitch;
+        const iconClass = isAiPitch 
+            ? "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 animate-pulse" 
+            : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-200";
+
         return `
         <div class="flex flex-col h-full bg-slate-50 dark:bg-slate-900">
             <!-- Header Image / Icon -->
-            <div class="pt-8 pb-4 flex flex-col items-center justify-center bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 rounded-t-3xl">
-                <div class="text-6xl mb-2">🌳</div>
-                <h2 class="text-2xl font-black text-slate-800 dark:text-white tracking-tight">ARBOR ACADEMY</h2>
-                <p class="text-slate-500 dark:text-slate-400 text-sm font-medium">${ui.welcomeIntro}</p>
+            <div class="pt-8 pb-4 flex flex-col items-center justify-center bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 rounded-t-3xl relative">
+                
+                <!-- Language Switcher (Top Right) -->
+                <div class="absolute top-4 right-12 md:right-14 flex gap-1 bg-slate-50 dark:bg-slate-900/50 p-1 rounded-xl border border-slate-100 dark:border-slate-800 z-30">
+                    ${langButtons}
+                </div>
+
+                <!-- Animated Owl Avatar -->
+                <div class="w-24 h-24 rounded-full ${iconClass} flex items-center justify-center text-5xl mb-4 shadow-xl border-4 border-white dark:border-slate-800 transition-all duration-500">
+                    ${currentStep.icon}
+                </div>
+                
+                <h2 class="text-xl font-black text-slate-800 dark:text-white tracking-tight uppercase">${ui.tutorialTitle}</h2>
+                <div class="flex gap-1 mt-2">
+                    ${steps.map((_, i) => `
+                        <div class="h-1.5 rounded-full transition-all duration-300 ${i === this.tutorialStep ? 'w-6 bg-slate-800 dark:bg-white' : 'w-2 bg-slate-200 dark:bg-slate-700'}"></div>
+                    `).join('')}
+                </div>
             </div>
             
-            <!-- Features Scroll -->
-            <div class="flex-1 overflow-y-auto p-6 space-y-6">
-                <!-- Step 1 -->
-                <div class="flex gap-4 items-start">
-                    <div class="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xl flex-shrink-0">🚀</div>
-                    <div>
-                        <h3 class="font-bold text-slate-800 dark:text-white">${ui.welcomeTip1}</h3>
-                        <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mt-1">${ui.welcomeTip1Desc}</p>
-                    </div>
-                </div>
+            <!-- Narrative Content -->
+            <div class="flex-1 overflow-y-auto p-8 flex flex-col items-center text-center justify-center animate-in fade-in slide-in-from-right-4 duration-300">
+                <h3 class="text-2xl font-black text-slate-900 dark:text-white mb-4 leading-tight">${currentStep.title}</h3>
+                <p class="text-lg text-slate-600 dark:text-slate-300 leading-relaxed max-w-sm">
+                    ${currentStep.text}
+                </p>
 
-                <!-- Step 2 -->
-                <div class="flex gap-4 items-start">
-                    <div class="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 flex items-center justify-center text-xl flex-shrink-0">🍎</div>
-                    <div>
-                        <h3 class="font-bold text-slate-800 dark:text-white">${ui.welcomeTip2}</h3>
-                        <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mt-1">${ui.welcomeTip2Desc}</p>
+                ${isAiPitch ? `
+                    <div class="mt-6 p-4 bg-purple-50 dark:bg-purple-900/10 rounded-xl border border-purple-100 dark:border-purple-800/30 w-full text-left flex gap-3 items-center">
+                        <div class="text-2xl animate-bounce">👈</div>
+                        <div>
+                            <p class="font-bold text-purple-700 dark:text-purple-300 text-xs uppercase">${ui.aiPitchAction}</p>
+                            <p class="text-sm text-slate-600 dark:text-slate-400">${ui.aiPitchSub}</p>
+                        </div>
                     </div>
-                </div>
-
-                <!-- Optional AI Section -->
-                <div class="bg-purple-50 dark:bg-purple-900/10 p-4 rounded-xl border border-purple-100 dark:border-purple-800/30 mt-4">
-                    <div class="flex gap-3">
-                         <div class="text-2xl">🦉</div>
-                         <div>
-                             <h4 class="font-bold text-purple-700 dark:text-purple-300 text-sm">${ui.welcomeOptional}</h4>
-                             <p class="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">${ui.welcomeOptionalDesc}</p>
-                         </div>
-                    </div>
-                </div>
+                ` : ''}
             </div>
 
             <!-- Footer Actions -->
-            <div class="p-4 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 flex flex-col gap-2">
-                 <button id="btn-welcome-start" class="w-full py-4 bg-slate-800 dark:bg-white text-white dark:text-slate-900 font-bold rounded-xl shadow-lg transition-transform active:scale-95 text-lg">
-                    ${ui.welcomeBtnStart}
-                 </button>
-                 <button id="btn-welcome-config" class="w-full py-3 text-purple-600 dark:text-purple-400 font-bold text-sm hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-xl transition-colors">
-                    ${ui.welcomeBtnConfig}
-                 </button>
+            <div class="p-4 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center">
+                 <button id="btn-tut-skip" class="px-4 py-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-bold uppercase tracking-wider">${ui.tutorialSkip}</button>
+                 
+                 <div class="flex gap-3">
+                    ${this.tutorialStep > 0 ? `
+                        <button id="btn-tut-prev" class="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-lg transition-colors">
+                            ←
+                        </button>
+                    ` : ''}
+                    
+                    <button id="btn-tut-next" class="px-8 h-12 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold rounded-xl shadow-lg transition-transform active:scale-95 flex items-center gap-2">
+                        ${isLast ? ui.tutorialFinish : ui.tutorialNext + ' →'}
+                    </button>
+                 </div>
             </div>
         </div>
         `;
     }
 
-    bindWelcomeEvents() {
+    bindWelcomeEvents(ui) {
         const markSeen = () => localStorage.setItem('arbor-welcome-seen', 'true');
 
-        this.querySelector('#btn-welcome-start').onclick = () => {
-            markSeen();
-            this.close();
-        };
+        // Navigation
+        const nextBtn = this.querySelector('#btn-tut-next');
+        if (nextBtn) {
+            nextBtn.onclick = () => {
+                if (this.tutorialStep < ui.welcomeSteps.length - 1) {
+                    this.tutorialStep++;
+                    this.render();
+                } else {
+                    markSeen();
+                    this.close();
+                }
+            };
+        }
 
-        this.querySelector('#btn-welcome-config').onclick = () => {
-            markSeen();
-            store.setModal({ type: 'sage', mode: 'settings' });
-        };
+        const prevBtn = this.querySelector('#btn-tut-prev');
+        if (prevBtn) {
+            prevBtn.onclick = () => {
+                if (this.tutorialStep > 0) {
+                    this.tutorialStep--;
+                    this.render();
+                }
+            };
+        }
+
+        const skipBtn = this.querySelector('#btn-tut-skip');
+        if (skipBtn) {
+            skipBtn.onclick = () => {
+                markSeen();
+                this.close();
+            };
+        }
+
+        // Language switcher events
+        this.querySelectorAll('.btn-welcome-lang').forEach(btn => {
+            btn.onclick = (e) => {
+                const code = e.currentTarget.dataset.code;
+                store.setLanguage(code);
+                // Render triggered automatically by store event
+            };
+        });
     }
 
     // --- PROFILE & SYNC ---
@@ -512,39 +570,6 @@ class ArborModals extends HTMLElement {
         };
         this.querySelector('#btn-prev-cancel').onclick = () => store.closePreview();
         this.querySelector('#btn-prev-enter').onclick = () => store.enterLesson();
-    }
-
-    renderTutorial(ui) {
-        const step = ui.tutorialSteps[this.tutorialStep];
-        return `
-        <div class="flex flex-col h-full">
-            <div class="flex-1 p-10 flex flex-col items-center justify-center text-center">
-                 <div class="flex gap-2 mb-8">
-                    ${ui.tutorialSteps.map((_, i) => `<div class="h-1.5 rounded-full transition-all ${i === this.tutorialStep ? 'w-8 bg-sky-500' : 'w-2 bg-slate-200 dark:bg-slate-700'}"></div>`).join('')}
-                 </div>
-                 <div class="text-6xl mb-8">${step.icon}</div>
-                 <h2 class="text-2xl font-black text-slate-800 dark:text-white mb-4">${step.title}</h2>
-                 <p class="text-slate-500 dark:text-slate-400 leading-relaxed">${step.text}</p>
-            </div>
-            <div class="p-6 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950/50">
-                 <button class="btn-close text-xs font-bold text-slate-400 uppercase tracking-wider">${ui.tutorialSkip}</button>
-                 <div class="flex gap-3">
-                    ${this.tutorialStep > 0 ? `<button id="btn-tut-prev" class="w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500">←</button>` : ''}
-                    ${this.tutorialStep < ui.tutorialSteps.length - 1 
-                        ? `<button id="btn-tut-next" class="px-6 h-10 bg-sky-500 text-white font-bold rounded-xl shadow-lg">${ui.tutorialNext} →</button>` 
-                        : `<button id="btn-tut-finish" class="px-6 h-10 bg-green-500 text-white font-bold rounded-xl shadow-lg animate-pulse">${ui.tutorialFinish}</button>`}
-                 </div>
-            </div>
-        </div>`;
-    }
-    
-    bindTutorialEvents() {
-        const btnNext = this.querySelector('#btn-tut-next');
-        if(btnNext) btnNext.onclick = () => { this.tutorialStep++; this.render(); };
-        const btnPrev = this.querySelector('#btn-tut-prev');
-        if(btnPrev) btnPrev.onclick = () => { this.tutorialStep--; this.render(); };
-        const btnFin = this.querySelector('#btn-tut-finish');
-        if(btnFin) btnFin.onclick = () => this.close();
     }
 
     renderContributor(ui) {
