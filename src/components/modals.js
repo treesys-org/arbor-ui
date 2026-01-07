@@ -46,13 +46,12 @@ class ArborModals extends HTMLElement {
             return;
         }
 
-        // 2. Generate a Unique Key for current state to prevent flickering (re-rendering same content)
-        // We include: previewNode ID, ViewMode, Modal Type/Props
+        // 2. Generate a Unique Key for current state to prevent flickering (re-rendering identical content)
         const stateKey = JSON.stringify({
             p: previewNode ? previewNode.id : null,
             v: viewMode,
             m: modal,
-            // Internal states that require re-render
+            l: store.value.lang,
             i: { 
                 step: this.tutorialStep, 
                 tab: this.profileTab, 
@@ -65,7 +64,7 @@ class ArborModals extends HTMLElement {
             }
         });
 
-        if (stateKey === this.currentRenderKey) return; // STOP: Nothing changed visually
+        if (stateKey === this.currentRenderKey) return; 
         this.currentRenderKey = stateKey;
 
         // --- RENDER LOGIC START ---
@@ -89,7 +88,7 @@ class ArborModals extends HTMLElement {
         const type = typeof modal === 'string' ? modal : modal.type;
         const ui = store.ui;
         
-        if (type === 'editor') return; // Handled by <arbor-editor>
+        if (type === 'editor') return; 
 
         if (type === 'search') {
             this.renderSearch(ui);
@@ -98,7 +97,6 @@ class ArborModals extends HTMLElement {
 
         let content = '';
         
-        // FUSED WELCOME & TUTORIAL: Both map to the same narrative renderer
         if (type === 'welcome' || type === 'tutorial') content = this.renderWelcome(ui);
         
         else if (type === 'sources') content = this.renderSources(ui);
@@ -123,9 +121,7 @@ class ArborModals extends HTMLElement {
         const closeBtn = this.querySelector('.btn-close');
         if(closeBtn) closeBtn.onclick = () => this.close();
         
-        // FUSED EVENTS
         if (type === 'welcome' || type === 'tutorial') this.bindWelcomeEvents(ui);
-        
         if (type === 'sources') this.bindSourcesEvents();
         if (type === 'contributor') this.bindContributorEvents();
         if (type === 'profile') this.bindProfileEvents();
@@ -264,7 +260,6 @@ class ArborModals extends HTMLElement {
             btn.onclick = (e) => {
                 const code = e.currentTarget.dataset.code;
                 store.setLanguage(code);
-                // Render triggered automatically by store event
             };
         });
     }
@@ -444,11 +439,8 @@ class ArborModals extends HTMLElement {
          } else {
              // SORTING & FILTERING
              const q = this.searchQuery.toLowerCase();
-             
              let displayResults = [...this.searchResults];
 
-             // STRICT FILTER for short queries (1-2 chars)
-             // This prevents "Linux" (desc "apps") showing up for query "ap"
              if (q.length < 3) {
                  displayResults = displayResults.filter(r => r.name.toLowerCase().includes(q));
              }
@@ -459,11 +451,9 @@ class ArborModals extends HTMLElement {
                 const startsA = nameA.startsWith(q);
                 const startsB = nameB.startsWith(q);
                 
-                // Exact start match gets top priority
                 if (startsA && !startsB) return -1;
                 if (!startsA && startsB) return 1;
                 
-                // Then name includes
                 const inNameA = nameA.includes(q);
                 const inNameB = nameB.includes(q);
                 
@@ -474,7 +464,6 @@ class ArborModals extends HTMLElement {
              });
 
              resultsHtml = displayResults.map((res, index) => {
-                // CLEAN PATH LOGIC
                 let pathParts = (res.path || '').split(' / ');
                 if (pathParts.length > 0 && pathParts[0].includes('Arbor')) pathParts.shift();
                 if (pathParts.length > 0 && pathParts[pathParts.length-1] === res.name) pathParts.pop();
@@ -618,42 +607,58 @@ class ArborModals extends HTMLElement {
 
         return `
         <div class="p-8">
-            <div class="w-16 h-16 bg-slate-800 text-white rounded-full flex items-center justify-center text-3xl mb-6 shadow-lg shadow-slate-500/30">🐙</div>
-            <h2 class="text-2xl font-black text-slate-800 dark:text-white mb-2">${ui.contribTitle}</h2>
-            <p class="text-slate-500 dark:text-slate-400 mb-6 text-sm leading-relaxed">${ui.contribDesc}</p>
+            <div class="w-16 h-16 bg-gradient-to-br from-slate-700 to-slate-900 text-white rounded-full flex items-center justify-center text-3xl mb-6 shadow-xl shadow-slate-500/20 mx-auto">🐙</div>
+            <h2 class="text-2xl font-black text-slate-800 dark:text-white mb-2 text-center">${ui.contribTitle}</h2>
+            <p class="text-slate-600 dark:text-slate-300 mb-6 text-sm leading-relaxed text-center max-w-xs mx-auto">${ui.contribDesc}</p>
 
             ${!user ? `
             <div class="space-y-4">
-                <a href="${magicLink}" target="_blank" class="w-full py-3 px-4 border-2 border-dashed border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-sky-100 dark:hover:bg-sky-900/40 transition-colors">
-                    <span>✨</span>
-                    <span>Registro Inicial (Generar Token)</span>
+                
+                <a href="${magicLink}" target="_blank" class="w-full py-4 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-xl flex items-center justify-center gap-2 transition-colors border border-slate-200 dark:border-slate-700">
+                    <span>🔑</span>
+                    <span>Generar Token (GitHub)</span>
                 </a>
+                
                 <div class="relative py-2">
                     <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-200 dark:border-slate-700"></div></div>
-                    <div class="relative flex justify-center text-xs uppercase"><span class="bg-white dark:bg-slate-900 px-2 text-slate-400">O ingresa tu token existente</span></div>
+                    <div class="relative flex justify-center text-xs uppercase"><span class="bg-white dark:bg-slate-900 px-2 text-slate-400">O ingresa uno existente</span></div>
                 </div>
+                
                 <div>
-                    <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">${ui.contribToken}</label>
-                    <input id="inp-gh-token" type="password" placeholder="${ui.contribTokenPlaceholder}" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-slate-500">
+                    <input id="inp-gh-token" type="password" placeholder="${ui.contribTokenPlaceholder}" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent transition-all placeholder:text-slate-300">
                 </div>
-                <label class="flex items-center gap-3 p-2 cursor-pointer group">
-                    <div class="relative flex items-center">
-                        <input type="checkbox" id="chk-remember-me" class="peer sr-only" checked>
-                        <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                
+                <div class="flex items-center justify-between px-1">
+                    <label class="flex items-center gap-2 cursor-pointer group">
+                        <div class="relative flex items-center">
+                            <input type="checkbox" id="chk-remember-me" class="peer sr-only" checked>
+                            <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-green-500"></div>
+                        </div>
+                        <span class="text-xs font-bold text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300">Recordar</span>
+                    </label>
+                    <div class="group relative cursor-help">
+                         <span class="text-xs text-slate-300 border-b border-dotted border-slate-300">¿Permisos?</span>
+                         <div class="absolute bottom-full right-0 mb-2 w-48 p-2 bg-slate-800 text-white text-[10px] rounded shadow-xl hidden group-hover:block z-50">
+                            ${ui.contribNote}
+                         </div>
                     </div>
-                    <span class="text-sm text-slate-600 dark:text-slate-400 font-medium group-hover:text-slate-900 dark:group-hover:text-slate-200">Recordarme (Guardar sesión)</span>
-                </label>
-                <button id="btn-gh-connect" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl shadow-lg transition-transform active:scale-95">${ui.contribConnect}</button>
+                </div>
+
+                <button id="btn-gh-connect" class="w-full py-4 bg-slate-900 dark:bg-white hover:opacity-90 text-white dark:text-slate-900 font-bold rounded-xl shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2 mt-2">
+                    ${ui.contribConnect}
+                </button>
             </div>
             ` : `
-            <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-4 rounded-xl flex items-center gap-4 mb-6">
-                <img src="${user.avatar_url}" class="w-12 h-12 rounded-full border-2 border-white dark:border-slate-900">
+            <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-4 rounded-xl flex items-center gap-4 mb-6 animate-in fade-in">
+                <img src="${user.avatar_url}" class="w-12 h-12 rounded-full border-2 border-white dark:border-slate-900 shadow-sm">
                 <div class="flex-1 min-w-0">
-                    <p class="font-black text-slate-800 dark:text-white truncate">${user.name || user.login}</p>
-                    <p class="text-xs text-green-600 dark:text-green-400 font-bold">Connected via GitHub</p>
+                    <p class="font-black text-slate-800 dark:text-white truncate text-lg">${user.name || user.login}</p>
+                    <p class="text-xs text-green-600 dark:text-green-400 font-bold flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Conectado
+                    </p>
                 </div>
             </div>
-            <button id="btn-gh-disconnect" class="w-full py-3 border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 font-bold rounded-xl transition-colors">${ui.contribDisconnect}</button>
+            <button id="btn-gh-disconnect" class="w-full py-3 border border-red-200 dark:border-red-900/30 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 font-bold rounded-xl transition-colors text-sm">${ui.contribDisconnect}</button>
             `}
         </div>`;
     }
@@ -668,7 +673,7 @@ class ArborModals extends HTMLElement {
                 if (!token) return;
                 
                 btnConnect.disabled = true;
-                btnConnect.textContent = "...";
+                btnConnect.innerHTML = `<div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>`;
                 
                 const user = await github.initialize(token);
                 if (user) {
@@ -682,7 +687,7 @@ class ArborModals extends HTMLElement {
                     }
                     this.render();
                 } else {
-                    alert('Authentication failed. Check your token.');
+                    alert('Error: Token inválido o sin permisos.');
                     btnConnect.disabled = false;
                     btnConnect.textContent = store.ui.contribConnect;
                 }
@@ -843,14 +848,9 @@ class ArborModals extends HTMLElement {
     }
 
     renderSingleCertificate(ui, moduleId) {
-        // Now using navigateTo which might have populated cache, but ideally 
-        // we should try to find node in memory or fallback to search if not found
         let module = store.findNode(moduleId);
         
-        // If not in live tree (because it's deep and collapsed), try search cache
         if (!module) {
-             // We can't render the certificate properly without name/description
-             // This is a rare edge case if user direct links to cert of unloaded node
              module = { name: "Module " + moduleId, description: "Loading..." }; 
         }
 
@@ -896,16 +896,9 @@ class ArborModals extends HTMLElement {
     }
 
     renderCertificatesGallery() {
-        // Requires full graph traversal since we don't have a flat index
-        // This is fine as it's a specific view mode, but we only show loaded nodes + completed ones (from local storage)
-        const allNodes = store.getModulesStatus(); // This gets modules, we need exams specifically
-        
-        // This view is tricky without a full index. 
-        // We will show "Completed Exams" based on local storage ID matching against known graph
-        // This is a limitation of client-side sharding: You can't list "everything" easily.
+        const allNodes = store.getModulesStatus();
         
         const completedExams = [];
-        // Traverse to find exams
         const traverse = (n) => {
             if (n.type === 'exam') completedExams.push(n);
             if (n.children) n.children.forEach(traverse);

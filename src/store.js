@@ -73,7 +73,7 @@ class Store extends EventTarget {
         if (!welcomeSeen) {
             setTimeout(() => {
                 this.setModal('welcome');
-            }, 2000);
+            }, 50); // Immediate but safe
         }
         
         const ghToken = localStorage.getItem('arbor-gh-token') || sessionStorage.getItem('arbor-gh-token');

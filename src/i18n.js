@@ -1,4 +1,5 @@
 
+
 export const UI_LABELS = {
     EN: {
       appTitle: 'ARBOR',
@@ -11,7 +12,7 @@ export const UI_LABELS = {
       searchBroadLoading: 'Loading all topics for this letter...',
       
       // MERGED WELCOME & TUTORIAL (Narrated by Owl)
-      tutorialTitle: 'The Guardian\'s Guide',
+      tutorialTitle: 'Arbor\'s Guide',
       tutorialSkip: 'Skip Intro',
       tutorialNext: 'Next',
       tutorialPrev: 'Previous',
@@ -35,14 +36,14 @@ export const UI_LABELS = {
         },
         {
             title: 'Activate my Superintelligence (AI)',
-            text: 'By default, I guide you with info from the lesson. By connecting a <strong>Gemini API Key</strong>, I become your personal tutor, able to solve complex questions and search the web.',
+            text: 'By default, I guide you using the lesson text. You can upgrade my brain by connecting a <strong>Cloud AI</strong> (like Gemini) or a <strong>Local AI</strong> (Ollama/WebLLM) for privacy.',
             icon: '🧠',
             isAiPitch: true
         }
       ],
       
-      aiPitchAction: 'Need help or want to activate me?',
-      aiPitchSub: 'Look for my icon 🦉 in the menu or top bar.',
+      aiPitchAction: 'Upgrade my Brain',
+      aiPitchSub: 'Click the Owl icon 🦉 to configure AI.',
 
       close: 'Close',
       statsNodes: 'Modules',
@@ -55,7 +56,7 @@ export const UI_LABELS = {
       navCertificates: 'Certificates',
       navSources: 'Trees',
       navHelp: 'Tutorial',
-      navContributor: 'Contributor',
+      navContributor: 'Editor Mode',
       navSage: 'Ask the Sage',
 
       lessonComplete: 'MARK COMPLETE',
@@ -63,7 +64,7 @@ export const UI_LABELS = {
       lessonEnter: 'ENTER LESSON', 
       lessonPreview: 'PREVIEW', 
       lessonBack: 'BACK TO MAP', 
-      lessonEdit: 'EDIT ON GITHUB',
+      lessonEdit: 'EDIT LESSON',
       lessonTopics: 'LESSON TOPICS', 
       lessonProgress: 'Lesson Progress',
       lessonDiscussion: 'JOIN THE DISCUSSION',
@@ -164,14 +165,15 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       languageTitle: 'Language',
       languageSelect: 'Select your preferred language',
       
-      // Contributor & Editor
-      contribTitle: 'Contributor Settings',
-      contribDesc: 'Connect with GitHub to propose changes to the knowledge tree directly from Arbor.',
-      contribToken: 'GitHub Personal Access Token (Classic)',
+      // Contributor & Editor (SIMPLIFIED)
+      contribTitle: 'Editor Mode',
+      contribDesc: 'Help us grow the garden. Connect your GitHub account to enable the "Edit" button on lessons and submit improvements to the team.',
+      contribNote: 'Note: You need a Personal Access Token (Classic) with "repo" permissions.',
+      contribToken: 'Paste your GitHub Token',
       contribTokenPlaceholder: 'ghp_...',
-      contribConnect: 'Connect GitHub',
+      contribConnect: 'Enable Editing',
       contribDisconnect: 'Disconnect',
-      contribRepoHint: 'Changes will be proposed to:',
+      contribRepoHint: 'Changes will be sent to:',
       editorTitle: 'Arbor Studio',
       editorChanges: 'Propose Changes',
       editorCommitMsg: 'Describe your changes...',
@@ -231,15 +233,15 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       sageMenuHelp: 'Explain Arbor',
       sageMenuHelpDesc: 'The Sage will guide you.',
       sageMenuAi: 'Enable True Sight',
-      sageMenuAiDesc: 'Connect Local AI (Ollama/WebLLM) or Gemini.',
+      sageMenuAiDesc: 'Connect Local AI or Cloud AI.',
       
       // AI Upgrade
       sageConfigTitle: 'Sage Configuration',
       sageConfigDesc: 'Choose how the Sage thinks.',
-      sageModeCloud: 'Cloud (Gemini)',
+      sageModeCloud: 'Cloud (Google)',
       sageModeLocal: 'Local (Ollama)',
       sageModeBrowser: 'Browser (WebGPU)',
-      sageApiKeyLabel: 'Google Gemini API Key',
+      sageApiKeyLabel: 'Google API Key (Gemini)',
       sageOllamaLabel: 'Ollama Model Name',
       sageWebLlmModel: 'WebGPU Model',
       sageLoadModel: 'Load to Browser Cache',
@@ -259,7 +261,7 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       searchBroadLoading: 'Cargando todo el contenido de esta letra...',
       
       // MERGED WELCOME & TUTORIAL
-      tutorialTitle: 'La Guía del Guardián',
+      tutorialTitle: 'Guía de Arbor',
       tutorialSkip: 'Saltar Intro',
       tutorialNext: 'Siguiente',
       tutorialPrev: 'Anterior',
@@ -283,14 +285,14 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
         },
         {
             title: 'Activa mi Superinteligencia (IA)',
-            text: 'Por defecto, te guío con la información de la lección. Si conectas una <strong>API Key de Gemini</strong>, me convierto en tu tutor personal para resolver dudas complejas y buscar en la web.',
+            text: 'Por defecto, te guío con la información de la lección. Puedes conectarme a una <strong>IA en la Nube</strong> o una <strong>IA Local</strong> para tener un tutor personalizado.',
             icon: '🧠',
             isAiPitch: true
         }
       ],
       
-      aiPitchAction: '¿Necesitas ayuda o quieres activarme?',
-      aiPitchSub: 'Busca mi icono 🦉 en el menú o en la barra superior.',
+      aiPitchAction: 'Mejorar mi Cerebro',
+      aiPitchSub: 'Pulsa el Búho 🦉 para configurar la IA.',
 
       close: 'Cerrar',
       statsNodes: 'Módulos',
@@ -303,7 +305,7 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       navCertificates: 'Certificados',
       navSources: 'Árboles',
       navHelp: 'Tutorial',
-      navContributor: 'Contribuidor',
+      navContributor: 'Modo Editor',
       navSage: 'Preguntar al Sabio',
       
       lessonComplete: 'MARCAR COMO VISTO',
@@ -311,7 +313,7 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       lessonEnter: 'ENTRAR A LECCIÓN', 
       lessonPreview: 'VISTA PREVIA', 
       lessonBack: 'VOLVER AL MAPA', 
-      lessonEdit: 'EDITAR EN GITHUB',
+      lessonEdit: 'EDITAR LECCIÓN',
       lessonTopics: 'TEMARIO DE LA LECCIÓN', 
       lessonProgress: 'Progreso de la Lección',
       lessonDiscussion: 'UNIRSE A LA DISCUSIÓN',
@@ -417,12 +419,13 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       languageTitle: 'Idioma',
       languageSelect: 'Selecciona tu idioma preferido',
 
-      // Contributor & Editor
-      contribTitle: 'Configuración de Contribuidor',
-      contribDesc: 'Conecta con GitHub para proponer cambios al árbol de conocimiento directamente desde Arbor.',
-      contribToken: 'GitHub Personal Access Token (Classic)',
+      // Contributor & Editor (SIMPLIFIED)
+      contribTitle: 'Modo Editor',
+      contribDesc: 'Ayuda a cultivar este jardín. Conecta tu cuenta de GitHub para activar el botón "Editar" en las lecciones y enviar tus mejoras al equipo.',
+      contribNote: 'Nota: Necesitas un Token de Acceso (Classic) con permisos de "repo".',
+      contribToken: 'Pega tu Token de GitHub',
       contribTokenPlaceholder: 'ghp_...',
-      contribConnect: 'Conectar GitHub',
+      contribConnect: 'Activar Edición',
       contribDisconnect: 'Desconectar',
       contribRepoHint: 'Los cambios se propondrán en:',
       editorTitle: 'Arbor Studio',
@@ -484,15 +487,15 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       sageMenuHelp: 'Explícame Arbor',
       sageMenuHelpDesc: 'El Sabio te guiará.',
       sageMenuAi: 'Activar Visión Verdadera',
-      sageMenuAiDesc: 'Conectar IA Local (Ollama/WebLLM) o Gemini Cloud.',
+      sageMenuAiDesc: 'Conectar IA Local o Nube.',
 
       // AI Upgrade
       sageConfigTitle: 'Configuración del Sabio',
       sageConfigDesc: 'Elige cómo piensa el sabio.',
-      sageModeCloud: 'Nube (Gemini)',
+      sageModeCloud: 'Nube (Google)',
       sageModeLocal: 'Local (Ollama)',
       sageModeBrowser: 'Navegador (WebGPU)',
-      sageApiKeyLabel: 'Google Gemini API Key',
+      sageApiKeyLabel: 'Google API Key (Gemini)',
       sageOllamaLabel: 'Nombre del Modelo Ollama',
       sageWebLlmModel: 'Modelo WebGPU',
       sageLoadModel: 'Cargar en caché del navegador',
