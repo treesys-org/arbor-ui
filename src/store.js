@@ -263,11 +263,14 @@ class Store extends EventTarget {
 
     async navigateTo(nodeId) {
         let node = this.findNode(nodeId);
+
+        // If node is not in memory, we need to traverse and load parents
         if (!node) {
-             const pathIdsToUnfold = [];
+            const pathIdsToUnfold = [];
             let currentId = nodeId;
             let highestAncestorInMemory = null;
 
+            // Traverse upwards from the target ID to find the highest ancestor that's already in our live tree
             while (currentId) {
                 const foundNode = this.findNode(currentId);
                 if (foundNode) {
@@ -275,8 +278,12 @@ class Store extends EventTarget {
                     break;
                 }
                 pathIdsToUnfold.unshift(currentId);
+                
+                // This logic infers parent ID from child ID for leaf nodes (parentID__slug).
+                // It's a best-effort approach that stops when it hits a branch with a UUID-based ID.
                 const parentId = currentId.substring(0, currentId.lastIndexOf('__'));
                 
+                // If we can't get a parent ID this way, we assume the highest ancestor is the root.
                 if (!parentId || !parentId.includes('-root')) {
                     highestAncestorInMemory = this.state.data;
                     break;
@@ -284,22 +291,33 @@ class Store extends EventTarget {
                 currentId = parentId;
             }
 
+            // Now, traverse downwards from the highest known ancestor, loading children as we go.
             let parentToExpand = highestAncestorInMemory;
             while (pathIdsToUnfold.length > 0 && parentToExpand) {
-                if (parentToExpand.type !== 'leaf' && !parentToExpand.expanded) {
+                // Ensure the current parent node is expanded
+                if (parentToExpand.type !== 'leaf' && parentToExpand.type !== 'exam' && !parentToExpand.expanded) {
                     if (parentToExpand.hasUnloadedChildren) {
                         await this.loadNodeChildren(parentToExpand);
                     }
                     parentToExpand.expanded = true;
                 }
+                
                 const nextIdToFind = pathIdsToUnfold.shift();
                 parentToExpand = parentToExpand.children?.find(c => c.id === nextIdToFind) || null;
             }
         }
         
+        // At this point, the node should be in memory. Let's find it again to be sure.
         node = this.findNode(nodeId);
-        if (!node) return;
+        if (!node) {
+            console.error("Failed to navigate to node after attempting to load path:", nodeId);
+            return;
+        }
+
+        // Use the existing toggleNode to handle final selection, path update, and preview.
         this.toggleNode(nodeId);
+        
+        // And dispatch focus event for the graph to center on it.
         this.dispatchEvent(new CustomEvent('focus-node', { detail: nodeId }));
     }
 
