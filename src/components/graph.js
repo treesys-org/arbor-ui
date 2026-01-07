@@ -2,6 +2,17 @@
 
 import { store } from '../store.js';
 
+// Paleta vibrante para las ramas principales
+const BRANCH_COLORS = [
+    '#FF5252', // Rojo Coral
+    '#FFD740', // Amarillo Sol
+    '#448AFF', // Azul Brillante
+    '#69F0AE', // Verde Menta
+    '#E040FB', // Violeta Eléctrico
+    '#FF6E40', // Naranja
+    '#00E5FF', // Cyan
+];
+
 class ArborGraph extends HTMLElement {
     constructor() {
         super();
@@ -10,7 +21,7 @@ class ArborGraph extends HTMLElement {
         this.width = 0;
         this.height = 0;
         this.zoom = null;
-        this.duration = 750;
+        this.duration = 800;
         this.nodePositions = new Map();
         
         // Avatar State
@@ -18,24 +29,21 @@ class ArborGraph extends HTMLElement {
     }
 
     connectedCallback() {
+        // Fondo "Cielo Celeste" estilo Teletubbies
         this.innerHTML = `
-        <div id="chart" class="w-full h-full cursor-grab active:cursor-grabbing relative overflow-hidden bg-slate-50 dark:bg-slate-900 transition-colors duration-500" style="touch-action: none;">
+        <div id="chart" class="w-full h-full cursor-grab active:cursor-grabbing relative overflow-hidden bg-gradient-to-b from-[#29b6f6] to-[#b3e5fc] dark:from-slate-900 dark:to-slate-800 transition-colors duration-500" style="touch-action: none;">
              
-             <!-- Decorative Background Elements (Fixed CSS) -->
-             <div class="absolute inset-0 overflow-hidden pointer-events-none">
-                <div class="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-200/20 dark:bg-blue-900/10 rounded-full blur-3xl"></div>
-                <div class="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-purple-200/20 dark:bg-purple-900/10 rounded-full blur-3xl"></div>
-             </div>
+             <!-- Sol (Decorativo) -->
+             <div class="absolute top-10 right-10 text-yellow-300 opacity-80 animate-pulse pointer-events-none text-9xl select-none" style="filter: drop-shadow(0 0 20px orange);">☀️</div>
 
-             <!-- Clouds (Parallax feel) -->
-             <div class="absolute top-10 left-10 opacity-30 dark:opacity-5 pointer-events-none text-6xl select-none animate-pulse" style="animation-duration: 8s">☁️</div>
-             <div class="absolute top-40 right-10 opacity-20 dark:opacity-5 pointer-events-none text-8xl select-none animate-pulse" style="animation-duration: 12s">☁️</div>
+             <!-- Nubes animadas -->
+             <div class="absolute top-20 left-10 opacity-60 text-white pointer-events-none text-7xl select-none animate-bounce" style="animation-duration: 6s">☁️</div>
+             <div class="absolute top-40 right-1/4 opacity-40 text-white pointer-events-none text-9xl select-none animate-pulse" style="animation-duration: 10s">☁️</div>
              
              <!-- Overlays Container -->
              <div id="overlays" class="absolute inset-0 pointer-events-none"></div>
         </div>`;
 
-        // Wait for layout
         requestAnimationFrame(() => {
              this.initGraph();
              this.renderOverlays();
@@ -50,13 +58,11 @@ class ArborGraph extends HTMLElement {
         store.addEventListener('graph-update', () => this.updateGraph());
         
         store.addEventListener('state-change', (e) => {
-             // Redraw if theme changes to update path colors
              if(this.g) this.updateGraph(); 
              this.renderOverlays();
         });
         
         store.addEventListener('focus-node', (e) => {
-             // Delay slightly to let layout settle
              setTimeout(() => this.focusNode(e.detail), 100);
         });
         
@@ -86,7 +92,6 @@ class ArborGraph extends HTMLElement {
         
         let html = '';
 
-        // Error Toasts
         if (state.lastErrorMessage) {
             html += `
             <div class="absolute top-24 left-1/2 -translate-x-1/2 z-[60] bg-red-100 border-l-4 border-red-500 text-red-700 px-6 py-4 rounded shadow-2xl animate-in fade-in slide-in-from-top-4 pointer-events-auto flex items-center gap-3 max-w-md w-[90%]">
@@ -98,35 +103,30 @@ class ArborGraph extends HTMLElement {
             </div>`;
         }
 
-        // Success Toasts
         if (state.lastActionMessage) {
             html += `
-            <div class="absolute top-24 left-1/2 -translate-x-1/2 z-[60] bg-emerald-500 text-white px-6 py-3 rounded-full shadow-xl animate-in fade-in zoom-in font-bold pointer-events-none flex items-center gap-2">
+            <div class="absolute top-24 left-1/2 -translate-x-1/2 z-[60] bg-emerald-500 text-white px-6 py-3 rounded-full shadow-xl animate-in fade-in zoom-in font-bold pointer-events-none flex items-center gap-2 border-2 border-white/30">
                 <span>✨</span> ${state.lastActionMessage}
             </div>`;
         }
 
-        // Loading / Big Error States
         if (state.loading) {
             html += `
-            <div class="absolute inset-0 flex flex-col items-center justify-center z-10 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm pointer-events-auto">
-              <div class="w-16 h-16 border-4 border-slate-200 border-t-sky-500 rounded-full animate-spin mb-4"></div>
-              <p class="font-bold text-slate-600 dark:text-slate-300 animate-pulse tracking-wide font-comic text-xl">${ui.loading}</p>
+            <div class="absolute inset-0 flex flex-col items-center justify-center z-10 bg-sky-100/80 dark:bg-slate-900/80 backdrop-blur-sm pointer-events-auto">
+              <div class="w-20 h-20 border-8 border-white border-t-yellow-400 rounded-full animate-spin mb-4 shadow-xl"></div>
+              <p class="font-black text-sky-600 dark:text-sky-300 tracking-wide text-2xl drop-shadow-sm">${ui.loading}</p>
             </div>`;
         } else if (state.error) {
              html += `
             <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 flex flex-col items-center animate-in pointer-events-auto">
-                 <div class="bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-2xl p-8 shadow-2xl relative max-w-md text-center">
+                 <div class="bg-white border-4 border-slate-200 rounded-3xl p-8 shadow-2xl relative max-w-md text-center">
                       <div class="text-6xl mb-4">🍂</div>
-                      <h2 class="text-slate-800 dark:text-white font-black text-2xl mb-2">
+                      <h2 class="text-slate-800 font-black text-2xl mb-2">
                           ${ui.errorTitle}
                       </h2>
-                      <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">
+                      <p class="text-slate-500 text-sm mb-4">
                         ${state.error}
                       </p>
-                      <div class="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                          ${ui.errorNoTrees}
-                      </div>
                  </div>
             </div>`;
         }
@@ -146,206 +146,262 @@ class ArborGraph extends HTMLElement {
             .style("height", "100%")
             .style("display", "block");
 
-        // DEFINITIONS (Glows, Shadows)
         const defs = this.svg.append("defs");
         
-        // Node Shadow
+        // Sombra suave para nodos
         const filter = defs.append("filter").attr("id", "shadow-soft");
         filter.append("feDropShadow")
-            .attr("dx", "0").attr("dy", "4").attr("stdDeviation", "4")
-            .attr("flood-color", "#000").attr("flood-opacity", "0.15");
+            .attr("dx", "0").attr("dy", "5").attr("stdDeviation", "3")
+            .attr("flood-color", "#000").attr("flood-opacity", "0.2");
 
-        // Leaf Glow
-        const leafGlow = defs.append("filter").attr("id", "glow-gold");
-        leafGlow.append("feGaussianBlur").attr("stdDeviation", "4").attr("result", "coloredBlur");
-        const feMerge = leafGlow.append("feMerge");
+        // Brillo interno
+        const glow = defs.append("filter").attr("id", "glow-soft");
+        glow.append("feGaussianBlur").attr("stdDeviation", "2.5").attr("result", "coloredBlur");
+        const feMerge = glow.append("feMerge");
         feMerge.append("feMergeNode").attr("in", "coloredBlur");
         feMerge.append("feMergeNode").attr("in", "SourceGraphic");
 
         // Layers Order
         this.g = this.svg.append("g");
         
+        // 0. Capa de Suelo (Hills)
+        this.groundLayer = this.g.append("g").attr("class", "ground-layer");
+
         // 1. Path/Links Layer
         this.linkGroup = this.g.append("g").attr("class", "links");
         
         // 2. Nodes Layer
         this.nodeGroup = this.g.append("g").attr("class", "nodes");
         
-        // 3. Avatar Layer (On top of everything)
+        // 3. Avatar Layer
         this.avatarGroup = this.g.append("g").attr("class", "avatar-layer");
         this.initAvatar();
 
         // --- CAMERA LOGIC (THE RAIL) ---
         this.zoom = d3.zoom()
-            .scaleExtent([0.5, 2.5]) // Limit zoom to avoid losing context
+            .scaleExtent([0.4, 2]) 
             .on("zoom", (e) => {
                 const t = e.transform;
                 const isMobile = this.width < 768;
 
                 if (isMobile) {
-                    // RAIL MODE: Force X to center
-                    // We want the spine (this.width / 2) to always be at the screen center.
-                    // formula: screen_center = world_x * k + tx
-                    // We know world_x of spine is this.width/2.
-                    // So: this.width/2 = (this.width/2 * t.k) + tx
-                    // tx = this.width/2 * (1 - t.k)
+                    // RAIL MODE: Bloquear eje X al centro
                     t.x = (this.width / 2) * (1 - t.k);
                 }
                 
                 this.g.attr("transform", t);
+                
+                // Mover nubes en paralaje inverso ligeramente si quisiéramos
             });
         
-        this.svg.call(this.zoom)
-            .on("dblclick.zoom", null); // Disable double click zoom
+        this.svg.call(this.zoom).on("dblclick.zoom", null);
+        
+        // Dibujar el suelo inicial
+        this.drawGround();
+    }
+
+    drawGround() {
+        // Dibujar colinas verdes infinitas en el fondo
+        // Las colinas deben estar siempre "abajo" relative a los nodos, pero como los nodos crecen hacia arriba,
+        // el suelo debe estar cerca de Y=Start.
+        
+        // Nota: Como usamos coordenadas negativas para ir hacia arriba, el suelo está en Y ~ height.
+        // Haremos el suelo ancho para cubrir el paneo.
+        
+        const w = 5000;
+        const h = 2000;
+        // Ajuste: El layout empieza en this.height - 100. Pondremos el suelo ahí.
+        const horizonY = this.height - 50; 
+        
+        this.groundLayer.selectAll("*").remove();
+
+        // Colina trasera (más oscura)
+        this.groundLayer.append("path")
+            .attr("d", `M-${w},${horizonY} C-${w/3},${horizonY - 150} ${w/3},${horizonY - 50} ${w},${horizonY} L${w},${horizonY+h} L-${w},${horizonY+h} Z`)
+            .attr("fill", "#66BB6A") // Verde medio
+            .style("opacity", 0.8);
+
+        // Colina frontal (más brillante, teletubbie style)
+        this.groundLayer.append("path")
+            .attr("d", `M-${w},${horizonY + 50} Q0,${horizonY - 80} ${w},${horizonY + 50} L${w},${horizonY+h} L-${w},${horizonY+h} Z`)
+            .attr("fill", "#81C784"); // Verde claro
     }
 
     initAvatar() {
-        // The Owl Character
         this.avatar = this.avatarGroup.append("g")
             .attr("class", "avatar-owl")
-            .attr("transform", `translate(${this.width/2}, ${this.height/2}) scale(0)`)
-            .style("pointer-events", "none"); // Click through to nodes
+            .attr("transform", `translate(${this.width/2}, ${this.height - 100}) scale(0)`)
+            .style("pointer-events", "none"); 
 
-        // Glow behind owl
-        this.avatar.append("circle")
-            .attr("r", 25)
-            .attr("fill", "white")
-            .attr("opacity", 0.6)
-            .attr("filter", "url(#glow-gold)");
+        // Sombra del búho (para dar efecto de flotar al saltar)
+        this.avatar.append("ellipse")
+            .attr("cx", 0).attr("cy", 25)
+            .attr("rx", 15).attr("ry", 5)
+            .attr("fill", "black")
+            .attr("opacity", 0.3)
+            .attr("class", "avatar-shadow");
 
-        // Owl Emoji (Simpler than SVG path for now, consistent with design)
+        // Búho Emoji
         this.avatar.append("text")
             .attr("text-anchor", "middle")
             .attr("dy", "0.35em")
-            .attr("font-size", "40px")
+            .attr("font-size", "50px")
             .text("🦉");
             
-        // Initial position
         this.avatarPos = { x: this.width/2, y: this.height - 100 };
     }
     
-    updateAvatarPosition(targetNode, duration = 1000) {
+    updateAvatarPosition(targetNode, duration = 800) {
         if (!targetNode) return;
         
-        // Offset slightly above the node
         const targetX = targetNode.x;
-        const targetY = targetNode.y - 60; 
+        const targetY = targetNode.y - 60; // Posarse encima del nodo
 
-        this.avatar.transition().duration(duration)
-            .attr("transform", `translate(${targetX}, ${targetY}) scale(1)`)
-            .tween("path", () => {
-                // Optional: We could make it follow the path exactly using path interpolation
-                // For now, a direct flight is smoother visually
+        // Determinar dirección para girar el búho (Flip X)
+        const isMovingRight = targetX > this.avatarPos.x;
+        const scaleX = isMovingRight ? -1 : 1; // Emojis suelen mirar a la izquierda por defecto, a veces. El buho mira al frente. 
+        // Vamos a asumir rotación leve.
+        const rotation = isMovingRight ? 10 : -10;
+
+        // Animar salto
+        this.avatar.transition()
+            .duration(duration)
+            .ease(d3.easeCubicOut)
+            .attrTween("transform", () => {
+                const iX = d3.interpolateNumber(this.avatarPos.x, targetX);
+                const iY = d3.interpolateNumber(this.avatarPos.y, targetY);
+                
                 return (t) => {
-                    // Simple linear interpolation for internal state tracking if needed
-                    this.avatarPos.x = targetX; 
-                    this.avatarPos.y = targetY;
+                    const currX = iX(t);
+                    const currY = iY(t);
+                    
+                    // Salto parabólico: Seno de 0 a PI
+                    const jumpHeight = 80;
+                    const jumpY = Math.sin(t * Math.PI) * jumpHeight;
+                    
+                    // Actualizar posición interna
+                    this.avatarPos.x = currX;
+                    this.avatarPos.y = currY;
+
+                    return `translate(${currX}, ${currY - jumpY}) scale(${scaleX}, 1) rotate(${rotation * t})`;
                 };
+            })
+            .on("end", () => {
+                // Aterrizaje: Squashing effect
+                this.avatar.transition().duration(150).attr("transform", `translate(${targetX}, ${targetY}) scale(${scaleX * 1.2}, 0.8)`)
+                    .transition().duration(150).attr("transform", `translate(${targetX}, ${targetY}) scale(${scaleX}, 1)`);
             });
             
-        // Make owl bounce slightly when arrived
-        this.avatar.select("text")
-            .transition().delay(duration).duration(500)
-            .attr("dy", "-0.1em")
-            .transition().duration(500)
-            .attr("dy", "0.35em");
+        // Animar sombra (se hace pequeña al saltar)
+        this.avatar.select(".avatar-shadow")
+            .transition().duration(duration/2).attr("rx", 5).attr("opacity", 0.1)
+            .transition().duration(duration/2).attr("rx", 15).attr("opacity", 0.3);
     }
 
     resetZoom(duration = 750) {
         if (!this.svg || !this.zoom) return;
-        // Reset to view the bottom (start) of the tree
+        // Resetear vista a la base (Suelo)
         const isMobile = this.width < 768;
         const k = isMobile ? 0.8 : 1;
         const tx = (this.width / 2) * (1 - k); 
         
-        // Aim for bottom of tree
-        // Note: Tree layout is inverted (root at top visually in data, but we might render bottom-up logic or top-down)
-        // In our logic, Root is Y=0 usually? Let's check updateGraph logic.
-        // Actually, we usually want to focus on the "Latest Active Node".
-        
+        // Queremos ver la parte inferior (donde empieza el árbol)
+        // El árbol empieza en this.height - 150.
+        // Centrar Y alrededor de this.height - 200
+        const ty = 100; // Ajuste fino
+
         this.svg.transition().duration(duration)
-            .call(this.zoom.transform, d3.zoomIdentity.translate(tx, 100).scale(k));
+            .call(this.zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(k));
     }
 
-    // --- LAYOUT ENGINE ---
+    // --- COLOR LOGIC ---
+    getNodeColor(node) {
+        // Encontrar el ancestro raíz (Módulo principal) para determinar el color de familia
+        let cursor = node;
+        let depth = node.depth;
+        
+        // Si es Root
+        if (depth === 0) return '#FFFFFF'; 
+
+        // Subir hasta encontrar el hijo directo del root (depth 1)
+        while (cursor.depth > 1) {
+            cursor = cursor.parent;
+        }
+
+        // Usar el índice del hijo para escoger color de la paleta
+        // Necesitamos saber qué índice tiene este cursor entre los hijos del root
+        if (cursor && cursor.parent) {
+            const index = cursor.parent.children.indexOf(cursor);
+            const color = BRANCH_COLORS[index % BRANCH_COLORS.length];
+            return color;
+        }
+        
+        return '#FFC107'; // Fallback
+    }
+
+    // --- LAYOUT ENGINE (Bottom-Up) ---
     
-    // Calculates a "Snake" layout for mobile to maximize vertical usage
     calculateMobileLayout(root) {
         const centerX = this.width / 2;
-        const startY = 150; 
+        // BOTTOM-UP: Empezamos abajo
+        const startY = this.height - 150; 
         const levelHeight = 180; 
         
-        // 1. Flatten the active path (The Spine)
         const spine = [];
         let cursor = root;
         while(cursor) {
             spine.push(cursor);
             if (cursor.children && cursor.data.expanded) {
-                // Follow the expanded path
-                cursor = cursor.children.find(c => c.data.expanded) || cursor.children[0]; // Fallback to first if none explicitly expanded but parent is
+                cursor = cursor.children.find(c => c.data.expanded) || cursor.children[0]; 
             } else if (cursor.children && cursor.children.length > 0) {
-                 // If not expanded, we stop here (children are hidden or condensed)
                  cursor = null;
             } else {
                 cursor = null;
             }
         }
 
-        // 2. Position the Spine vertically
+        // Posicionar Columna Vertebral (Spine) hacia ARRIBA
         spine.forEach((node, index) => {
             node.x = centerX;
-            node.y = startY + (index * levelHeight);
+            node.y = startY - (index * levelHeight); // Restar Y para subir
             node.isSpine = true;
         });
 
-        // 3. Position Siblings (The "Branches" sticking out)
+        // Posicionar Hijos (Branches)
         spine.forEach((parent) => {
             if (!parent.children) return;
-            
-            // Siblings are children NOT in the spine
             const siblings = parent.children.filter(c => !spine.includes(c));
             
             if (siblings.length > 0) {
-                // Fan them out around the parent
-                // Alternating left/right based on depth for visual interest
-                const direction = parent.depth % 2 === 0 ? 1 : -1;
-                
+                // Alternar izquierda / derecha
+                // Usar grid simple alrededor del padre
                 siblings.forEach((child, i) => {
-                    const offset = (i + 1) * 100; // Distance from spine
-                    // If multiple siblings, fan them: -100, +100, -200...
-                    // Simple Logic: Stack them horizontally? No, too wide.
-                    // Logic: Cluster them near parent.
-                    
-                    // Let's put them in a mini-grid below parent but above next spine node
                     const row = Math.floor(i / 2);
                     const col = i % 2 === 0 ? -1 : 1;
                     
-                    child.x = centerX + (col * 110); 
-                    child.y = parent.y + 80 + (row * 80);
+                    child.x = centerX + (col * 130); 
+                    // Ponerlos un poco más arriba que el padre para que se vea crecimiento
+                    child.y = parent.y - 80 - (row * 90); 
                     child.isSpine = false;
                 });
             }
         });
         
-        // 4. Default for any uncalculated (shouldn't happen with filtered logic)
         root.descendants().forEach(d => {
             if (d.x === undefined) { d.x = centerX; d.y = startY; }
         });
     }
 
     calculateDesktopLayout(root) {
-        // Standard Tree
         const treeLayout = d3.tree().size([this.width - 200, this.height - 200]);
         treeLayout(root);
         
-        // Flip Y to go downwards? D3 tree is Top-Down by default (Y increases downwards).
-        // Let's adjust spacing.
+        // Invertir Y para Desktop también (Bottom-Up)
+        const startY = this.height - 100;
         const levelHeight = 180;
+        
         root.descendants().forEach(d => {
-            d.y = d.depth * levelHeight + 100;
-            // Center horizontal
-            // D3 tree computes X from 0 to width. We might need to center it if it's narrow.
-            // But strict tree is fine for desktop.
+            d.y = startY - (d.depth * levelHeight);
         });
     }
 
@@ -357,8 +413,9 @@ class ArborGraph extends HTMLElement {
         const completedSet = store.value.completedNodes;
         const rootData = store.value.data;
 
-        // Build Hierarchy
-        // Note: We only visualize expanded nodes + direct children of expanded nodes.
+        // Actualizar suelo si cambia el tamaño
+        this.drawGround();
+
         const root = d3.hierarchy(rootData, d => {
             return d.expanded ? d.children : null;
         });
@@ -373,35 +430,26 @@ class ArborGraph extends HTMLElement {
         const nodes = root.descendants();
         const links = root.links();
 
-        // --- CONSTRAINTS UPDATE ---
-        // Calculate Y limits for the camera
-        let minY = Infinity, maxY = -Infinity;
-        nodes.forEach(d => {
-            if (d.y < minY) minY = d.y;
-            if (d.y > maxY) maxY = d.y;
-        });
+        // --- CAMERA CONSTRAINTS (Bottom-Up Logic) ---
+        // Y crece hacia arriba (negativo). 
+        // MaxY (suelo) es ~height. MinY (cielo) es muy negativo.
+        
+        let minY = Infinity;
+        nodes.forEach(d => { if (d.y < minY) minY = d.y; });
+        
+        // Permitir scroll hasta la copa más alta + padding
+        const topLimit = minY - 500;
+        const bottomLimit = this.height + 200;
 
-        const paddingY = this.height / 2;
-        // Update Zoom Extent
         if (this.zoom) {
-            // X is strictly locked to [0, width] basically, but handled in zoom event.
-            // Y allows scrolling from top node to bottom node + padding.
             this.zoom.translateExtent([
-                [-Infinity, -Infinity], // Infinite X allowed in theory (clamped by event)
-                [Infinity, Infinity]    // Infinite Y allowed (clamped here?)
-            ]);
-            // Actually, better to limit Y translation range:
-            this.zoom.translateExtent([
-                [-Infinity, -500], // Allow some "overscroll" feeling
-                [Infinity, maxY + 500]
+                [-Infinity, topLimit], 
+                [Infinity, bottomLimit]
             ]);
         }
 
-        // --- RENDERING LINKS ---
-        // We use a custom path generator for a curvy, organic look
-        const linkGen = d3.linkVertical()
-            .x(d => d.x)
-            .y(d => d.y);
+        // --- LINKS (Troncos Marrones) ---
+        const linkGen = d3.linkVertical().x(d => d.x).y(d => d.y);
 
         const linkSelection = this.linkGroup.selectAll(".link")
             .data(links, d => d.target.data.id);
@@ -409,8 +457,8 @@ class ArborGraph extends HTMLElement {
         const linkEnter = linkSelection.enter().append("path")
             .attr("class", "link")
             .attr("fill", "none")
-            .attr("stroke", store.value.theme === 'dark' ? "#334155" : "#cbd5e1")
-            .attr("stroke-width", 6)
+            .attr("stroke", "#8D6E63") // Marrón Madera
+            .attr("stroke-width", 12)
             .attr("stroke-linecap", "round")
             .attr("d", d => {
                 const o = {x: d.source.x, y: d.source.y};
@@ -423,16 +471,17 @@ class ArborGraph extends HTMLElement {
         linkSelection.merge(linkEnter).transition().duration(this.duration)
             .attr("d", linkGen)
             .attr("stroke", d => {
-                // If target is completed or active, color the path
-                const isTargetDone = completedSet.has(d.target.data.id);
-                return isTargetDone ? "#10b981" : (store.value.theme === 'dark' ? "#334155" : "#cbd5e1");
+                // Si completado, quizás ponerlo verde? No, dejémoslo madera para que parezca árbol.
+                // O quizás dorado si todo está completo.
+                // Usemos marrón madera siempre para la metáfora del árbol.
+                return "#8D6E63"; 
             });
 
         linkSelection.exit().transition().duration(this.duration / 2)
             .style("opacity", 0).remove();
 
 
-        // --- RENDERING NODES ---
+        // --- NODES ---
         const nodeSelection = this.nodeGroup.selectAll("g.node")
             .data(nodes, d => d.data.id);
 
@@ -442,70 +491,64 @@ class ArborGraph extends HTMLElement {
             .style("cursor", "pointer")
             .on("click", (e, d) => this.handleNodeClick(e, d));
 
-        // 1. Node Background (Circle)
+        // 1. Círculo Fondo (Color dinámico)
         nodeEnter.append("circle")
-            .attr("r", 35)
+            .attr("r", 40)
             .attr("class", "node-bg")
-            .attr("fill", store.value.theme === 'dark' ? "#1e293b" : "#fff")
-            .attr("stroke", "#cbd5e1")
+            .attr("stroke", "#fff")
             .attr("stroke-width", 4)
             .attr("filter", "url(#shadow-soft)");
 
-        // 2. Icon
+        // 2. Icono
         nodeEnter.append("text")
             .attr("class", "node-icon")
             .attr("dy", "0.35em")
             .attr("text-anchor", "middle")
-            .style("font-size", "24px")
+            .style("font-size", "28px")
             .style("user-select", "none");
 
-        // 3. Label (Pill below)
+        // 3. Etiqueta (Pill)
         const labelG = nodeEnter.append("g")
-            .attr("transform", "translate(0, 50)");
+            .attr("transform", "translate(0, 55)");
         
         labelG.append("rect")
-            .attr("rx", 8)
-            .attr("ry", 8)
-            .attr("height", 20)
-            .attr("fill", store.value.theme === 'dark' ? "#0f172a" : "#fff")
-            .attr("stroke", store.value.theme === 'dark' ? "#334155" : "#e2e8f0")
-            .attr("stroke-width", 1)
-            .style("opacity", 0.9);
+            .attr("rx", 8).attr("ry", 8).attr("height", 24)
+            .attr("fill", "rgba(255,255,255,0.9)")
+            .attr("stroke", "#e2e8f0")
+            .attr("stroke-width", 1);
 
         labelG.append("text")
             .attr("class", "label-text")
-            .attr("dy", 14)
+            .attr("dy", 16)
             .attr("text-anchor", "middle")
-            .style("font-size", "10px")
-            .style("font-weight", "bold")
-            .attr("fill", store.value.theme === 'dark' ? "#94a3b8" : "#64748b")
-            .text(d => d.data.name.substring(0, 15)); // Initial text for sizing
+            .style("font-size", "11px")
+            .style("font-weight", "800")
+            .attr("fill", "#334155")
+            .text(d => d.data.name.substring(0, 15));
 
         // --- UPDATE NODES ---
         const nodeUpdate = nodeSelection.merge(nodeEnter).transition().duration(this.duration)
             .attr("transform", d => `translate(${d.x},${d.y}) scale(1)`);
 
-        // Style Update based on state
         nodeUpdate.select(".node-bg")
-            .attr("stroke", d => {
-                if (d.data.type === 'exam') return "#ef4444";
-                if (completedSet.has(d.data.id)) return "#10b981"; // Green
-                if (d.data.expanded) return "#3b82f6"; // Blue
-                return store.value.theme === 'dark' ? "#334155" : "#cbd5e1";
-            })
             .attr("fill", d => {
-                if (completedSet.has(d.data.id)) return store.value.theme === 'dark' ? "#064e3b" : "#ecfdf5";
-                if (d.data.expanded) return store.value.theme === 'dark' ? "#1e3a8a" : "#eff6ff";
-                return store.value.theme === 'dark' ? "#1e293b" : "#fff";
+                if (d.data.type === 'root') return "#fff";
+                return this.getNodeColor(d);
+            })
+            .attr("stroke", d => {
+                const isComplete = completedSet.has(d.data.id);
+                if (isComplete) return "#4CAF50"; // Borde verde si completado
+                if (d.data.expanded) return "#2196F3"; // Borde azul si activo
+                return "#fff";
             });
 
         nodeUpdate.select(".node-icon")
             .text(d => {
-                if (completedSet.has(d.data.id) && (d.data.type === 'leaf' || d.data.type === 'exam')) return "✅";
-                return d.data.icon || (d.data.type === 'branch' ? '📂' : '📄');
+                if (completedSet.has(d.data.id) && (d.data.type === 'leaf' || d.data.type === 'exam')) return "🌟";
+                return d.data.icon || (d.data.type === 'branch' ? '🍎' : '🍃');
             });
 
-        // Update Label Text & Rect Size
+        // Ajustar ancho etiqueta
         nodeSelection.merge(nodeEnter).each(function(d) {
              const g = d3.select(this);
              const text = g.select(".label-text");
@@ -527,15 +570,15 @@ class ArborGraph extends HTMLElement {
             .remove();
             
         // --- AVATAR LOGIC ---
-        // Find the "Latest" relevant node to put the owl on.
-        // Priority: Selected Node -> Last Completed Node -> Root
         let targetNode = null;
         if (store.value.selectedNode) {
             targetNode = nodes.find(n => n.data.id === store.value.selectedNode.id);
         }
         if (!targetNode) {
-             // Find deepest completed node
-             // This is a simple heuristic: last node in the list that is completed
+             // Find Highest completed node (Highest Y means lowest numeric value since Y goes up negative)
+             // But actually we want the "latest" in terms of progression.
+             // Progression is bottom-up.
+             // We look for the "deepest" node in tree structure that is complete.
              for (let i = nodes.length - 1; i >= 0; i--) {
                  if (completedSet.has(nodes[i].data.id)) {
                      targetNode = nodes[i];
@@ -554,21 +597,14 @@ class ArborGraph extends HTMLElement {
         e.stopPropagation();
         if (d.data.status === 'loading') return;
         
-        // 1. Move Avatar immediately (visual feedback)
-        this.updateAvatarPosition(d, 400);
-
-        // 2. Logic
+        this.updateAvatarPosition(d, 500);
         store.toggleNode(d.data.id);
-        
-        // 3. Camera Follow
         this.focusNode(d.data.id);
     }
 
     focusNode(nodeId) {
         if (!this.svg || !this.zoom) return;
         
-        // Find node position in current data
-        // We need to re-select because D3 binds data to DOM
         let targetX = 0, targetY = 0;
         let found = false;
         
@@ -585,15 +621,10 @@ class ArborGraph extends HTMLElement {
         const isMobile = this.width < 768;
         const scale = isMobile ? 1.2 : 1.5;
         
-        // Center the node
-        // formula: translate = screen_center - node_pos * scale
-        // For mobile rail: X is fixed to center, so targetX * scale should align with width/2?
-        // Actually zoom transform is applied to the GROUP.
-        // We want: (targetX * scale) + tx = width / 2
-        // tx = width/2 - targetX * scale
-        
+        // Centrar
         const tx = (this.width / 2) - (targetX * scale);
-        const ty = (this.height / 2) - (targetY * scale);
+        // Queremos que el nodo esté un poco más abajo del centro (para ver lo que crece arriba)
+        const ty = (this.height * 0.7) - (targetY * scale);
 
         this.svg.transition().duration(1000)
             .call(this.zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
