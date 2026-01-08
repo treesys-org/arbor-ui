@@ -4,6 +4,8 @@
 
 
 
+
+
 import { store } from '../store.js';
 import { parseContent } from '../utils/parser.js';
 
@@ -348,6 +350,11 @@ class ArborContent extends HTMLElement {
                    <button id="btn-ask-sage" class="px-3 py-1.5 rounded-lg bg-purple-50 dark:bg-purple-900/30 hover:bg-purple-100 dark:hover:bg-purple-900/50 text-purple-600 dark:text-purple-300 font-bold text-xs flex items-center gap-2 border border-purple-100 dark:border-purple-800 transition-colors">
                       🦉 <span class="hidden sm:inline">${ui.navSage}</span>
                    </button>
+                   
+                   <button id="btn-export-pdf" class="w-9 h-9 flex items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors" title="${ui.exportTitle}">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                   </button>
+
                    <div class="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
 
                    ${canEdit ? `
@@ -484,6 +491,11 @@ class ArborContent extends HTMLElement {
         // Sage Button
         safeBind('#btn-ask-sage', () => {
              store.setModal({ type: 'sage', mode: 'chat' });
+        });
+        
+        // Export PDF
+        safeBind('#btn-export-pdf', () => {
+            store.setModal({ type: 'export-pdf', node: this.currentNode });
         });
         
         safeBind('#btn-toggle-toc', () => this.toggleToc());

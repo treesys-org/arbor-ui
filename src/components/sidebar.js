@@ -1,7 +1,5 @@
 
 
-
-
 import { store } from '../store.js';
 
 class ArborSidebar extends HTMLElement {
@@ -56,10 +54,9 @@ class ArborSidebar extends HTMLElement {
 
                 <!-- Menu Items -->
                 <nav class="flex flex-col">
+                    <!-- Removed Sage and Help from here as requested (redundant on mobile) -->
                     <button class="js-btn-lang menu-item"><span>${store.currentLangInfo.flag}</span> <span>${ui.languageTitle}</span></button>
                     <button class="js-btn-theme menu-item"><span>${store.value.theme === 'light' ? '🌙' : '☀️'}</span> <span>Toggle Theme</span></button>
-                    <div class="h-px bg-slate-100 dark:bg-slate-700 my-1 mx-2"></div>
-                    <button class="js-btn-offline menu-item"><span>💾</span> <span>${ui.navOffline}</span></button>
                     <div class="h-px bg-slate-100 dark:bg-slate-700 my-1 mx-2"></div>
                     <button class="js-btn-contrib menu-item"><span>🐙</span> <span>${ui.navContributor}</span></button>
                     <button class="js-btn-about menu-item"><span>ℹ️</span> <span>${ui.navAbout}</span></button>
@@ -152,9 +149,6 @@ class ArborSidebar extends HTMLElement {
 
                 <div class="relative group"><button class="js-btn-sources w-10 h-10 rounded-xl flex items-center justify-center bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-600 hover:text-white transition-colors"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18M13.5-18v18M9 6.75h6M9 11.25h6M9 15.75h6" /></svg></button><span class="tooltip">${ui.navSources}</span></div>
                 
-                <!-- OFFLINE BUTTON -->
-                <div class="relative group"><button class="js-btn-offline w-10 h-10 rounded-xl flex items-center justify-center bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-600 hover:text-white transition-colors"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M12 9.75l-3 3m0 0l-3-3m3 3V2.25" /></svg></button><span class="tooltip">${ui.navOffline}</span></div>
-
                 <!-- THE SAGE CONFIG BUTTON -->
                 <div class="relative group">
                      <button class="js-btn-sage w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-purple-500 hover:text-white transition-all">🦉</button>
@@ -200,7 +194,6 @@ class ArborSidebar extends HTMLElement {
         this.querySelectorAll('.js-btn-search').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('search')));
         this.querySelectorAll('.js-btn-certs').forEach(b => b.onclick = mobileMenuAction(() => store.setViewMode('certificates')));
         this.querySelectorAll('.js-btn-sources').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('sources')));
-        this.querySelectorAll('.js-btn-offline').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('offline')));
         this.querySelectorAll('.js-btn-about').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('about')));
         this.querySelectorAll('.js-btn-lang').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('language')));
         this.querySelectorAll('.js-btn-help').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('tutorial')));

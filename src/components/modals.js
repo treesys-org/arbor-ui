@@ -3,9 +3,8 @@
 
 
 
-
-
 import { store } from '../store.js';
+import { parseArborFile, markdownToVisualHTML } from '../utils/editor-engine.js';
 import './admin-panel.js';
 
 class ArborModals extends HTMLElement {
@@ -20,7 +19,8 @@ class ArborModals extends HTMLElement {
             showImpressum: false,
             profileTab: 'garden',
             showAllCerts: false, 
-            certSearchQuery: '' 
+            certSearchQuery: '',
+            isGeneratingPdf: false
         };
         this.searchTimer = null;
         this.lastRenderKey = null;
@@ -49,6 +49,7 @@ class ArborModals extends HTMLElement {
         this.state.showImpressum = false;
         this.state.showAllCerts = false;
         this.state.certSearchQuery = '';
+        this.state.isGeneratingPdf = false;
         this.lastRenderKey = null;
         if (this.searchTimer) clearTimeout(this.searchTimer);
         store.setModal(null); 
@@ -132,7 +133,6 @@ class ArborModals extends HTMLElement {
             case 'welcome': 
             case 'tutorial': content = this.renderWelcome(ui); break;
             case 'sources': content = this.renderSources(ui); break;
-            case 'offline': content = this.renderOffline(ui); break;
             case 'about': content = this.renderAbout(ui); break;
             case 'language': content = this.renderLanguage(ui); break;
             case 'impressum': content = this.renderImpressum(ui); break;
@@ -140,6 +140,7 @@ class ArborModals extends HTMLElement {
             case 'profile': content = this.renderProfile(ui); break;
             case 'emptyModule': content = this.renderEmptyModule(ui, modal.node); break;
             case 'certificate': content = this.renderSingleCertificate(ui, modal.moduleId); break;
+            case 'export-pdf': content = this.renderExportPdf(ui, modal.node); break;
             default: content = `<div class="p-8">Unknown modal: ${type}</div>`;
         }
 
@@ -334,11 +335,167 @@ class ArborModals extends HTMLElement {
         });
     }
 
+    // --- PDF EXPORT MODAL ---
+    renderExportPdf(ui, node) {
+        if (!node) return '';
+        
+        if (this.state.isGeneratingPdf) {
+             return `
+             <div class="p-12 flex flex-col items-center justify-center text-center">
+                 <div class="w-16 h-16 border-4 border-slate-200 border-t-purple-600 rounded-full animate-spin mb-6"></div>
+                 <h2 class="text-xl font-bold text-slate-800 dark:text-white animate-pulse">${ui.generatingPdf}</h2>
+             </div>`;
+        }
+
+        return `
+        <div class="p-8 text-center">
+            <h2 class="text-2xl font-black mb-2 text-slate-800 dark:text-white">${ui.exportTitle}</h2>
+            <p class="text-slate-500 dark:text-slate-400 mb-8">${ui.exportDesc}</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button id="btn-export-lesson" class="bg-slate-50 dark:bg-slate-800 hover:bg-purple-50 dark:hover:bg-purple-900/20 border-2 border-slate-100 dark:border-slate-700 hover:border-purple-500 dark:hover:border-purple-500 rounded-2xl p-6 transition-all group active:scale-95 text-left">
+                    <div class="w-12 h-12 bg-white dark:bg-slate-700 rounded-full flex items-center justify-center text-2xl mb-4 shadow-sm group-hover:scale-110 transition-transform">📄</div>
+                    <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-1 group-hover:text-purple-600 dark:group-hover:text-purple-400">${ui.exportLesson}</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">${ui.exportLessonDesc}</p>
+                </button>
+                
+                <button id="btn-export-module" class="bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 border-2 border-slate-100 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 rounded-2xl p-6 transition-all group active:scale-95 text-left">
+                     <div class="w-12 h-12 bg-white dark:bg-slate-700 rounded-full flex items-center justify-center text-2xl mb-4 shadow-sm group-hover:scale-110 transition-transform">📚</div>
+                     <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400">${ui.exportModule}</h3>
+                     <p class="text-xs text-slate-500 dark:text-slate-400">${ui.exportModuleDesc}</p>
+                </button>
+            </div>
+        </div>
+        `;
+    }
+
+    async handleExport(mode, node) {
+        this.updateState({ isGeneratingPdf: true });
+        
+        try {
+            let nodesToPrint = [];
+            
+            if (mode === 'lesson') {
+                nodesToPrint = [node];
+            } else {
+                // Fetch Module
+                const parentId = node.parentId;
+                let parentNode = store.findNode(parentId);
+                
+                if (!parentNode) {
+                     // Fallback if current node is root or orphan, just print it
+                     nodesToPrint = [node];
+                } else {
+                     // Ensure children are loaded
+                     if (parentNode.hasUnloadedChildren) {
+                         await store.loadNodeChildren(parentNode);
+                     }
+                     // Get all children (lessons)
+                     // If children are loaded, we assume their structure is in memory.
+                     // IMPORTANT: We need their content. Usually only current lesson content is full in memory?
+                     // Actually, Arbor's logic usually fetches content on demand for leaves. 
+                     // BUT, the builder script puts content inside the node object for leaves! 
+                     // So iterating parentNode.children should give us nodes with content property.
+                     
+                     // Filter only leaves/exams
+                     const siblings = parentNode.children.filter(n => n.type === 'leaf' || n.type === 'exam');
+                     
+                     // If for some reason content is missing (e.g. huge tree lazy loading optimization in future), we might need to fetch.
+                     // For now, assuming standard Arbor behavior where leaves have content property.
+                     
+                     // Edge case: If content is missing, we fetch it (simulated)
+                     const promises = siblings.map(async (child) => {
+                         if (!child.content && child.sourcePath) {
+                              // We can try to fetch the raw file if missing
+                              // This relies on knowing the raw URL pattern, which is tricky without the source URL logic.
+                              // Fallback: Skip empty content or assume it is there.
+                              return child; 
+                         }
+                         return child;
+                     });
+                     
+                     nodesToPrint = await Promise.all(promises);
+                }
+            }
+
+            this.generatePrintDocument(nodesToPrint);
+            this.close(); // Close modal on success (print window opens)
+
+        } catch (e) {
+            console.error(e);
+            alert("Error generating PDF: " + e.message);
+            this.close();
+        }
+    }
+
+    generatePrintDocument(nodes) {
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            alert("Pop-up blocked. Please allow pop-ups for printing.");
+            return;
+        }
+
+        const contentHtml = nodes.map(n => {
+            const parsed = parseArborFile(n.content || '');
+            const bodyHtml = markdownToVisualHTML(parsed.body);
+            return `
+            <article class="lesson-page">
+                <header>
+                    <h1>${n.name}</h1>
+                    ${n.path ? `<p class="meta">${n.path}</p>` : ''}
+                </header>
+                <div class="content">
+                    ${bodyHtml}
+                </div>
+            </article>
+            `;
+        }).join('<div class="page-break"></div>');
+
+        const styles = `
+            @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap');
+            body { font-family: 'Nunito', sans-serif; color: #1e293b; line-height: 1.6; max-width: 800px; mx-auto; padding: 40px; }
+            h1 { font-size: 24pt; font-weight: 900; margin-bottom: 10px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
+            h2 { font-size: 18pt; margin-top: 20px; color: #334155; }
+            h3 { font-size: 14pt; color: #475569; }
+            p { margin-bottom: 15px; text-align: justify; }
+            img { max-width: 100%; height: auto; border-radius: 8px; margin: 20px 0; }
+            blockquote { border-left: 4px solid #fbbf24; padding-left: 15px; font-style: italic; color: #4b5563; margin: 20px 0; }
+            code, pre { background: #f1f5f9; padding: 2px 5px; border-radius: 4px; font-family: monospace; }
+            pre { padding: 15px; overflow-x: auto; }
+            .meta { font-size: 9pt; color: #94a3b8; margin-bottom: 30px; text-transform: uppercase; font-weight: bold; }
+            .lesson-page { margin-bottom: 50px; }
+            .page-break { page-break-after: always; height: 0; margin: 0; padding: 0; }
+            
+            /* Hide UI elements from print */
+            @media print {
+                body { padding: 0; max-width: 100%; }
+                a { text-decoration: none; color: black; }
+                .arbor-quiz-edit, .arbor-media-edit { border: 1px solid #ccc; break-inside: avoid; }
+            }
+        `;
+
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Arbor Export</title>
+                <style>${styles}</style>
+            </head>
+            <body>
+                ${contentHtml}
+                <script>
+                    window.onload = function() { window.print(); window.close(); }
+                </script>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+    }
+
     bindEvents(type, ui) {
         if (type === 'search') this.bindSearchEvents();
         if (type === 'welcome' || type === 'tutorial') this.bindWelcomeEvents(ui);
         if (type === 'sources') this.bindSourcesEvents();
-        if (type === 'offline') this.bindOfflineEvents();
         if (type === 'profile') this.bindProfileEvents();
         if (type === 'language') {
             this.querySelectorAll('.btn-lang-sel').forEach(b => b.onclick = (e) => {
@@ -349,6 +506,13 @@ class ArborModals extends HTMLElement {
         if (type === 'impressum') {
             const btn = this.querySelector('#btn-show-imp');
             if(btn) btn.onclick = () => this.updateState({ showImpressum: true });
+        }
+        if (type === 'export-pdf') {
+             const btnLesson = this.querySelector('#btn-export-lesson');
+             if(btnLesson) btnLesson.onclick = () => this.handleExport('lesson', store.value.modal.node);
+             
+             const btnModule = this.querySelector('#btn-export-module');
+             if(btnModule) btnModule.onclick = () => this.handleExport('module', store.value.modal.node);
         }
     }
 
@@ -513,7 +677,7 @@ class ArborModals extends HTMLElement {
         <div class="p-6 h-full flex flex-col">
             <h2 class="text-2xl font-black mb-2 dark:text-white">${ui.sourceManagerTitle}</h2>
             <p class="text-sm text-slate-500 mb-6">${ui.sourceManagerDesc}</p>
-            
+
             <div class="flex-1 overflow-y-auto custom-scrollbar space-y-3 mb-4 pr-1">
                 ${sources.map(s => `
                     <div class="p-4 rounded-xl border-2 transition-all group relative ${s.id === activeId ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20' : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900'}">
@@ -570,55 +734,6 @@ class ArborModals extends HTMLElement {
                 if (url) {
                     store.addSource(url);
                     this.querySelector('#inp-source-url').value = ''; 
-                }
-            };
-        }
-    }
-    
-    // --- OFFLINE / DOWNLOAD ---
-    renderOffline(ui) {
-        return `
-        <div class="p-8 text-center flex flex-col items-center justify-center h-full relative">
-             <div class="w-20 h-20 bg-green-50 dark:bg-green-900/20 rounded-full flex items-center justify-center text-4xl mb-6 shadow-inner border border-green-100 dark:border-green-800 text-green-600">💾</div>
-             <h2 class="text-2xl font-black mb-2 dark:text-white">${ui.offlineTitle}</h2>
-             <p class="text-sm text-slate-500 dark:text-slate-400 mb-8 max-w-xs leading-relaxed">${ui.offlineDesc}</p>
-             
-             <div class="w-full max-w-sm space-y-3">
-                 <button id="btn-download-offline" class="w-full py-4 bg-green-600 text-white font-bold rounded-xl shadow-lg hover:bg-green-500 active:scale-95 transition-all flex items-center justify-center gap-2">
-                    <span>⬇️</span> ${ui.offlineBtnDownload}
-                 </button>
-                 
-                 <button id="btn-delete-offline" class="w-full py-4 bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400 font-bold rounded-xl transition-colors flex items-center justify-center gap-2">
-                    <span>🗑️</span> ${ui.offlineBtnDelete}
-                 </button>
-             </div>
-             
-             <div class="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800 w-full max-w-xs">
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">${ui.offlineStatus}</p>
-                <div class="flex items-center justify-center gap-2">
-                     <span class="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600"></span>
-                     <span class="text-xs text-slate-500">IndexedDB: ArborDB</span>
-                </div>
-             </div>
-        </div>
-        `;
-    }
-    
-    bindOfflineEvents() {
-        const btnDownload = this.querySelector('#btn-download-offline');
-        if (btnDownload) {
-             btnDownload.onclick = () => {
-                 store.downloadCurrentTree();
-                 this.close();
-             };
-        }
-        
-        const btnDeleteOffline = this.querySelector('#btn-delete-offline');
-        if (btnDeleteOffline) {
-            btnDeleteOffline.onclick = () => {
-                if(confirm("Clear offline cache?")) {
-                    store.deleteOfflineData();
-                    this.close();
                 }
             };
         }

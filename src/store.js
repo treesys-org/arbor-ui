@@ -1,10 +1,8 @@
 
 
-
 import { UI_LABELS, AVAILABLE_LANGUAGES } from './i18n.js';
 import { github } from './services/github.js';
 import { aiService } from './services/ai.js';
-import { db } from './services/db.js';
 
 const OFFICIAL_DOMAINS = [
     'treesys-org.github.io',
@@ -176,43 +174,22 @@ class Store extends EventTarget {
         this.loadData(source);
     }
 
-    // --- FETCH WITH OFFLINE SUPPORT ---
-    async fetchWithCache(url, saveToCache = false) {
-        // 1. Check IndexedDB first
-        try {
-            const cached = await db.get(url);
-            if (cached) {
-                return { ok: true, json: async () => cached, text: async () => JSON.stringify(cached) };
-            }
-        } catch(e) { console.warn('DB Read Error', e); }
-
-        // 2. Network Fetch
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
-
-        const res = await fetch(url, { signal: controller.signal });
-        clearTimeout(timeoutId);
-
-        if (!res.ok) return res;
-
-        // 3. Optional Cache Save (for explicit downloads)
-        if (saveToCache) {
-            const clone = res.clone();
-            const data = await clone.json();
-            await db.set(url, data);
-        }
-        
-        return res;
-    }
-
     async loadData(source) {
         this.update({ loading: true, error: null, activeSource: source });
         localStorage.setItem('arbor-active-source-id', source.id);
 
         try {
+            // OPTIMIZATION: Removed aggressive cache busting (Date.now())
+            // This allows the browser to cache the main tree skeleton.
+            // Only add timestamp if explicit reload is requested (future feature).
             const url = source.url; 
             
-            const res = await this.fetchWithCache(url);
+            // Add Timeout to prevent "Eternity" hanging
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
+            const res = await fetch(url, { signal: controller.signal });
+            clearTimeout(timeoutId);
 
             if (!res.ok) throw new Error(`Failed to fetch data from ${source.name} (Status ${res.status}).`);
             const json = await res.json();
@@ -253,92 +230,6 @@ class Store extends EventTarget {
             console.error(e);
             const msg = e.name === 'AbortError' ? 'Connection timed out (15s).' : e.message;
             this.update({ loading: false, error: msg });
-        }
-    }
-    
-    // --- OFFLINE DOWNLOAD LOGIC ---
-    async downloadCurrentTree() {
-        const source = this.state.activeSource;
-        if (!source || !this.state.data) return;
-        
-        this.update({ lastActionMessage: this.ui.downloading + ' 0%' });
-        
-        try {
-            // 1. Download Root (Main Data File)
-            const mainUrl = source.url;
-            await this.fetchWithCache(mainUrl, true);
-            
-            // 2. Recursively Find all API Paths in current Language Tree
-            const nodesToFetch = [];
-            
-            // Helper to collect all needed URLs
-            const collect = (node) => {
-                if (node.apiPath && node.hasUnloadedChildren) {
-                    nodesToFetch.push(node.apiPath);
-                }
-                if (node.children) {
-                    node.children.forEach(collect);
-                }
-            };
-            
-            collect(this.state.data);
-            
-            // 3. Process Queue
-            const baseDir = mainUrl.substring(0, mainUrl.lastIndexOf('/') + 1);
-            let count = 0;
-            const total = nodesToFetch.length;
-            
-            // We need a loop that handles new children being discovered
-            // But standard Arbor architecture has pre-calculated apiPaths in the parent JSON?
-            // Actually, `collect` only finds currently loaded ones. 
-            // We need to fetch, parse, and check *those* results for more children.
-            
-            const queue = [...nodesToFetch];
-            const visited = new Set();
-            
-            while(queue.length > 0) {
-                const apiPath = queue.shift();
-                if (visited.has(apiPath)) continue;
-                visited.add(apiPath);
-                
-                const url = `${baseDir}nodes/${apiPath}.json`;
-                
-                // Fetch and Save
-                const res = await this.fetchWithCache(url, true);
-                if (res.ok) {
-                    const children = await res.json();
-                    
-                    // Look for nested branches in the downloaded data
-                    children.forEach(child => {
-                        if (child.apiPath && child.hasUnloadedChildren) {
-                            queue.push(child.apiPath);
-                        }
-                    });
-                }
-                
-                count++;
-                if (count % 5 === 0) {
-                     this.update({ lastActionMessage: `${this.ui.downloading} ${Math.round(count / (count + queue.length) * 100)}%` });
-                }
-            }
-            
-            this.update({ lastActionMessage: this.ui.downloadSuccess });
-            setTimeout(() => this.update({ lastActionMessage: null }), 5000);
-            
-        } catch(e) {
-            console.error("Download failed", e);
-            this.update({ lastActionMessage: this.ui.downloadError });
-            setTimeout(() => this.update({ lastActionMessage: null }), 4000);
-        }
-    }
-    
-    async deleteOfflineData() {
-        try {
-            await db.clear();
-            this.update({ lastActionMessage: "Offline cache cleared." });
-            setTimeout(() => this.update({ lastActionMessage: null }), 3000);
-        } catch(e) {
-            console.error(e);
         }
     }
 
@@ -502,11 +393,10 @@ class Store extends EventTarget {
         try {
             const sourceUrl = this.state.activeSource.url;
             const baseDir = sourceUrl.substring(0, sourceUrl.lastIndexOf('/') + 1);
-            
-            // USE FETCH WITH CACHE
+            // OPTIMIZATION: Removed cache busting here too for children
             const url = `${baseDir}nodes/${node.apiPath}.json`;
-            const res = await this.fetchWithCache(url);
             
+            const res = await fetch(url);
             if (res.ok) {
                 let text = await res.text();
                 if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
@@ -571,7 +461,7 @@ class Store extends EventTarget {
                 const firstChar = prefix.charAt(0);
                 const url = `${baseDir}search/${lang}/${firstChar}/${prefix}.json`;
                 
-                const res = await this.fetchWithCache(url); // Use Cached Fetch here too
+                const res = await fetch(url);
                 if (res.ok) {
                     const shard = await res.json();
                     
@@ -624,7 +514,7 @@ class Store extends EventTarget {
 
             try {
                 const url = `${baseDir}search/${lang}/${c}/${prefix}.json`;
-                const res = await this.fetchWithCache(url);
+                const res = await fetch(url);
                 if (res.ok) {
                     const shard = await res.json();
                     const normalized = shard.map(item => ({
@@ -812,7 +702,7 @@ class Store extends EventTarget {
         // 1. Mark the branch folder itself
         this.state.completedNodes.add(branchId);
 
-        constbranchNode = this.findNode(branchId);
+        const branchNode = this.findNode(branchId);
         
         if (branchNode) {
             // Helper to recursively mark loaded nodes
