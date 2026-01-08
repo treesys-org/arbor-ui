@@ -1,1032 +1,715 @@
 
 
+
+
+
+
 import { store } from '../store.js';
-import { github } from '../services/github.js';
+import './admin-panel.js';
 
 class ArborModals extends HTMLElement {
     constructor() {
         super();
-        this.tutorialStep = 0;
-        this.certSearch = '';
-        this.certShowAll = false;
-        this.searchQuery = '';
-        this.searchResults = [];
-        this.pendingSourceUrl = null;
-        this.showSecurityWarning = false;
-        this.showImpressumDetails = false;
-        
-        this.profileTab = 'garden'; // 'garden' | 'export' | 'import'
-        
-        // Search State
-        this.isBroadSearchLoading = false;
-        this.broadSearchMessage = null;
-
-        this.currentRenderKey = null; // Cache to prevent re-rendering identical states
+        this.state = {
+            step: 0,
+            searchQuery: '',
+            searchResults: [],
+            pendingUrl: null,
+            showWarning: false,
+            showImpressum: false,
+            profileTab: 'garden',
+            showAllCerts: false, 
+            certSearchQuery: '' 
+        };
+        this.searchTimer = null;
+        this.lastRenderKey = null;
     }
 
     connectedCallback() {
-        store.addEventListener('state-change', () => this.render());
+        store.addEventListener('state-change', () => {
+             // Only full re-render if we are NOT in search mode with an active input
+             // or if the modal type actually changed.
+             const currentModal = store.value.modal;
+             const isSearch = currentModal === 'search' || currentModal?.type === 'search';
+             // Simple check: if we are already searching, don't re-render whole component on state change
+             // unless the modal ITSELF changed.
+             if (isSearch && this.querySelector('#inp-search')) {
+                 return; 
+             }
+             this.render();
+        });
     }
 
-    close() { store.setModal(null); }
+    close() { 
+        this.state.searchQuery = '';
+        this.state.searchResults = [];
+        this.state.pendingUrl = null;
+        this.state.showWarning = false;
+        this.state.showImpressum = false;
+        this.state.showAllCerts = false;
+        this.state.certSearchQuery = '';
+        this.lastRenderKey = null;
+        if (this.searchTimer) clearTimeout(this.searchTimer);
+        store.setModal(null); 
+    }
+
+    updateState(partial) {
+        this.state = { ...this.state, ...partial };
+        // If we are in search, manual update of list instead of full re-render
+        if (store.value.modal === 'search' || store.value.modal?.type === 'search') {
+            if (partial.searchResults) {
+                this.updateSearchResultsDOM();
+                return;
+            }
+        }
+        this.render();
+    }
     
     render() {
-        const modal = store.value.modal;
-        const viewMode = store.value.viewMode;
-        const previewNode = store.value.previewNode;
-
-        // 1. Handle Sage Collision: If Sage is active, this component should stay out of the way
-        // Sage is handled by its own component <arbor-sage>
-        if (modal && (modal === 'sage' || modal.type === 'sage')) {
-            if (this.innerHTML !== '') {
-                this.innerHTML = '';
-                this.currentRenderKey = 'sage-hidden';
-            }
-            return;
-        }
-
-        // 2. Generate a Unique Key for current state to prevent flickering (re-rendering identical content)
-        const stateKey = JSON.stringify({
-            p: previewNode ? previewNode.id : null,
-            v: viewMode,
-            m: modal,
-            l: store.value.lang,
-            i: { 
-                step: this.tutorialStep, 
-                tab: this.profileTab, 
-                sq: this.searchQuery, 
-                sr: this.searchResults.length,
-                sec: this.showSecurityWarning,
-                imp: this.showImpressumDetails,
-                certS: this.certSearch,
-                certF: this.certShowAll
-            }
-        });
-
-        if (stateKey === this.currentRenderKey) return; 
-        this.currentRenderKey = stateKey;
-
-        // --- RENDER LOGIC START ---
-
-        if (previewNode) {
-            this.renderPreview(previewNode);
-            return;
-        }
-
-        if (viewMode === 'certificates' && modal?.type !== 'certificate') {
-            this.renderCertificatesGallery();
-            return;
-        }
-
-        if (!modal) {
-            this.innerHTML = '';
-            this.showImpressumDetails = false;
-            return;
-        }
-
-        const type = typeof modal === 'string' ? modal : modal.type;
+        const { modal, viewMode, previewNode } = store.value;
         const ui = store.ui;
-        
-        if (type === 'editor') return; 
 
-        if (type === 'search') {
-            this.renderSearch(ui);
-            return;
+        // 1. Sage (AI) Modal
+        if (modal && (modal === 'sage' || modal.type === 'sage')) { 
+            if (this.lastRenderKey !== 'sage') {
+                this.innerHTML = ''; 
+                this.lastRenderKey = 'sage';
+            }
+            return; 
         }
-
-        let content = '';
         
-        if (type === 'welcome' || type === 'tutorial') content = this.renderWelcome(ui);
+        // 2. Lesson Preview Modal (The "Enter" Screen)
+        if (previewNode) { 
+            const key = `preview-${previewNode.id}`;
+            if (this.lastRenderKey !== key) {
+                this.renderPreviewModal(previewNode, ui);
+                this.lastRenderKey = key;
+            }
+            return; 
+        }
         
-        else if (type === 'sources') content = this.renderSources(ui);
-        else if (type === 'about') content = this.renderAbout(ui);
-        else if (type === 'language') content = this.renderLanguage(ui);
-        else if (type === 'impressum') content = this.renderImpressum(ui);
-        else if (type === 'contributor') content = this.renderContributor(ui);
-        else if (type === 'profile') content = this.renderProfile(ui);
-        else if (type === 'certificate') {
-            this.renderSingleCertificate(ui, modal.moduleId); 
+        // 3. Certificates Gallery
+        if (viewMode === 'certificates' && modal?.type !== 'certificate') { 
+            // Always render certificates view to handle internal state updates (like search filter)
+            // But use key to debounce simple prop changes
+            const certKey = `certificates-${this.state.showAllCerts}-${this.state.certSearchQuery}`;
+            if (this.lastRenderKey !== certKey) {
+                this.renderCertificatesGallery(ui); 
+                this.lastRenderKey = certKey;
+            }
             return; 
         }
 
+        // 4. No Modal Check
+        if (!modal) { 
+            if (this.innerHTML !== '') {
+                this.innerHTML = ''; 
+                this.lastRenderKey = null;
+            }
+            return; 
+        }
+        
+        // 5. Editor (Handled by its own component usually, but ensures cleanup if needed)
+        if (modal.type === 'editor') return;
+
+        // --- RENDER KEY CHECK for Standard Modals ---
+        const currentKey = JSON.stringify({
+            modalType: modal.type || modal,
+            modalNodeId: modal.node ? modal.node.id : null,
+            state: this.state,
+            lang: store.value.lang
+        });
+
+        if (currentKey === this.lastRenderKey) return;
+        this.lastRenderKey = currentKey;
+
+        const type = modal.type || modal;
+        let content = '';
+
+        switch (type) {
+            case 'search': content = this.renderSearch(ui); break;
+            case 'welcome': 
+            case 'tutorial': content = this.renderWelcome(ui); break;
+            case 'sources': content = this.renderSources(ui); break;
+            case 'about': content = this.renderAbout(ui); break;
+            case 'language': content = this.renderLanguage(ui); break;
+            case 'impressum': content = this.renderImpressum(ui); break;
+            case 'contributor': content = '<arbor-admin-panel class="w-full h-full flex flex-col"></arbor-admin-panel>'; break;
+            case 'profile': content = this.renderProfile(ui); break;
+            case 'emptyModule': content = this.renderEmptyModule(ui, modal.node); break;
+            case 'certificate': content = this.renderSingleCertificate(ui, modal.moduleId); break;
+            default: content = `<div class="p-8">Unknown modal: ${type}</div>`;
+        }
+
+        const sizeClass = type === 'contributor' && store.value.githubUser ? 'w-[95vw] h-[90vh] max-w-6xl' : 'max-w-lg';
+
+        // Custom styling wrapper for Search vs Standard modals
+        if (type === 'search') {
+             this.innerHTML = `
+             <div class="fixed inset-0 z-[70] flex items-start justify-center pt-20 bg-slate-900/80 backdrop-blur-md p-4 animate-in fade-in">
+                <div class="w-full max-w-2xl flex flex-col max-h-[80vh] relative">
+                    ${content}
+                </div>
+             </div>`;
+             this.bindEvents(type, ui);
+             return;
+        }
+
+        // Standard Modal Wrapper
         this.innerHTML = `
         <div class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
-            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full relative overflow-hidden flex flex-col max-h-[90vh]">
-                <button class="btn-close absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors z-20">✕</button>
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl ${sizeClass} w-full relative overflow-hidden flex flex-col max-h-[95vh] border border-slate-200 dark:border-slate-800">
+                ${type !== 'contributor' ? `<button class="btn-close absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 z-20 transition-colors">✕</button>` : ''}
                 ${content}
             </div>
         </div>`;
 
         const closeBtn = this.querySelector('.btn-close');
-        if(closeBtn) closeBtn.onclick = () => this.close();
+        if (closeBtn) closeBtn.onclick = () => this.close();
         
+        this.bindEvents(type, ui);
+    }
+
+    // --- PREVIEW LOGIC (Fixing the "Click Course" Issue) ---
+    renderPreviewModal(node, ui) {
+        const isComplete = store.isCompleted(node.id);
+        const icon = node.icon || (node.type === 'exam' ? '⚔️' : '📄');
+        const btnText = isComplete ? ui.lessonFinished : ui.lessonEnter;
+        const btnClass = isComplete ? 'bg-green-600 hover:bg-green-500' : 'bg-purple-600 hover:bg-purple-500';
+
+        this.innerHTML = `
+        <div class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-sm w-full relative overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800">
+                <button class="btn-cancel absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 z-20 transition-colors">✕</button>
+                
+                <div class="p-8 text-center">
+                    <div class="w-24 h-24 mx-auto bg-slate-50 dark:bg-slate-800 rounded-3xl flex items-center justify-center text-5xl mb-6 shadow-inner border border-slate-100 dark:border-slate-700/50 transform rotate-3">
+                        ${icon}
+                    </div>
+                    
+                    <h2 class="text-2xl font-black text-slate-800 dark:text-white mb-3 leading-tight">${node.name}</h2>
+                    
+                    <p class="text-slate-500 dark:text-slate-400 mb-8 leading-relaxed text-sm max-w-[260px] mx-auto">
+                        ${node.description || ui.noDescription}
+                    </p>
+
+                    <div class="flex gap-3 justify-center w-full">
+                        <button class="btn-enter w-full py-4 rounded-2xl font-bold text-white shadow-xl shadow-purple-500/20 transition-transform active:scale-95 flex items-center justify-center gap-2 ${btnClass}">
+                            <span>${isComplete ? '✓' : '🚀'}</span> ${btnText}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+
+        this.querySelector('.btn-enter').onclick = () => store.enterLesson();
+        this.querySelectorAll('.btn-cancel').forEach(b => b.onclick = () => store.closePreview());
+    }
+
+    // --- CERTIFICATES GALLERY ---
+    renderCertificatesGallery(ui) {
+        // Filter by Exam Type (isCertifiable)
+        const allCertifiable = store.getModulesStatus().filter(m => m.isCertifiable);
+        
+        // Filter by Search
+        const query = this.state.certSearchQuery.toLowerCase();
+        let filtered = allCertifiable.filter(m => m.name.toLowerCase().includes(query));
+        
+        // Toggle Logic: Show All vs Earned
+        const showAll = this.state.showAllCerts;
+        const visibleModules = showAll ? filtered : filtered.filter(m => m.isComplete);
+        
+        // Button Text logic: "Mis logros" implies going BACK to earned only. "Ver todos" implies showing all.
+        const toggleBtnText = showAll ? ui.showEarned : ui.showAll;
+
+        let listHtml = '';
+        if (visibleModules.length === 0) {
+            listHtml = `
+            <div class="flex flex-col items-center justify-center h-64 text-center">
+                <div class="text-6xl mb-4 opacity-30 grayscale">🎓</div>
+                <h2 class="text-xl font-bold mb-2 text-slate-800 dark:text-white">${ui.noResults}</h2>
+            </div>`;
+        } else {
+            listHtml = `
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto custom-scrollbar p-1">
+                ${visibleModules.map(m => {
+                    const isLocked = !m.isComplete;
+                    return `
+                    <div class="border-2 ${isLocked ? 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900/50' : 'border-yellow-400/30 bg-yellow-50 dark:bg-yellow-900/10'} p-4 rounded-xl flex items-center gap-4 relative overflow-hidden group transition-colors">
+                         <div class="absolute -right-4 -bottom-4 text-8xl opacity-10 rotate-12 pointer-events-none select-none ${isLocked ? 'grayscale' : ''}">📜</div>
+                         
+                         <div class="w-16 h-16 ${isLocked ? 'bg-slate-200 dark:bg-slate-800 grayscale opacity-50' : 'bg-white dark:bg-slate-800'} rounded-full flex items-center justify-center text-3xl shadow-sm border ${isLocked ? 'border-slate-300 dark:border-slate-600' : 'border-yellow-200 dark:border-yellow-700/50'} relative z-10 shrink-0">
+                            ${isLocked ? '🔒' : (m.icon || '🎓')}
+                         </div>
+                         
+                         <div class="flex-1 relative z-10 min-w-0">
+                             <h3 class="font-bold ${isLocked ? 'text-slate-500 dark:text-slate-500' : 'text-slate-800 dark:text-white'} leading-tight mb-1 truncate">${m.name}</h3>
+                             <p class="text-[10px] uppercase font-bold ${isLocked ? 'text-slate-400' : 'text-yellow-600 dark:text-yellow-400'} mb-2">${isLocked ? ui.lockedCert : ui.lessonFinished}</p>
+                             
+                             ${isLocked ? `
+                             <button class="text-xs font-bold text-slate-400 bg-slate-200 dark:bg-slate-800 px-3 py-1.5 rounded-lg cursor-not-allowed opacity-70">
+                                ${ui.viewCert}
+                             </button>
+                             ` : `
+                             <button class="btn-view-cert text-xs font-bold text-white bg-slate-900 dark:bg-slate-700 hover:bg-blue-600 px-3 py-1.5 rounded-lg transition-colors" data-id="${m.id}">
+                                ${ui.viewCert}
+                             </button>
+                             `}
+                         </div>
+                    </div>
+                `;
+                }).join('')}
+            </div>`;
+        }
+
+        this.innerHTML = `
+        <div class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-3xl w-full relative overflow-hidden flex flex-col max-h-[85vh] border border-slate-200 dark:border-slate-800">
+                <div class="p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex flex-col gap-4 shrink-0">
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center gap-3">
+                             <span class="text-3xl">🏆</span>
+                             <h2 class="text-xl font-black text-slate-800 dark:text-white">${ui.navCertificates}</h2>
+                        </div>
+                        <button class="btn-close-certs p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 transition-colors">✕</button>
+                    </div>
+
+                    <div class="flex gap-3">
+                        <div class="relative flex-1">
+                            <span class="absolute left-3 top-2.5 text-slate-400 text-sm">🔍</span>
+                            <input id="inp-cert-search" type="text" placeholder="${ui.searchCert}" 
+                                class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-2 pl-9 pr-4 text-sm font-bold text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-sky-500"
+                                value="${this.state.certSearchQuery}">
+                        </div>
+                        <button id="btn-toggle-certs" class="px-4 py-2 rounded-xl bg-slate-800 dark:bg-slate-700 text-white font-bold text-xs whitespace-nowrap hover:bg-slate-700 dark:hover:bg-slate-600 transition-colors shadow-sm">
+                            ${toggleBtnText}
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="p-6 flex-1 overflow-y-auto">
+                    ${listHtml}
+                </div>
+            </div>
+        </div>`;
+        
+        // Bindings
+        this.querySelector('.btn-close-certs').onclick = () => store.setViewMode('explore');
+        
+        const searchInput = this.querySelector('#inp-cert-search');
+        if (searchInput) {
+            searchInput.oninput = (e) => {
+                this.updateState({ certSearchQuery: e.target.value });
+                setTimeout(() => {
+                    const el = this.querySelector('#inp-cert-search');
+                    if(el) {
+                         el.focus();
+                         el.selectionStart = el.selectionEnd = el.value.length;
+                    }
+                }, 10);
+            };
+            searchInput.focus();
+        }
+
+        const toggleBtn = this.querySelector('#btn-toggle-certs');
+        if (toggleBtn) {
+            toggleBtn.onclick = () => this.updateState({ showAllCerts: !this.state.showAllCerts });
+        }
+
+        this.querySelectorAll('.btn-view-cert').forEach(b => {
+             b.onclick = (e) => store.setModal({ type: 'certificate', moduleId: e.currentTarget.dataset.id });
+        });
+    }
+
+    bindEvents(type, ui) {
+        if (type === 'search') this.bindSearchEvents();
         if (type === 'welcome' || type === 'tutorial') this.bindWelcomeEvents(ui);
         if (type === 'sources') this.bindSourcesEvents();
-        if (type === 'contributor') this.bindContributorEvents();
         if (type === 'profile') this.bindProfileEvents();
-        
-        if (type === 'impressum') {
-            const btnImp = this.querySelector('#btn-show-impressum');
-            if(btnImp) btnImp.onclick = () => {
-                this.showImpressumDetails = true;
-                this.render();
-            };
-        }
         if (type === 'language') {
             this.querySelectorAll('.btn-lang-sel').forEach(b => b.onclick = (e) => {
                 store.setLanguage(e.currentTarget.dataset.code);
                 this.close();
             });
         }
+        if (type === 'impressum') {
+            const btn = this.querySelector('#btn-show-imp');
+            if(btn) btn.onclick = () => this.updateState({ showImpressum: true });
+        }
     }
 
-    renderWelcome(ui) {
-        // Build language buttons
-        const langButtons = store.availableLanguages.map(l => `
-            <button class="btn-welcome-lang text-xl transition-all duration-200 p-1.5 rounded-lg ${store.value.lang === l.code ? 'bg-white dark:bg-slate-800 shadow-sm' : 'opacity-40 hover:opacity-100'}" data-code="${l.code}" title="${l.nativeName}">
-                ${l.flag}
-            </button>
-        `).join('');
-
-        const steps = ui.welcomeSteps;
-        const currentStep = steps[this.tutorialStep];
-        const isLast = this.tutorialStep === steps.length - 1;
-
-        // Custom Visuals for the AI Pitch Step
-        const isAiPitch = currentStep.isAiPitch;
-        const iconClass = isAiPitch 
-            ? "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 animate-pulse" 
-            : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-200";
-
+    // --- SEARCH ---
+    renderSearch(ui) {
         return `
-        <div class="flex flex-col h-full bg-slate-50 dark:bg-slate-900">
-            <!-- Header Image / Icon -->
-            <div class="pt-8 pb-4 flex flex-col items-center justify-center bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 rounded-t-3xl relative">
-                
-                <!-- Top Right Controls -->
-                <div class="absolute top-4 right-14 flex items-center gap-2 z-30">
-                    <!-- Language Switcher -->
-                    <div class="flex gap-1 bg-slate-50 dark:bg-slate-900/50 p-1 rounded-xl border border-slate-100 dark:border-slate-800">
-                        ${langButtons}
-                    </div>
-                    <!-- Theme Switcher -->
-                    <div class="flex gap-1 bg-slate-50 dark:bg-slate-900/50 p-1 rounded-xl border border-slate-100 dark:border-slate-800">
-                        <button class="btn-welcome-theme text-xl transition-all duration-200 p-1.5 rounded-lg ${store.value.theme === 'light' ? 'bg-white dark:bg-slate-800 shadow-sm' : 'opacity-40 hover:opacity-100'}" data-theme="light" title="Light Mode">☀️</button>
-                        <button class="btn-welcome-theme text-xl transition-all duration-200 p-1.5 rounded-lg ${store.value.theme === 'dark' ? 'bg-white dark:bg-slate-800 shadow-sm' : 'opacity-40 hover:opacity-100'}" data-theme="dark" title="Dark Mode">🌙</button>
-                    </div>
-                </div>
-
-                <!-- Animated Owl Avatar -->
-                <div class="w-24 h-24 rounded-full ${iconClass} flex items-center justify-center text-5xl mb-4 shadow-xl border-4 border-white dark:border-slate-800 transition-all duration-500">
-                    ${currentStep.icon}
-                </div>
-                
-                <h2 class="text-xl font-black text-slate-800 dark:text-white tracking-tight uppercase">${ui.tutorialTitle}</h2>
-                <div class="flex gap-1 mt-2">
-                    ${steps.map((_, i) => `
-                        <div class="h-1.5 rounded-full transition-all duration-300 ${i === this.tutorialStep ? 'w-6 bg-slate-800 dark:bg-white' : 'w-2 bg-slate-200 dark:bg-slate-700'}"></div>
-                    `).join('')}
-                </div>
-            </div>
-            
-            <!-- Narrative Content -->
-            <div class="flex-1 overflow-y-auto p-8 flex flex-col items-center text-center justify-center animate-in fade-in slide-in-from-right-4 duration-300">
-                <h3 class="text-2xl font-black text-slate-900 dark:text-white mb-4 leading-tight">${currentStep.title}</h3>
-                <p class="text-lg text-slate-600 dark:text-slate-300 leading-relaxed max-w-sm">
-                    ${currentStep.text}
-                </p>
-
-                ${isAiPitch ? `
-                    <div class="mt-6 p-4 bg-purple-50 dark:bg-purple-900/10 rounded-xl border border-purple-100 dark:border-purple-800/30 w-full text-left flex gap-3 items-center">
-                        <div class="text-2xl animate-bounce">👈</div>
-                        <div>
-                            <p class="font-bold text-purple-700 dark:text-purple-300 text-xs uppercase">${ui.aiPitchAction}</p>
-                            <p class="text-sm text-slate-600 dark:text-slate-400">${ui.aiPitchSub}</p>
-                        </div>
-                    </div>
-                ` : ''}
-            </div>
-
-            <!-- Footer Actions -->
-            <div class="p-4 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center">
-                 <button id="btn-tut-skip" class="px-4 py-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-bold uppercase tracking-wider">${ui.tutorialSkip}</button>
-                 
-                 <div class="flex gap-3">
-                    ${this.tutorialStep > 0 ? `
-                        <button id="btn-tut-prev" class="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-lg transition-colors">
-                            ←
-                        </button>
-                    ` : ''}
-                    
-                    <button id="btn-tut-next" class="px-8 h-12 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold rounded-xl shadow-lg transition-transform active:scale-95 flex items-center gap-2">
-                        ${isLast ? ui.tutorialFinish : ui.tutorialNext + ' →'}
-                    </button>
-                 </div>
-            </div>
+        <div class="relative w-full mb-4">
+            <span class="absolute left-4 top-4 text-slate-400 text-lg">🔍</span>
+            <input id="inp-search" type="text" placeholder="" 
+                class="w-full bg-[#1e293b] border border-slate-700 text-slate-200 rounded-xl py-4 pl-12 pr-14 font-bold outline-none focus:ring-2 focus:ring-sky-500 shadow-xl text-lg transition-all placeholder:text-slate-500"
+                value="${this.state.searchQuery}" autofocus autocomplete="off">
+            <span class="absolute right-4 top-4 text-[10px] font-bold text-slate-500 border border-slate-600 px-1.5 py-1 rounded bg-[#0f172a] select-none">ESC</span>
         </div>
-        `;
+        
+        <div id="search-msg-area" class="text-center text-slate-400 py-4 font-medium text-sm transition-opacity duration-300 ${this.state.searchQuery.length > 0 ? 'opacity-100' : 'opacity-0'}">
+            ${ui.searchKeepTyping}
+        </div>
+
+        <div id="search-results-list" class="flex-1 overflow-y-auto custom-scrollbar bg-[#1e293b] rounded-xl border border-slate-700 shadow-2xl hidden">
+            <!-- Results injected here -->
+        </div>`;
     }
+    
+    getSearchResultsHTML(ui) {
+         if (this.state.searchResults.length === 0) {
+             return `<div class="text-center text-slate-400 py-8 flex flex-col items-center gap-2"><span class="text-2xl opacity-50">🍃</span><span>${ui.noResults}</span></div>`;
+         }
+         
+         return this.state.searchResults.map(res => {
+            // Determine Tag
+            let tag = ui.tagModule || 'MODULE';
+            let tagClass = 'border-blue-500 text-blue-400 bg-blue-500/10';
+            
+            if (res.type === 'leaf') { 
+                tag = ui.tagLesson || 'LESSON'; 
+                tagClass = 'border-sky-500 text-sky-400 bg-sky-500/10';
+            }
+            if (res.type === 'exam') { 
+                tag = ui.tagExam || 'EXAM'; 
+                tagClass = 'border-red-500 text-red-400 bg-red-500/10';
+            }
+            if (res.type === 'branch' || res.type === 'tree' || res.type === 'root') {
+                 tag = ui.tagModule || 'MODULE';
+            }
 
-    bindWelcomeEvents(ui) {
-        const markSeen = () => localStorage.setItem('arbor-welcome-seen', 'true');
+            // Format Breadcrumbs
+            const pathDisplay = (res.path || '').replace(/ \/ /g, ' › ');
 
-        // Navigation
-        const nextBtn = this.querySelector('#btn-tut-next');
-        if (nextBtn) {
-            nextBtn.onclick = () => {
-                if (this.tutorialStep < ui.welcomeSteps.length - 1) {
-                    this.tutorialStep++;
-                    this.render();
+            return `
+            <button class="btn-search-result w-full text-left p-4 border-b border-slate-700/50 hover:bg-white/5 transition-colors flex items-start gap-4 group" data-json="${encodeURIComponent(JSON.stringify(res))}">
+                <div class="w-10 h-10 rounded-lg bg-[#0f172a] border border-slate-700 text-slate-300 flex items-center justify-center text-xl shrink-0 group-hover:scale-105 transition-transform shadow-md">
+                    ${res.icon || '📄'}
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-3 mb-1">
+                        <h4 class="font-bold text-slate-100 truncate text-base">${res.name}</h4>
+                        <span class="text-[10px] uppercase font-bold px-1.5 py-0.5 border rounded ${tagClass}">${tag}</span>
+                    </div>
+                    <p class="text-xs text-slate-400 truncate font-medium">${pathDisplay}</p>
+                </div>
+            </button>
+            `;
+         }).join('');
+    }
+    
+    updateSearchResultsDOM() {
+        const list = this.querySelector('#search-results-list');
+        const msgArea = this.querySelector('#search-msg-area');
+        
+        if (list && msgArea) {
+            if (this.state.searchQuery.length > 0) {
+                // Determine visibility based on query length logic
+                if (this.state.searchResults.length > 0 || (this.state.searchQuery.length >= 2)) {
+                    list.innerHTML = this.getSearchResultsHTML(store.ui);
+                    list.classList.remove('hidden');
+                    msgArea.classList.add('hidden');
+                } else if (this.state.searchQuery.length === 1) {
+                    list.classList.add('hidden');
+                    msgArea.classList.remove('hidden');
+                    msgArea.textContent = store.ui.searchKeepTyping;
                 } else {
-                    markSeen();
+                    list.classList.add('hidden');
+                    msgArea.classList.remove('hidden');
+                    msgArea.textContent = store.ui.noResults;
+                }
+            } else {
+                list.classList.add('hidden');
+                msgArea.classList.add('hidden');
+            }
+
+            // Re-bind click events
+            list.querySelectorAll('.btn-search-result').forEach(btn => {
+                btn.onclick = () => {
+                    const data = JSON.parse(decodeURIComponent(btn.dataset.json));
+                    store.navigateTo(data.id, data);
                     this.close();
                 }
-            };
+            });
         }
-
-        const prevBtn = this.querySelector('#btn-tut-prev');
-        if (prevBtn) {
-            prevBtn.onclick = () => {
-                if (this.tutorialStep > 0) {
-                    this.tutorialStep--;
-                    this.render();
-                }
-            };
-        }
-
-        const skipBtn = this.querySelector('#btn-tut-skip');
-        if (skipBtn) {
-            skipBtn.onclick = () => {
-                markSeen();
-                this.close();
-            };
-        }
-
-        // Language switcher events
-        this.querySelectorAll('.btn-welcome-lang').forEach(btn => {
-            btn.onclick = (e) => {
-                const code = e.currentTarget.dataset.code;
-                store.setLanguage(code);
-            };
-        });
-
-        // Theme switcher events
-        this.querySelectorAll('.btn-welcome-theme').forEach(btn => {
-            btn.onclick = (e) => {
-                const theme = e.currentTarget.dataset.theme;
-                store.setTheme(theme);
-            };
-        });
     }
 
-    // --- PROFILE & SYNC ---
-    renderProfile(ui) {
-        const exportCode = store.getExportData();
-        const g = store.value.gamification;
-
-        return `
-        <div class="flex flex-col h-full">
-            <!-- Header -->
-            <div class="p-6 pb-2 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
-                <div class="flex items-center gap-4 mb-4">
-                     <div class="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-4xl overflow-hidden border-2 border-white dark:border-slate-700 shadow-lg">
-                        👤
-                     </div>
-                     <div>
-                        <h2 class="text-xl font-black text-slate-800 dark:text-white">${ui.profileTitle}</h2>
-                        <div class="flex gap-4 mt-1">
-                            <span class="text-xs font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">Level ${Math.floor(g.xp / 100) + 1}</span>
-                            <span class="text-xs font-bold text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded">💧 ${g.streak} ${ui.streak}</span>
-                        </div>
-                     </div>
-                </div>
-            </div>
-
-            <!-- TABS -->
-            <div class="flex border-b border-slate-100 dark:border-slate-800">
-                <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${this.profileTab === 'garden' ? 'border-green-500 text-green-600 dark:text-green-400' : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}" id="tab-garden">
-                    🍎 ${ui.gardenTitle}
-                </button>
-                <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${this.profileTab === 'export' ? 'border-sky-500 text-sky-600 dark:text-sky-400' : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}" id="tab-export">
-                    📤 ${ui.exportTitle}
-                </button>
-                <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${this.profileTab === 'import' ? 'border-purple-500 text-purple-600 dark:text-purple-400' : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}" id="tab-import">
-                    📥 ${ui.importTitle}
-                </button>
-            </div>
-
-            <!-- CONTENT -->
-            <div class="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950/50">
-                
-                ${this.profileTab === 'garden' ? `
-                    <div class="animate-in fade-in slide-in-from-bottom-4 duration-300">
-                        ${g.fruits.length === 0 ? `
-                            <div class="text-center py-10 text-slate-400">
-                                <div class="text-5xl mb-4 grayscale opacity-50">🧺</div>
-                                <p>${ui.gardenEmpty}</p>
-                            </div>
-                        ` : `
-                            <div class="grid grid-cols-4 sm:grid-cols-5 gap-4">
-                                ${g.fruits.map(f => `
-                                    <div class="aspect-square bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-center text-3xl hover:scale-110 transition-transform cursor-help" title="Harvested on ${new Date(f.date).toLocaleDateString()}">
-                                        ${f.icon}
-                                    </div>
-                                `).join('')}
-                            </div>
-                        `}
-                        
-                        <div class="mt-8 p-4 bg-yellow-50 dark:bg-yellow-900/10 rounded-xl border border-yellow-200 dark:border-yellow-800/30">
-                            <h4 class="font-bold text-yellow-800 dark:text-yellow-500 text-xs uppercase mb-2">Total Stats</h4>
-                            <div class="flex justify-between text-sm">
-                                <span>Lifetime XP:</span>
-                                <span class="font-bold">${g.xp} ${ui.xpUnit}</span>
-                            </div>
-                             <div class="flex justify-between text-sm mt-1">
-                                <span>Fruits Harvested:</span>
-                                <span class="font-bold">${g.fruits.length}</span>
-                            </div>
-                        </div>
-                    </div>
-                ` : ''}
-
-                ${this.profileTab === 'export' ? `
-                    <div class="animate-in fade-in slide-in-from-right-4 duration-300">
-                        <p class="text-sm text-slate-500 mb-4">${ui.exportDesc}</p>
-                        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 mb-4">
-                            <textarea readonly class="w-full h-24 bg-transparent text-xs font-mono text-slate-600 dark:text-slate-300 outline-none resize-none" id="export-textarea">${exportCode}</textarea>
-                            <button id="btn-copy-code" class="w-full mt-2 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-xs rounded-lg transition-colors">
-                                📋 ${ui.copyCode}
-                            </button>
-                        </div>
-                        <button id="btn-download-file" class="w-full py-3 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-xl shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2">
-                             💾 ${ui.downloadFile} (.json)
-                        </button>
-                    </div>
-                ` : ''}
-
-                ${this.profileTab === 'import' ? `
-                    <div class="animate-in fade-in slide-in-from-left-4 duration-300">
-                        <p class="text-sm text-slate-500 mb-4">${ui.importDesc}</p>
-                         <textarea class="w-full h-24 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl mb-4 text-xs font-mono outline-none focus:ring-2 focus:ring-purple-500" id="import-textarea" placeholder="${ui.pasteCodePlaceholder}"></textarea>
-                        <div class="relative">
-                            <input type="file" id="import-file" class="hidden" accept=".json">
-                            <button onclick="document.getElementById('import-file').click()" class="w-full py-3 border-2 border-dashed border-slate-300 dark:border-slate-700 text-slate-400 hover:border-purple-500 hover:text-purple-500 font-bold rounded-xl transition-colors">
-                                📂 Select File
-                            </button>
-                        </div>
-                        <button id="btn-run-import" class="w-full mt-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl shadow-lg transition-transform active:scale-95">
-                            ${ui.importBtn}
-                        </button>
-                    </div>
-                ` : ''}
-            </div>
-        </div>`;
-    }
-
-    bindProfileEvents() {
-        const setTab = (t) => {
-            this.profileTab = t;
-            this.render();
-        };
-        this.querySelector('#tab-garden').onclick = () => setTab('garden');
-        this.querySelector('#tab-export').onclick = () => setTab('export');
-        this.querySelector('#tab-import').onclick = () => setTab('import');
+    bindSearchEvents() {
+        const inp = this.querySelector('#inp-search');
         
-        if (this.profileTab === 'export') {
-            this.querySelector('#btn-copy-code').onclick = (e) => {
-                const txt = this.querySelector('#export-textarea');
-                txt.select();
-                document.execCommand('copy');
-                const originalText = e.target.textContent;
-                e.target.textContent = '✅ Copied!';
-                setTimeout(() => e.target.textContent = originalText, 2000);
-            };
-            this.querySelector('#btn-download-file').onclick = () => store.downloadProgressFile();
-        }
-
-        if (this.profileTab === 'import') {
-            const runImport = (val) => {
-                 if(store.importProgress(val)) {
-                     alert(store.ui.importSuccess);
-                     this.close();
-                 } else {
-                     alert(store.ui.importError);
-                 }
-            };
-            this.querySelector('#btn-run-import').onclick = () => {
-                const val = this.querySelector('#import-textarea').value;
-                if(val) runImport(val);
-            };
-            const fileInp = this.querySelector('#import-file');
-            fileInp.onchange = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (ev) => runImport(ev.target.result);
-                reader.readAsText(file);
-            };
-        }
-    }
-
-    renderSearchLabel(type) {
-        if (type === 'branch') {
-            return `<span class="flex-shrink-0 text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 tracking-wider">MÓDULO</span>`;
-        }
-        if (type === 'leaf') {
-            return `<span class="flex-shrink-0 text-[10px] uppercase font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/20 px-2 py-0.5 rounded border border-sky-100 dark:border-sky-800/30 tracking-wider">LECCIÓN</span>`;
-        }
-        if (type === 'exam') {
-            return `<span class="flex-shrink-0 text-[10px] uppercase font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded border border-red-100 dark:border-red-800/30 tracking-wider">EXAMEN</span>`;
-        }
-        return '';
-    }
-
-    // --- SEARCH MODAL ---
-    renderSearch(ui) {
-         let resultsHtml = '';
-         
-         if (this.isBroadSearchLoading) {
-             resultsHtml = `<div class="p-8 text-center text-slate-400 animate-pulse"><p>${ui.searchBroadLoading}</p></div>`;
-         } else if (this.broadSearchMessage) {
-             resultsHtml = `<div class="p-8 text-center text-sky-500 font-bold animate-pulse"><p>${this.broadSearchMessage}</p></div>`;
-         } else if (this.searchResults.length === 0 && this.searchQuery.length >= 2) {
-             resultsHtml = `<div class="p-8 text-center text-slate-400"><p>${ui.noResults}</p></div>`;
-         } else {
-             // SORTING & FILTERING
-             const q = this.searchQuery.toLowerCase();
-             let displayResults = [...this.searchResults];
-
-             if (q.length < 3) {
-                 displayResults = displayResults.filter(r => r.name.toLowerCase().includes(q));
-             }
-
-             displayResults.sort((a, b) => {
-                const nameA = a.name.toLowerCase();
-                const nameB = b.name.toLowerCase();
-                const startsA = nameA.startsWith(q);
-                const startsB = nameB.startsWith(q);
-                
-                if (startsA && !startsB) return -1;
-                if (!startsA && startsB) return 1;
-                
-                const inNameA = nameA.includes(q);
-                const inNameB = nameB.includes(q);
-                
-                if (inNameA && !inNameB) return -1;
-                if (!inNameA && inNameB) return 1;
-                
-                return 0;
-             });
-
-             resultsHtml = displayResults.map((res, index) => {
-                let pathParts = (res.path || '').split(' / ');
-                if (pathParts.length > 0 && pathParts[0].includes('Arbor')) pathParts.shift();
-                if (pathParts.length > 0 && pathParts[pathParts.length-1] === res.name) pathParts.pop();
-
-                const displayPath = pathParts.length > 0
-                    ? pathParts.join(' <span class="text-slate-300 dark:text-slate-600 px-0.5">›</span> ')
-                    : '';
-
-                const borderClass = index !== displayResults.length - 1 ? 'border-b border-slate-50 dark:border-slate-800/50' : '';
-
-                return `
-                <button class="btn-res w-full text-left p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group flex items-start gap-3 ${borderClass}" data-id="${res.id}">
-                    <div class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-lg flex-shrink-0 mt-0.5 shadow-sm border border-slate-200 dark:border-slate-700">${res.icon || '📄'}</div>
-                    <div class="min-w-0 flex-1">
-                        <div class="flex items-center gap-2 mb-0.5">
-                            <h3 class="font-bold text-slate-700 dark:text-slate-200 truncate text-sm">${res.name}</h3>
-                            ${this.renderSearchLabel(res.type)}
-                        </div>
-                        <p class="text-xs text-slate-400 dark:text-slate-500 truncate flex items-center leading-tight">
-                           ${displayPath}
-                        </p>
-                    </div>
-                </button>
-            `}).join('');
-         }
-
-         this.innerHTML = `
-         <div class="fixed inset-0 z-[70] flex items-start justify-center pt-4 md:pt-[15vh] bg-slate-900/60 backdrop-blur-sm p-4 animate-in" id="search-overlay">
-            <div class="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700 flex flex-col max-h-[60vh] md:max-h-[60vh]">
-                <div class="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3">
-                    <svg class="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
-                    <input id="inp-search" type="text" placeholder="${ui.searchPlaceholder}" class="w-full bg-transparent text-xl font-bold text-slate-700 dark:text-white outline-none placeholder:text-slate-300 dark:placeholder:text-slate-600" autocomplete="off" value="${this.searchQuery}">
-                    <button class="btn-close px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded text-xs font-bold text-slate-500">ESC</button>
-                </div>
-                <div class="overflow-y-auto custom-scrollbar" id="search-results">
-                    ${resultsHtml}
-                </div>
-            </div>
-         </div>`;
-
-         const overlay = this.querySelector('#search-overlay');
-         overlay.onclick = (e) => { if(e.target === overlay) this.close(); };
-         
-         const inp = this.querySelector('#inp-search');
-         inp.focus();
-         inp.setSelectionRange(inp.value.length, inp.value.length);
-         
-         let debounceTimeout = null;
-         let singleLetterTimeout = null;
-
-         inp.oninput = (e) => {
-             const val = e.target.value;
-             this.searchQuery = val;
-             
-             clearTimeout(debounceTimeout);
-             clearTimeout(singleLetterTimeout);
-             
-             this.broadSearchMessage = null;
-             this.isBroadSearchLoading = false;
-
-             if (val.length === 0) {
-                 this.searchResults = [];
-                 this.render();
-                 return;
-             }
-
-             if (val.length === 1) {
-                 this.broadSearchMessage = ui.searchKeepTyping;
-                 this.searchResults = [];
-                 this.render();
-                 
-                 singleLetterTimeout = setTimeout(async () => {
-                     if (this.searchQuery.length === 1) {
-                         this.broadSearchMessage = null;
-                         this.isBroadSearchLoading = true;
-                         this.render();
-                         
-                         this.searchResults = await store.searchBroad(val);
-                         this.isBroadSearchLoading = false;
-                         this.render();
-                         this.querySelector('#inp-search').focus();
-                     }
-                 }, 1500);
-             } else {
-                 debounceTimeout = setTimeout(async () => {
-                     this.searchResults = await store.search(val);
-                     this.render();
-                     this.querySelector('#inp-search').focus();
-                 }, 300);
-             }
-         };
-
-         this.querySelectorAll('.btn-res').forEach(b => b.onclick = async (e) => {
-             const id = e.currentTarget.dataset.id;
-             const nodeInfo = this.searchResults.find(n => n.id === id);
-             await store.navigateTo(id, nodeInfo);
-             this.close();
-         });
-         this.querySelector('.btn-close').onclick = () => this.close();
-    }
-
-    renderPreview(node) {
-        const ui = store.ui;
-        const isDone = store.isCompleted(node.id);
-        
-        this.innerHTML = `
-        <div id="preview-overlay" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in">
-            <div class="bg-white dark:bg-slate-900 rounded-3xl p-8 max-w-sm w-full shadow-2xl relative text-center">
-                 <div class="absolute -top-10 left-1/2 -translate-x-1/2 w-20 h-20 bg-white dark:bg-slate-800 rounded-2xl shadow-xl flex items-center justify-center text-4xl border-4 border-slate-50 dark:border-slate-700">
-                    ${node.icon || '📄'}
-                 </div>
-                 <div class="mt-10">
-                    <h2 class="text-2xl font-black text-slate-800 dark:text-white mb-2 leading-tight">${node.name}</h2>
-                    <p class="text-slate-500 dark:text-slate-400 font-medium mb-6 text-sm">${node.description || ui.noDescription}</p>
-                    <div class="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 mb-6">
-                        <div class="flex justify-between text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">
-                            <span>${ui.status}</span><span>${isDone ? '100%' : '0%'}</span>
-                        </div>
-                        <div class="h-2 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                            <div class="h-full bg-green-500" style="width: ${isDone ? '100%' : '0%'}"></div>
-                        </div>
-                    </div>
-                    <div class="flex gap-3">
-                         <button id="btn-prev-cancel" class="flex-1 py-3 bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold rounded-xl">${ui.cancel}</button>
-                         <button id="btn-prev-enter" class="flex-1 py-3 bg-sky-500 text-white font-bold rounded-xl shadow-lg">${ui.enter}</button>
-                    </div>
-                 </div>
-            </div>
-        </div>`;
-
-        this.querySelector('#preview-overlay').onclick = (e) => {
-            if(e.target.id === 'preview-overlay') store.closePreview();
+        // Global Keydown for ESC
+        const handleKey = (e) => {
+            if (e.key === 'Escape') this.close();
         };
-        this.querySelector('#btn-prev-cancel').onclick = () => store.closePreview();
-        this.querySelector('#btn-prev-enter').onclick = () => store.enterLesson();
-    }
+        window.addEventListener('keydown', handleKey);
+        
+        // Cleanup listener when element removed
+        const observer = new MutationObserver((mutations) => {
+             if (!document.contains(inp)) {
+                 window.removeEventListener('keydown', handleKey);
+                 observer.disconnect();
+             }
+        });
+        if(inp) observer.observe(document.body, { childList: true, subtree: true });
 
-    renderContributor(ui) {
-        const user = store.value.githubUser;
-        const magicLink = 'https://github.com/settings/tokens/new?description=Arbor%20Studio%20Access&scopes=repo,workflow';
 
-        return `
-        <div class="p-8">
-            <div class="w-16 h-16 bg-gradient-to-br from-slate-700 to-slate-900 text-white rounded-full flex items-center justify-center text-3xl mb-6 shadow-xl shadow-slate-500/20 mx-auto">🐙</div>
-            <h2 class="text-2xl font-black text-slate-800 dark:text-white mb-2 text-center">${ui.contribTitle}</h2>
-            <p class="text-slate-600 dark:text-slate-300 mb-6 text-sm leading-relaxed text-center max-w-xs mx-auto">${ui.contribDesc}</p>
-
-            ${!user ? `
-            <div class="space-y-4">
+        if(inp) {
+            inp.focus();
+            inp.oninput = (e) => {
+                const q = e.target.value;
+                this.state.searchQuery = q;
                 
-                <a href="${magicLink}" target="_blank" class="w-full py-4 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-xl flex items-center justify-center gap-2 transition-colors border border-slate-200 dark:border-slate-700">
-                    <span>🔑</span>
-                    <span>Generar Token (GitHub)</span>
-                </a>
+                if (this.searchTimer) clearTimeout(this.searchTimer);
                 
-                <div class="relative py-2">
-                    <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-200 dark:border-slate-700"></div></div>
-                    <div class="relative flex justify-center text-xs uppercase"><span class="bg-white dark:bg-slate-900 px-2 text-slate-400">O ingresa uno existente</span></div>
-                </div>
-                
-                <div>
-                    <input id="inp-gh-token" type="password" placeholder="${ui.contribTokenPlaceholder}" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent transition-all placeholder:text-slate-300">
-                </div>
-                
-                <div class="flex items-center justify-between px-1">
-                    <label class="flex items-center gap-2 cursor-pointer group">
-                        <div class="relative flex items-center">
-                            <input type="checkbox" id="chk-remember-me" class="peer sr-only" checked>
-                            <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-green-500"></div>
-                        </div>
-                        <span class="text-xs font-bold text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300">Recordar</span>
-                    </label>
-                    <div class="group relative cursor-help">
-                         <span class="text-xs text-slate-300 border-b border-dotted border-slate-300">¿Permisos?</span>
-                         <div class="absolute bottom-full right-0 mb-2 w-48 p-2 bg-slate-800 text-white text-[10px] rounded shadow-xl hidden group-hover:block z-50">
-                            ${ui.contribNote}
-                         </div>
-                    </div>
-                </div>
-
-                <button id="btn-gh-connect" class="w-full py-4 bg-slate-900 dark:bg-white hover:opacity-90 text-white dark:text-slate-900 font-bold rounded-xl shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2 mt-2">
-                    ${ui.contribConnect}
-                </button>
-            </div>
-            ` : `
-            <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-4 rounded-xl flex items-center gap-4 mb-6 animate-in fade-in">
-                <img src="${user.avatar_url}" class="w-12 h-12 rounded-full border-2 border-white dark:border-slate-900 shadow-sm">
-                <div class="flex-1 min-w-0">
-                    <p class="font-black text-slate-800 dark:text-white truncate text-lg">${user.name || user.login}</p>
-                    <p class="text-xs text-green-600 dark:text-green-400 font-bold flex items-center gap-1">
-                        <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Conectado
-                    </p>
-                </div>
-            </div>
-            <button id="btn-gh-disconnect" class="w-full py-3 border border-red-200 dark:border-red-900/30 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 font-bold rounded-xl transition-colors text-sm">${ui.contribDisconnect}</button>
-            `}
-        </div>`;
-    }
-
-    bindContributorEvents() {
-        const btnConnect = this.querySelector('#btn-gh-connect');
-        if (btnConnect) {
-            btnConnect.onclick = async () => {
-                const token = this.querySelector('#inp-gh-token').value.trim();
-                const rememberMe = this.querySelector('#chk-remember-me').checked;
-                
-                if (!token) return;
-                
-                btnConnect.disabled = true;
-                btnConnect.innerHTML = `<div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>`;
-                
-                const user = await github.initialize(token);
-                if (user) {
-                    store.update({ githubUser: user });
-                    if (rememberMe) {
-                        localStorage.setItem('arbor-gh-token', token);
-                        sessionStorage.removeItem('arbor-gh-token'); 
-                    } else {
-                        sessionStorage.setItem('arbor-gh-token', token);
-                        localStorage.removeItem('arbor-gh-token'); 
-                    }
-                    this.render();
+                if (q.length === 0) {
+                    this.updateState({ searchResults: [] });
+                } else if (q.length === 1) {
+                    // Update UI to show "Keep typing..." immediately
+                    this.updateSearchResultsDOM();
+                    
+                    // Set 3 second delay for single char search
+                    this.searchTimer = setTimeout(async () => {
+                         // Double check current query in case it changed
+                         if (this.state.searchQuery === q) {
+                             const results = await store.searchBroad(q);
+                             this.updateState({ searchResults: results });
+                         }
+                    }, 3000);
                 } else {
-                    alert('Error: Token inválido o sin permisos.');
-                    btnConnect.disabled = false;
-                    btnConnect.textContent = store.ui.contribConnect;
+                    // Standard search debounce
+                    this.searchTimer = setTimeout(async () => {
+                         const results = await store.search(q);
+                         this.updateState({ searchResults: results });
+                    }, 300);
                 }
             };
         }
-
-        const btnDisconnect = this.querySelector('#btn-gh-disconnect');
-        if (btnDisconnect) {
-            btnDisconnect.onclick = () => {
-                github.disconnect();
-                store.update({ githubUser: null });
-                localStorage.removeItem('arbor-gh-token');
-                sessionStorage.removeItem('arbor-gh-token');
-                this.render();
-            };
-        }
+        // Initial DOM Sync
+        this.updateSearchResultsDOM();
     }
 
+    // --- SOURCES ---
     renderSources(ui) {
-        if (this.showSecurityWarning) return this.renderSecurityWarning(ui);
+        const sources = store.value.sources || [];
+        const activeId = store.value.activeSource?.id;
 
         return `
-        <div class="flex flex-col h-full">
-            <div class="p-6 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
-                <h2 class="text-2xl font-black text-slate-800 dark:text-white mb-1">📚 ${ui.sourceManagerTitle}</h2>
-                <p class="text-sm text-slate-500">${ui.sourceManagerDesc}</p>
-            </div>
-            ${store.value.lastActionMessage ? `<div class="bg-green-100 text-green-800 p-2 text-xs font-bold text-center">${store.value.lastActionMessage}</div>` : ''}
-            <div class="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50 dark:bg-slate-950/50">
-                ${store.value.sources.map(s => `
-                    <div class="p-4 rounded-xl flex items-center justify-between border ${store.value.activeSource?.id === s.id ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/20' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900'}">
-                        <div class="min-w-0 flex-1 mr-4">
-                            <div class="flex items-center gap-2 mb-1">
-                                <p class="font-bold text-slate-800 dark:text-white truncate">${s.name}</p>
-                                ${store.value.activeSource?.id === s.id ? `<span class="text-[10px] bg-sky-500 text-white px-2 rounded-full font-bold uppercase">${ui.sourceActive}</span>` : ''}
-                                ${s.isTrusted ? `<span class="text-[10px] bg-green-100 text-green-700 px-2 rounded font-bold border border-green-200">VERIFIED</span>` : `<span class="text-[10px] bg-orange-100 text-orange-700 px-2 rounded font-bold border border-orange-200">⚠️</span>`}
+        <div class="p-6 h-full flex flex-col">
+            <h2 class="text-2xl font-black mb-2 dark:text-white">${ui.sourceManagerTitle}</h2>
+            <p class="text-sm text-slate-500 mb-6">${ui.sourceManagerDesc}</p>
+
+            <div class="flex-1 overflow-y-auto custom-scrollbar space-y-3 mb-4 pr-1">
+                ${sources.map(s => `
+                    <div class="p-4 rounded-xl border-2 transition-all group relative ${s.id === activeId ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20' : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900'}">
+                        <div class="flex justify-between items-start mb-2">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xl">${s.isDefault ? '🌳' : '🌐'}</span>
+                                <h3 class="font-bold text-slate-800 dark:text-white">${s.name}</h3>
+                                ${s.id === activeId ? `<span class="bg-purple-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold uppercase">${ui.sourceActive}</span>` : ''}
                             </div>
-                            <p class="text-xs text-slate-400 font-mono truncate">${s.url}</p>
+                            ${!s.isDefault ? `<button class="btn-remove-source text-slate-300 hover:text-red-500 transition-colors p-1" data-id="${s.id}">✕</button>` : ''}
                         </div>
-                        <div class="flex gap-2">
-                             ${store.value.activeSource?.id !== s.id ? `<button class="btn-load px-3 py-1.5 bg-slate-200 dark:bg-slate-700 text-xs font-bold rounded hover:bg-sky-500 hover:text-white transition-colors" data-id="${s.id}">${ui.sourceLoad}</button>` : ''}
-                             ${!s.isDefault ? `<button class="btn-del p-2 text-slate-400 hover:text-red-500" data-id="${s.id}">🗑</button>` : ''}
-                        </div>
+                        <p class="text-xs text-slate-400 font-mono mb-3 truncate">${s.url}</p>
+                        
+                        ${s.id !== activeId ? `
+                        <button class="btn-load-source w-full py-2 bg-slate-100 dark:bg-slate-800 hover:bg-purple-100 dark:hover:bg-purple-900/40 text-slate-600 dark:text-purple-300 font-bold rounded-lg text-xs transition-colors" data-id="${s.id}">
+                            ${ui.sourceLoad}
+                        </button>
+                        ` : ''}
                     </div>
                 `).join('')}
             </div>
-            <div class="p-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
-                 <div class="flex gap-2">
-                     <input id="inp-url" type="url" placeholder="${ui.sourceUrlPlaceholder}" class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-lg px-4 py-2 text-sm font-bold">
-                     <button id="btn-add" class="px-4 py-2 bg-purple-600 text-white font-bold rounded-lg shadow-lg hover:bg-purple-500">${ui.sourceAdd}</button>
-                 </div>
+
+            <div class="pt-4 border-t border-slate-100 dark:border-slate-800">
+                <label class="text-[10px] font-bold text-slate-400 uppercase mb-2 block">${ui.sourceAdd}</label>
+                <div class="flex gap-2">
+                    <input id="inp-source-url" type="text" placeholder="https://.../data.json" class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-purple-500 dark:text-white">
+                    <button id="btn-add-source" class="bg-purple-600 text-white px-4 py-2 rounded-xl font-bold shadow-lg hover:bg-purple-500 active:scale-95 transition-transform">
+                        +
+                    </button>
+                </div>
             </div>
         </div>`;
-    }
-
-    renderSecurityWarning(ui) {
-        return `
-        <div class="p-8 text-center">
-            <div class="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center text-3xl mb-4 mx-auto">🛡️</div>
-            <h3 class="text-xl font-black text-slate-800 dark:text-white mb-2">${ui.secWarningTitle}</h3>
-            <p class="text-slate-600 dark:text-slate-300 mb-6 text-sm leading-relaxed">${ui.secWarningBody}</p>
-            <div class="w-full bg-slate-100 dark:bg-slate-800 p-3 rounded-lg mb-6 border border-slate-200 dark:border-slate-700">
-                <p class="text-xs font-mono break-all text-slate-700 dark:text-slate-200">${this.pendingSourceUrl}</p>
-            </div>
-            <div class="flex flex-col gap-3">
-                 <button id="btn-sec-confirm" class="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-lg">${ui.secConfirm}</button>
-                 <button id="btn-sec-cancel" class="w-full py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold rounded-xl">${ui.secCancel}</button>
-            </div>
-        </div>
-        `;
     }
 
     bindSourcesEvents() {
-        if (this.showSecurityWarning) {
-            this.querySelector('#btn-sec-confirm').onclick = () => {
-                store.addSource(this.pendingSourceUrl);
-                this.pendingSourceUrl = null;
-                this.showSecurityWarning = false;
-                this.render();
+        this.querySelectorAll('.btn-load-source').forEach(btn => {
+            btn.onclick = () => {
+                store.loadAndSmartMerge(btn.dataset.id);
+                this.close(); // Auto close on load
             };
-            this.querySelector('#btn-sec-cancel').onclick = () => {
-                this.pendingSourceUrl = null;
-                this.showSecurityWarning = false;
-                this.render();
+        });
+        
+        this.querySelectorAll('.btn-remove-source').forEach(btn => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                if(confirm('Delete tree?')) store.removeSource(btn.dataset.id);
             };
-            return;
-        }
+        });
 
-        this.querySelector('#btn-add').onclick = () => {
-             const url = this.querySelector('#inp-url').value;
-             if(!url) return;
-             
-             if (store.isUrlTrusted(url)) {
-                 store.addSource(url);
-             } else {
-                 this.pendingSourceUrl = url;
-                 this.showSecurityWarning = true;
-                 this.render();
-             }
-        };
-        this.querySelectorAll('.btn-del').forEach(b => b.onclick = (e) => store.removeSource(e.target.dataset.id));
-        this.querySelectorAll('.btn-load').forEach(b => b.onclick = (e) => store.loadAndSmartMerge(e.target.dataset.id));
+        const btnAdd = this.querySelector('#btn-add-source');
+        if (btnAdd) {
+            btnAdd.onclick = () => {
+                const url = this.querySelector('#inp-source-url').value.trim();
+                if (url) {
+                    store.addSource(url);
+                    this.querySelector('#inp-source-url').value = ''; 
+                }
+            };
+        }
+    }
+
+    // --- OTHER MODALS ---
+    renderEmptyModule(ui, node) {
+        return `<div class="p-8 text-center">
+            <div class="text-4xl mb-4">🍂</div>
+            <h3 class="font-bold text-xl mb-2">${ui.emptyModuleTitle}</h3>
+            <p class="text-slate-500 mb-6">${ui.emptyModuleDesc}</p>
+            ${store.value.githubUser 
+                ? `<button class="bg-green-600 text-white px-4 py-2 rounded font-bold" onclick="window.editFile('${node.sourcePath}/01_Intro.md')">Crear Primera Lección</button>` 
+                : `<p class="text-xs text-slate-400">Inicia sesión en modo editor para contribuir.</p>`}
+        </div>`;
     }
     
-    renderAbout(ui) {
-        return `
-        <div class="p-8">
-            <div class="w-16 h-16 bg-green-100 dark:bg-green-900/30 text-green-600 rounded-full flex items-center justify-center text-3xl mb-6">ℹ️</div>
-            <h2 class="text-2xl font-black text-slate-800 dark:text-white mb-4">${ui.aboutTitle}</h2>
-            <div class="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl text-left text-sm text-slate-600 dark:text-slate-300 leading-relaxed space-y-4">
-                <p><strong>${ui.missionTitle}</strong><br>${ui.missionText}</p>
-                <p class="text-xs text-slate-400 font-mono pt-4 border-t border-slate-200 dark:border-slate-700">Version 0.2<br>${ui.lastUpdated} ${store.value.data?.generatedAt || 'N/A'}</p>
-            </div>
-            <a href="https://github.com/treesys-org/arbor-ui" target="_blank" rel="noopener noreferrer" class="mt-6 w-full flex items-center justify-center gap-3 py-3 px-4 bg-slate-800 hover:bg-slate-700 dark:bg-slate-200 dark:hover:bg-slate-300 text-white dark:text-slate-800 font-bold text-sm rounded-xl transition-all">
-                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"></path></svg>
-                ${ui.viewOnGithub}
-            </a>
-        </div>`;
-    }
-
-    renderImpressum(ui) {
-        return `
-        <div class="p-8">
-             <h2 class="text-xl font-black text-slate-800 dark:text-white mb-4">${ui.impressumTitle}</h2>
-             <div class="text-left bg-slate-50 dark:bg-slate-800 p-6 rounded-xl text-sm text-slate-600 dark:text-slate-300 space-y-4">
-                 <p>${ui.impressumText}</p>
-                 
-                 ${!this.showImpressumDetails ? `
-                    <button id="btn-show-impressum" class="text-sky-600 dark:text-sky-400 font-bold text-xs hover:underline">
-                        ${ui.showImpressumDetails}
-                    </button>
-                 ` : `
-                    <div class="font-mono pt-4 border-t border-slate-200 dark:border-slate-700 whitespace-pre-wrap animate-in fade-in duration-300 text-xs">
-                        ${ui.impressumDetails}
-                    </div>
-                 `}
-             </div>
-        </div>`;
-    }
-
-    renderLanguage(ui) {
-        return `
-        <div class="p-8">
-            <div class="text-4xl mb-6">🌍</div>
-            <h2 class="text-2xl font-black text-slate-800 dark:text-white mb-6">${ui.languageTitle}</h2>
-            <div class="space-y-3">
-                ${store.availableLanguages.map(l => `
-                    <button class="btn-lang-sel w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all ${store.value.lang === l.code ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-slate-100 dark:border-slate-800 hover:border-blue-300'}" data-code="${l.code}">
-                        <div class="flex items-center gap-4">
-                            <span class="text-3xl">${l.flag}</span>
-                            <div class="text-left"><p class="font-bold text-slate-800 dark:text-white">${l.nativeName}</p></div>
+    renderWelcome(ui) {
+         return `<div class="p-8">
+            <h2 class="text-2xl font-black mb-4 text-center">${ui.tutorialTitle}</h2>
+            <div class="space-y-4">
+                ${ui.welcomeSteps.map(step => `
+                    <div class="flex gap-4 items-start">
+                        <div class="text-2xl bg-slate-100 rounded-full w-12 h-12 flex items-center justify-center shrink-0">${step.icon}</div>
+                        <div>
+                            <h3 class="font-bold text-lg">${step.title}</h3>
+                            <p class="text-slate-600">${step.text}</p>
                         </div>
-                        ${store.value.lang === l.code ? '<span class="text-blue-500">✓</span>' : ''}
-                    </button>
+                    </div>
                 `).join('')}
             </div>
-        </div>`;
+            <button class="w-full mt-8 py-3 bg-slate-900 text-white font-bold rounded-xl" onclick="store.setModal(null)">${ui.tutorialFinish}</button>
+         </div>`;
     }
-
-    renderSingleCertificate(ui, moduleId) {
-        let module = store.findNode(moduleId);
-        
-        if (!module) {
-             module = { name: "Module " + moduleId, description: "Loading..." }; 
-        }
-
-        this.innerHTML = `
-        <div id="cert-overlay" class="fixed inset-0 z-[100] flex items-center justify-center bg-white dark:bg-slate-950 p-6 overflow-y-auto animate-in">
-          <button id="btn-cert-close" class="absolute top-4 right-4 z-[110] p-3 bg-white/50 dark:bg-slate-900/50 rounded-full hover:bg-red-500 hover:text-white transition-colors no-print">
-             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
-          <div class="max-w-3xl w-full border-8 border-double border-stone-800 dark:border-stone-600 p-8 bg-stone-50 dark:bg-[#1a2e22] text-center shadow-2xl relative certificate-container">
-              <div class="absolute top-2 left-2 w-12 md:w-16 h-12 md:h-16 border-t-4 border-l-4 border-stone-800 dark:border-stone-600"></div>
-              <div class="absolute top-2 right-2 w-12 md:w-16 h-12 md:h-16 border-t-4 border-r-4 border-stone-800 dark:border-stone-600"></div>
-              <div class="absolute bottom-2 left-2 w-12 md:w-16 h-12 md:h-16 border-b-4 border-l-4 border-stone-800 dark:border-stone-600"></div>
-              <div class="absolute bottom-2 right-2 w-12 md:w-16 h-12 md:h-16 border-b-4 border-r-4 border-stone-800 dark:border-stone-600"></div>
-
-              <div class="py-12 px-6 border-2 border-stone-800/20 dark:border-stone-600/20 flex flex-col items-center justify-center">
-                  <div class="w-24 h-24 mb-6 bg-green-700 text-white rounded-full flex items-center justify-center text-5xl shadow-lg">🎓</div>
-                  <h1 class="text-3xl md:text-5xl font-black text-slate-800 dark:text-green-400 mb-2 uppercase tracking-widest font-serif">${ui.certTitle}</h1>
-                  <div class="w-32 h-1 bg-stone-700 dark:bg-stone-500 mx-auto mb-8"></div>
-                  <p class="text-xl text-slate-500 dark:text-slate-400 italic font-serif mb-6">${ui.certBody}</p>
-                  <h2 class="text-2xl md:text-4xl font-bold text-slate-900 dark:text-white mb-12 font-serif border-b-2 border-slate-300 dark:border-slate-700 pb-2 px-6 md:px-12 inline-block min-w-[200px] w-full max-w-[500px] break-words">
-                      ${module.name}
-                  </h2>
-                  <p class="text-md text-slate-600 dark:text-slate-300 mb-1">${ui.certSign}</p>
-                  <p class="text-sm text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-12">${new Date().toLocaleDateString()}</p>
-                  <button id="btn-cert-print" class="px-8 py-3 bg-stone-800 hover:bg-stone-700 text-white font-bold rounded-xl shadow-lg no-print">
-                      ${ui.printCert}
-                  </button>
-              </div>
-          </div>
-        </div>`;
-        
-        const closeCert = () => {
-             store.setModal(null);
-             store.closeContent();
-             store.setViewMode('explore');
-        };
-
-        this.querySelector('#cert-overlay').onclick = (e) => {
-            if(e.target.id === 'cert-overlay') closeCert();
-        };
-        this.querySelector('#btn-cert-close').onclick = closeCert;
-        this.querySelector('#btn-cert-print').onclick = () => window.print();
-    }
-
-    renderCertificatesGallery() {
-        const allNodes = store.getModulesStatus();
-        
-        const completedExams = [];
-        const traverse = (n) => {
-            if (n.type === 'exam') completedExams.push(n);
-            if (n.children) n.children.forEach(traverse);
-        };
-        if(store.value.data) traverse(store.value.data);
-
-        const certificateItems = completedExams.map(exam => ({
-            id: exam.id,
-            name: exam.name,
-            icon: exam.icon,
-            description: exam.description,
-            isComplete: store.isCompleted(exam.id),
-            path: exam.path ? exam.path.split(' / ').slice(0, -1).join(' / ') : '',
-        }));
-
-        const ui = store.ui;
-
-        const filtered = certificateItems.filter(item => {
-            if (!this.certShowAll && !item.isComplete) return false;
-            if (this.certSearch) {
-                 const q = this.certSearch.toLowerCase();
-                 return item.name.toLowerCase().includes(q);
-            }
-            return true;
-        });
-
-        this.innerHTML = `
-        <div class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/80 backdrop-blur-md p-0 md:p-10 animate-in fade-in duration-300">
-          
-          <div class="bg-white dark:bg-slate-950 rounded-none md:rounded-3xl w-full max-w-6xl h-full md:max-h-[90vh] shadow-2xl relative border-0 md:border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden">
+    bindWelcomeEvents(ui) {}
+    renderProfile(ui) { 
+        const g = store.value.gamification;
+        return `<div class="p-8 text-center">
+            <div class="w-20 h-20 bg-slate-100 rounded-full mx-auto flex items-center justify-center text-4xl mb-4">👤</div>
+            <h2 class="text-2xl font-black mb-1">${ui.profileTitle}</h2>
+            <p class="text-slate-500 mb-6">${g.xp} ${ui.xpUnit} • Racha: ${g.streak} días</p>
             
-            <div class="p-6 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row gap-4 justify-between items-start md:items-center bg-white dark:bg-slate-950 z-10 pt-16 md:pt-6">
-               <div>
-                   <h2 class="text-3xl font-black text-slate-800 dark:text-white flex items-center gap-3">
-                       <span class="text-green-600">🏆</span> ${ui.navCertificates}
-                   </h2>
-                   <p class="text-slate-500 dark:text-slate-400 mt-1">${ui.modulesProgress}</p>
-               </div>
-               
-               <div class="flex items-center gap-4 w-full md:w-auto">
-                   <div class="relative flex-1 md:w-64">
-                       <input id="inp-cert-search" type="text" placeholder="${ui.searchCert}" value="${this.certSearch}"
-                        class="w-full bg-slate-100 dark:bg-slate-900 border-none rounded-xl px-4 py-2 pl-10 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-green-600 outline-none">
-                       <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
-                   </div>
-                   <button id="btn-cert-filter" class="whitespace-nowrap px-4 py-2 rounded-xl text-sm font-bold transition-colors ${!this.certShowAll ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}">
-                       ${this.certShowAll ? ui.showAll : ui.showEarned}
-                   </button>
-                   <button class="btn-close-certs w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center transition-colors flex-shrink-0">
-                       <svg class="w-6 h-6 text-slate-500" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                   </button>
-               </div>
-            </div>
-
-            <div class="flex-1 overflow-y-auto custom-scrollbar p-6 bg-slate-50 dark:bg-slate-900/50">
-                ${filtered.length === 0 ? `
-                    <div class="flex flex-col items-center justify-center h-full text-slate-400">
-                        <div class="text-4xl mb-4">🔍</div><p>${ui.noResults}</p>
-                    </div>` : ''}
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20 md:pb-0">
-                    ${filtered.map((module, i) => `
-                        <div class="relative group overflow-hidden rounded-2xl border-2 transition-all duration-300 bg-white dark:bg-slate-900
-                             ${module.isComplete ? 'border-green-600 shadow-xl shadow-green-600/20' : 'border-slate-200 dark:border-slate-800 opacity-75'}">
-                            
-                            <div class="p-6 flex flex-col h-full relative z-10">
-                                <div class="flex justify-between items-start mb-4">
-                                    <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-4xl shadow-inner border border-white dark:border-slate-700
-                                         ${module.isComplete ? 'bg-gradient-to-br from-green-100 to-white dark:from-green-900/20 dark:to-slate-900' : 'bg-slate-100 dark:bg-slate-800 grayscale'}">
-                                        ${module.icon || '⚔️'}
-                                    </div>
-                                    ${module.isComplete 
-                                        ? `<div class="bg-green-600 text-white text-[10px] font-black px-2 py-1 rounded uppercase tracking-wider shadow-sm">${ui.lessonFinished}</div>`
-                                        : `<div class="text-slate-400"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg></div>`
-                                    }
-                                </div>
-
-                                <h3 class="text-xl font-black text-slate-800 dark:text-white mb-2 leading-tight">${module.name}</h3>
-                                <p class="text-sm text-slate-500 dark:text-slate-400 mb-4 line-clamp-2 min-h-[2.5em]">${module.description || module.path}</p>
-
-                                <div class="mt-auto pt-4 border-t border-slate-100 dark:border-slate-800">
-                                    ${module.isComplete 
-                                        ? `<button class="btn-cert-view w-full py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl shadow-lg shadow-green-600/30 transition-all active:scale-95 flex items-center justify-center gap-2" data-id="${module.id}">
-                                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                            ${ui.viewCert}
-                                           </button>`
-                                        : `<button disabled class="w-full py-3 bg-slate-100 dark:bg-slate-800 text-slate-400 font-bold rounded-xl cursor-not-allowed border border-transparent">${ui.lockedCert}</button>`
-                                    }
-                                </div>
-                            </div>
-                        </div>
-                    `).join('')}
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <div class="bg-orange-50 p-4 rounded-xl border border-orange-100">
+                    <div class="text-2xl mb-1">🍎</div>
+                    <div class="font-bold text-orange-800">${g.fruits.length} Frutos</div>
+                </div>
+                 <div class="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                    <div class="text-2xl mb-1">💧</div>
+                    <div class="font-bold text-blue-800">${g.streak} Días</div>
                 </div>
             </div>
-          </div>
-        </div>`;
+            
+            <div class="text-left bg-slate-50 p-4 rounded-xl mb-4">
+                <h3 class="font-bold text-xs uppercase text-slate-400 mb-2">Sync Code</h3>
+                <textarea class="w-full p-2 text-[10px] font-mono border rounded h-20" readonly onclick="this.select()">${store.getExportData()}</textarea>
+                <div class="flex gap-2 mt-2">
+                     <button class="flex-1 bg-white border border-slate-200 py-1 rounded text-xs font-bold" onclick="store.downloadProgressFile()">Descargar Archivo</button>
+                     <button class="flex-1 bg-slate-800 text-white py-1 rounded text-xs font-bold" onclick="const code=prompt('Pega el código:'); if(code) store.importProgress(code);">Importar</button>
+                </div>
+            </div>
+        </div>`; 
+    } 
+    bindProfileEvents() {}
+    
+    renderAbout(ui) { 
+        return `
+        <div class="p-8 text-center">
+            <h2 class="text-2xl font-black mb-4 dark:text-white flex items-center justify-center gap-2">
+                <span>ℹ️</span> ${ui.missionTitle}
+            </h2>
+            
+            <div class="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl text-left mb-6 border border-slate-100 dark:border-slate-800">
+                <p class="text-slate-600 dark:text-slate-300 leading-relaxed mb-6 font-medium">${ui.missionText}</p>
+                
+                <a href="https://github.com/treesys-org/arbor-ui" target="_blank" class="flex items-center justify-center gap-2 w-full py-3.5 bg-slate-900 dark:bg-slate-700 text-white font-bold rounded-xl hover:bg-slate-800 dark:hover:bg-slate-600 transition-all shadow-lg active:scale-95 group">
+                    <svg class="w-5 h-5 transition-transform group-hover:scale-110" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.164 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.322-3.369-1.322-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.597 1.028 2.688 0 3.848-2.339 4.685-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.418 22 12c0-5.523-4.477-10-10-10z" /></svg>
+                    ${ui.viewOnGithub}
+                </a>
+            </div>
+            
+            <div class="pt-6 border-t border-slate-100 dark:border-slate-800">
+                <h3 class="font-bold text-slate-400 dark:text-slate-500 mb-2 text-xs uppercase tracking-widest">${ui.metaphorTitle}</h3>
+                <blockquote class="text-slate-500 dark:text-slate-400 italic text-sm font-serif">"${ui.metaphorText}"</blockquote>
+            </div>
+        </div>`; 
+    }
+    
+    renderImpressum(ui) { 
+        const detailsClass = this.state.showImpressum ? 'block' : 'hidden';
+        const btnClass = this.state.showImpressum ? 'hidden' : 'block';
+        
+        return `
+        <div class="p-8">
+            <h2 class="text-2xl font-black mb-6 dark:text-white flex items-center gap-2">
+                <span>⚖️</span> ${ui.impressumTitle}
+            </h2>
+            
+            <div class="bg-slate-50 dark:bg-slate-950/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-800">
+                <p class="text-slate-600 dark:text-slate-300 mb-4 leading-relaxed">${ui.impressumText}</p>
+                
+                <button id="btn-show-imp" class="${btnClass} text-sky-500 hover:text-sky-600 dark:text-sky-400 dark:hover:text-sky-300 font-bold text-sm flex items-center gap-1 transition-colors">
+                    <span>${ui.showImpressumDetails}</span>
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                </button>
 
-        this.querySelector('.btn-close-certs').onclick = () => store.setViewMode('explore');
-        const searchInput = this.querySelector('#inp-cert-search');
-        searchInput.oninput = (e) => {
-            this.certSearch = e.target.value;
-            this.render();
-            const el = this.querySelector('#inp-cert-search');
-            el.focus();
-            el.setSelectionRange(el.value.length, el.value.length);
-        };
-        this.querySelector('#btn-cert-filter').onclick = () => {
-            this.certShowAll = !this.certShowAll;
-            this.render();
-        };
-        this.querySelectorAll('.btn-cert-view').forEach(b => {
-            b.onclick = (e) => store.setModal({ type: 'certificate', moduleId: e.currentTarget.dataset.id });
-        });
+                <div class="${detailsClass} mt-6 pt-6 border-t border-slate-200 dark:border-slate-700 animate-in slide-in-from-top-2 fade-in">
+                     <div class="flex flex-col items-center mb-6">
+                         <div class="w-16 h-16 bg-white dark:bg-slate-900 rounded-xl shadow-sm flex items-center justify-center text-2xl border border-slate-100 dark:border-slate-800 mb-2">🌲</div>
+                         <p class="font-black text-slate-800 dark:text-white">treesys.org</p>
+                     </div>
+                     <pre class="whitespace-pre-wrap font-mono text-xs text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-100 dark:border-slate-800">${ui.impressumDetails}</pre>
+                </div>
+            </div>
+        </div>`; 
+    }
+    
+    renderLanguage(ui) { 
+        return `<div class="p-8 grid grid-cols-2 gap-4">
+            ${store.availableLanguages.map(l => `
+                <button class="btn-lang-sel p-4 border rounded-xl hover:bg-slate-50 flex flex-col items-center gap-2 ${store.value.lang === l.code ? 'border-green-500 bg-green-50' : ''}" data-code="${l.code}">
+                    <span class="text-4xl">${l.flag}</span>
+                    <span class="font-bold">${l.nativeName}</span>
+                </button>
+            `).join('')}
+        </div>`; 
+    }
+    
+    renderSingleCertificate(ui, moduleId) { 
+        return `
+        <div class="p-12 text-center bg-yellow-50 dark:bg-yellow-950/20 h-full flex flex-col items-center justify-center relative overflow-hidden">
+             <div class="absolute inset-0 border-[10px] border-double border-yellow-200 dark:border-yellow-900/40 m-4 rounded-2xl pointer-events-none"></div>
+             <div class="w-24 h-24 bg-white dark:bg-slate-900 rounded-full flex items-center justify-center text-5xl shadow-lg border-4 border-yellow-400 mb-6 relative z-10">🎓</div>
+             <h2 class="font-black text-3xl text-slate-800 dark:text-white mb-2 uppercase tracking-widest relative z-10">${ui.certTitle}</h2>
+             <div class="w-24 h-1 bg-yellow-400 mb-6 relative z-10"></div>
+             <p class="text-slate-600 dark:text-slate-300 mb-2 font-serif italic text-lg relative z-10">${ui.certBody}</p>
+             <h3 class="font-bold text-2xl text-purple-600 dark:text-purple-400 mb-8 relative z-10">${moduleId}</h3>
+             
+             <div class="flex gap-8 text-center text-xs text-slate-400 font-mono relative z-10 uppercase tracking-widest">
+                <div>
+                    <div class="border-b border-slate-300 dark:border-slate-700 pb-1 mb-1 w-32 mx-auto">${new Date().toLocaleDateString()}</div>
+                    ${ui.certDate}
+                </div>
+                <div>
+                    <div class="border-b border-slate-300 dark:border-slate-700 pb-1 mb-1 w-32 mx-auto font-black text-slate-800 dark:text-slate-300">Arbor University</div>
+                    ${ui.certSign}
+                </div>
+             </div>
+             
+             <button class="mt-8 px-6 py-2 bg-slate-900 dark:bg-slate-800 text-white rounded-lg font-bold text-xs uppercase tracking-wider hover:scale-105 transition-transform relative z-10" onclick="window.print()">
+                ${ui.printCert}
+             </button>
+        </div>`;
     }
 }
+
 customElements.define('arbor-modals', ArborModals);

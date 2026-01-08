@@ -1,4 +1,5 @@
 
+
 import { UI_LABELS, AVAILABLE_LANGUAGES } from './i18n.js';
 import { github } from './services/github.js';
 import { aiService } from './services/ai.js';
@@ -403,8 +404,8 @@ class Store extends EventTarget {
                 
                 if (children.length === 0) {
                     node.children = [];
-                    this.update({ lastActionMessage: this.ui.moduleEmpty });
-                    setTimeout(() => this.update({ lastActionMessage: null }), 3000);
+                    // Show Empty Module Modal instead of just a message
+                    this.setModal({ type: 'emptyModule', node: node });
                 } else {
                     children.forEach(child => child.parentId = node.id);
                     node.children = children;
@@ -832,7 +833,8 @@ class Store extends EventTarget {
                             totalLeaves: total,
                             completedLeaves: completedCount,
                             isComplete: isComplete,
-                            path: node.path
+                            path: node.path,
+                            isCertifiable: node.isCertifiable // Add this
                         });
                      }
                  }

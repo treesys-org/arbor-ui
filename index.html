@@ -1,5 +1,4 @@
 
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -34,6 +33,12 @@
   <!-- Google Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   
+  <!-- CRITICAL POLYFILLS FOR BROWSER COMPATIBILITY -->
+  <script>
+    // Fixes 'process is not defined' error common with node libraries like Octokit in browser
+    window.process = { env: { NODE_ENV: 'production' } };
+  </script>
+
   <style>
     /* NATIVE APP LOCK: Fixes the viewport to prevent swaying/rubber-banding */
     html {
@@ -71,6 +76,36 @@
 
     /* Web Component loading helper */
     :not(:defined) { display: none; }
+
+    /* EDITOR VISUAL STYLES (ARBOR STUDIO PORT) */
+    .prose h1, .prose h2, .prose h3 { margin-top: 1em; margin-bottom: 0.5em; line-height: 1.2; font-weight: 800; }
+    .prose h1 { font-size: 2em; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3em; }
+    .prose h2 { font-size: 1.5em; color: #334155; }
+    .dark .prose h2 { color: #94a3b8; }
+    .prose p { margin-bottom: 1em; line-height: 1.6; }
+    .prose ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 1em; }
+    .prose blockquote { border-left: 4px solid #fbbf24; padding-left: 1em; margin: 1.5em 0; font-style: italic; color: #4b5563; }
+    .dark .prose blockquote { color: #9ca3af; }
+    
+    .edit-block-wrapper:hover {
+        outline: 1px dashed #cbd5e1;
+    }
+    .dark .edit-block-wrapper:hover {
+        outline: 1px dashed #475569;
+    }
+
+    /* TREE VIEW STYLES */
+    .tree-item.drag-over {
+        background-color: #e0f2fe;
+        border: 1px dashed #3b82f6;
+    }
+    .dark .tree-item.drag-over {
+        background-color: #0c4a6e;
+        border: 1px dashed #38bdf8;
+    }
+    .tree-item.dragging {
+        opacity: 0.5;
+    }
   </style>
 <script type="importmap">
 {
@@ -88,7 +123,7 @@
     "@angular/common": "https://esm.sh/@angular/common@^21.0.6?external=rxjs",
     "@angular/forms": "https://esm.sh/@angular/forms@^21.0.6?external=rxjs",
     "vite": "https://esm.sh/vite@^7.3.0?external=rxjs",
-    "octokit": "https://esm.sh/octokit",
+    "octokit": "https://esm.sh/@octokit/rest?bundle", 
     "@google/genai": "https://esm.sh/@google/genai",
     "@mlc-ai/web-llm": "https://esm.sh/@mlc-ai/web-llm",
     "path": "https://esm.sh/path@^0.12.7?external=rxjs"

@@ -1,33 +1,24 @@
 
 import { store } from '../store.js';
 import { github } from '../services/github.js';
+import { BLOCKS, parseArborFile, visualHTMLToMarkdown, markdownToVisualHTML, reconstructArborFile } from '../utils/editor-engine.js';
+
+const EMOJI_DATA = {
+    "General": ["📄", "📁", "📂", "✨", "🔥", "💡", "🚀", "⭐", "📝", "📌"],
+    "Science": ["🧬", "🔬", "⚗️", "⚛️", "🔭", "💊", "🦠", "🧪", "🧫", "🩺"],
+    "Computing": ["💻", "🖥️", "⌨️", "🖱️", "💾", "📀", "🌐", "🔌", "🔋", "📱"],
+    "Arts": ["🎨", "🎭", "🖌️", "✍️", "📖", "📚", "🗣️", "🎹", "🎸", "🎻"],
+    "Society": ["⚖️", "💰", "🏛️", "🌍", "🧠", "🤝", "🎓", "🏘️", "🏙️", "🏭"]
+};
 
 class ArborEditor extends HTMLElement {
     constructor() {
         super();
         this.node = null;
-        this.originalContent = '';
-        this.isUploading = false;
-
-        // Default state for metadata
-        this.meta = {
-            title: '',
-            icon: '📄',
-            description: '',
-            order: '99',
-            isExam: false,
-            extra: {} // Preserve unknown meta fields
-        };
-
-        // Categorized Emojis for the Picker
-        this.emojiCategories = {
-            "General": ["📚", "📁", "📄", "📌", "📎", "📂", "📝", "🧠", "💡", "🎯", "🔥", "✨", "🚀", "⭐", "🛑", "✅", "⚠️", "🔍", "🛠️", "⚙️"],
-            "Science": ["🧬", "🧪", "🔬", "🔭", "🩺", "🦠", "🦖", "🦴", "🩸", "💊", "🌡️", "🌪️", "⚛️", "🌱", "🌿", "🍄", "⚡", "💧", "🌎", "🪐"],
-            "Computing": ["💻", "🖥️", "💾", "⌨️", "🖱️", "🖨️", "📱", "🔋", "🔌", "📡", "🤖", "👾", "🌐", "🔒", "🔑", "📀", "📸", "📞", "🕹️", "🏗️"],
-            "Arts": ["🎨", "🎭", "🖼️", "🎬", "🎤", "🎧", "🎼", "🎹", "🥁", "🎷", "🎺", "🎸", "🎻", "🖌️", "🖍️", "🖊️", "🎪", "🎫", "🎥", "📷"],
-            "Society": ["🌍", "🏰", "🏛️", "🏦", "🏥", "🏫", "⚖️", "🔨", "⚔️", "🛡️", "👑", "🚩", "🏳️", "🤝", "🧑‍🤝‍🧑", "🗳️", "📜", "📢", "💬", "🏺"],
-            "Math": ["🔢", "📐", "📏", "➕", "➖", "➗", "✖️", "♾️", "💹", "📊", "📉", "💯", "🧮", "🎲", "🧩", "🕒", "📅", "💲", "🪙", "🏧"]
-        };
+        this.meta = { title: '', icon: '📄', description: '', order: '99', isExam: false, extra: [] };
+        this.hasWriteAccess = false;
+        this.isMetaJson = false;
+        this.currentSha = null;
     }
 
     connectedCallback() {
@@ -52,572 +43,261 @@ class ArborEditor extends HTMLElement {
     async loadContent() {
         this.renderLoading();
         try {
-            if (!this.node.sourcePath) throw new Error("No source path configured for this node.");
-            const { content } = await github.getFileContent(this.node.sourcePath);
-            this.originalContent = content;
-            this.parseFullContent(content);
-            this.renderEditor();
+            const path = this.node.sourcePath;
+            if (!path) throw new Error("No sourcePath defined.");
+            
+            // Check Permissions
+            this.hasWriteAccess = github.canEdit(path);
+            this.isMetaJson = path.endsWith('meta.json');
+
+            // New File
+            if (this.node.id && this.node.id.startsWith('new-')) {
+                 this.meta.title = this.node.name;
+                 this.renderEditor('');
+                 return;
+            }
+
+            const { content, sha } = await github.getFileContent(path);
+            this.currentSha = sha;
+            
+            if (this.isMetaJson) {
+                const json = JSON.parse(content);
+                this.meta = {
+                    title: json.name || '',
+                    icon: json.icon || '📁',
+                    description: json.description || '',
+                    order: json.order || '99',
+                    isExam: false,
+                    extra: []
+                };
+                this.renderEditor(''); // Empty body for meta.json
+            } else {
+                const parsed = parseArborFile(content);
+                this.meta = parsed.meta;
+                const visualHTML = markdownToVisualHTML(parsed.body);
+                this.renderEditor(visualHTML);
+            }
+
         } catch (e) {
-            console.error(e);
-            store.update({ lastErrorMessage: "Error loading content: " + e.message });
+            alert("Error: " + e.message);
             store.setModal(null);
         }
     }
 
-    // --- Data Parsing & Generation ---
-
-    parseFullContent(md) {
-        const lines = md.split('\n');
-        const bodyLines = [];
-        let parsingMeta = true;
-
-        // Reset meta state with defaults from the node
-        this.meta = {
-            title: this.node.name,
-            icon: this.node.icon || '📄',
-            description: this.node.description || '',
-            order: '99',
-            isExam: false,
-            extra: {}
-        };
+    generateFinalContent() {
+        // Collect Meta
+        const title = this.querySelector('#meta-title').value.trim();
+        const icon = this.querySelector('#btn-emoji').textContent.trim();
+        const desc = this.querySelector('#meta-desc').value.trim();
+        const order = this.querySelector('#meta-order').value.trim();
         
-        const knownMeta = ['title', 'icon', 'description', 'order', 'discussion'];
-
-        for (const line of lines) {
-            const t = line.trim();
-            if (parsingMeta && t.startsWith('@')) {
-                if (t.toLowerCase() === '@exam') {
-                    this.meta.isExam = true;
-                    continue;
-                }
-
-                const parts = t.substring(1).split(':');
-                const key = parts.shift().trim().toLowerCase();
-                const value = parts.join(':').trim();
-                
-                if (knownMeta.includes(key)) {
-                    this.meta[key] = value;
-                } else if (value) {
-                    this.meta.extra[key] = value;
-                } else {
-                    // It's a tag without a value that we don't recognize, treat as content
-                    parsingMeta = false;
-                    bodyLines.push(line);
-                }
-            } else {
-                if (t !== '') parsingMeta = false;
-                bodyLines.push(line);
-            }
+        if (this.isMetaJson) {
+            // JSON Output
+            const json = {
+                name: title,
+                icon: icon,
+                description: desc,
+                order: order
+            };
+            return JSON.stringify(json, null, 2);
+        } else {
+            // Markdown Output
+            this.meta.title = title;
+            this.meta.icon = icon;
+            this.meta.description = desc;
+            this.meta.order = order;
+            // Collect Body
+            const visualEditor = this.querySelector('#visual-editor');
+            const bodyMarkdown = visualHTMLToMarkdown(visualEditor);
+            return reconstructArborFile(this.meta, bodyMarkdown);
         }
-        this.bodyContent = bodyLines.join('\n');
     }
-
-    generateFinalMarkdown() {
-        let md = '';
-        const editorEl = this.querySelector('#wysiwyg-editor');
-        
-        // 1. Extract Title from the first H1 in the editor
-        const mainTitleEl = editorEl.querySelector('h1');
-        const mainTitle = mainTitleEl?.textContent.trim() || 'Untitled';
-
-        // 2. Generate Metadata
-        md += `@title: ${mainTitle}\n`;
-        md += `@icon: ${this.querySelector('#btn-emoji').textContent.trim()}\n`;
-        md += `@description: ${this.querySelector('#editor-description').value.trim()}\n`;
-        md += `@order: ${this.querySelector('#editor-order').value.trim()}\n`;
-        if (this.querySelector('#editor-type-exam').checked) {
-            md += `@exam\n`;
-        }
-        Object.entries(this.meta.extra).forEach(([key, value]) => {
-            md += `@${key}: ${value}\n`;
-        });
-        md += `\n`;
-
-        // 3. Body from visual editor blocks, skipping the first H1
-        let titleProcessed = false;
-        editorEl.childNodes.forEach(node => {
-            if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) {
-                md += node.textContent + '\n\n';
-            } else if (node.nodeType === Node.ELEMENT_NODE) {
-                if (node.tagName === 'H1' && !titleProcessed) {
-                    titleProcessed = true; // Skip the main title
-                    return;
-                }
-
-                if (node.tagName === 'H1') md += `# ${node.textContent}\n\n`;
-                else if (node.tagName === 'H2') md += `## ${node.textContent}\n\n`;
-                else if (node.tagName === 'P' && node.innerHTML.trim() && node.innerHTML !== '<br>') {
-                    const parsedHtml = node.innerHTML.replace(/<b>(.*?)<\/b>/g, '**$1**').replace(/<i>(.*?)<\/i>/g, '*$1*').replace(/<br>/g, '\n');
-                    md += parsedHtml + '\n\n';
-                } else if (node.classList?.contains('image-block')) {
-                    const src = node.querySelector('img')?.src;
-                    if (src) md += `@image: ${src}\n\n`;
-                } else if (node.classList?.contains('video-block')) {
-                    const src = node.querySelector('.url-input')?.value.trim();
-                    if (src) md += `@video: ${src}\n\n`;
-                } else if (node.classList?.contains('audio-block')) {
-                    const src = node.querySelector('.url-input')?.value.trim();
-                    if (src) md += `@audio: ${src}\n\n`;
-                } else if (node.classList?.contains('quiz-block')) {
-                    const question = node.querySelector('.quiz-question-input')?.value.trim();
-                    if(question) {
-                        md += `@quiz: ${question}\n`;
-                        node.querySelectorAll('.options-container .option-item').forEach(opt => {
-                            const val = opt.querySelector('input')?.value.trim();
-                            if (val) {
-                                const type = opt.dataset.type === 'correct' ? '@correct' : '@option';
-                                md += `${type}: ${val}\n`;
-                            }
-                        });
-                        md += `\n`;
-                    }
-                }
-            }
-        });
-
-        return md.trim();
-    }
-
-    // --- Rendering ---
 
     renderLoading() {
+        this.innerHTML = `<div class="fixed inset-0 z-[80] bg-white dark:bg-slate-900 flex items-center justify-center"><div class="animate-spin text-4xl">⏳</div></div>`;
+    }
+    
+    toggleEmojiPicker() {
+        const picker = this.querySelector('#emoji-picker');
+        if(picker) picker.classList.toggle('hidden');
+    }
+    
+    selectEmoji(char) {
+        const btn = this.querySelector('#btn-emoji');
+        btn.textContent = char;
+        this.toggleEmojiPicker();
+    }
+
+    execCmd(cmd, val = null) {
+        const editor = this.querySelector('#visual-editor');
+        if (!editor) return;
+        editor.focus();
+        document.execCommand(cmd, false, val);
+    }
+
+    insertBlock(type) {
+        const editor = this.querySelector('#visual-editor');
+        if (!editor) return;
+        
+        let html = '';
+        if (type === 'section') html = BLOCKS.section();
+        if (type === 'quiz') html = BLOCKS.quiz();
+        if (type === 'callout') html = BLOCKS.callout();
+        if (type === 'image') html = BLOCKS.media('image');
+        if (type === 'video') html = BLOCKS.media('video');
+        
+        // Simple append for now to avoid selection complexity issues in shadow dom/custom elements
+        editor.insertAdjacentHTML('beforeend', html);
+        
+        // Try to scroll to bottom
+        editor.scrollTop = editor.scrollHeight;
+    }
+
+    renderEditor(bodyHTML) {
+        const saveLabel = this.hasWriteAccess ? 'Publicar' : 'Proponer Cambio';
+        const saveColor = this.hasWriteAccess ? 'bg-green-600' : 'bg-orange-500';
+        
+        // If meta.json, disable body editing
+        const isMeta = this.isMetaJson;
+        const bodyContent = isMeta 
+            ? `<div class="p-8 text-center text-slate-400 italic border-2 border-dashed border-slate-200 rounded-xl">
+                 <span class="text-4xl block mb-2">📂</span>
+                 Estás editando las propiedades de una carpeta.<br>Usa el panel superior para cambiar Nombre, Icono y Orden.
+               </div>`
+            : bodyHTML;
+
         this.innerHTML = `
-        <div class="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4">
-            <div class="bg-white dark:bg-slate-900 rounded-2xl p-8 flex flex-col items-center gap-4 shadow-2xl">
-                <div class="w-12 h-12 border-4 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
-                <p class="font-bold text-lg text-slate-600 dark:text-slate-300">${store.ui.editorLoading}</p>
+        <div id="editor-overlay" class="fixed inset-0 z-[80] bg-[#f7f9fa] dark:bg-slate-900 animate-in fade-in flex flex-col">
+            <!-- Header -->
+            <div class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 flex justify-between items-center shadow-sm shrink-0">
+                <div class="flex items-center gap-4">
+                    <button id="btn-cancel" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500">✕</button>
+                    <div>
+                        <h2 class="font-black text-slate-800 dark:text-white leading-none text-lg truncate max-w-md">${this.meta.title || 'Nuevo Archivo'}</h2>
+                        <span class="text-xs text-slate-400 font-mono">${this.node.sourcePath}</span>
+                    </div>
+                </div>
+                <button id="btn-submit" class="${saveColor} text-white px-6 py-2.5 rounded-lg font-bold shadow-lg hover:brightness-110 active:scale-95 transition-all uppercase tracking-wide text-xs flex items-center gap-2">
+                    <span>💾</span> ${saveLabel}
+                </button>
+            </div>
+            
+            <!-- Metadata Form -->
+            <div class="bg-slate-50 dark:bg-slate-950/50 p-6 border-b border-slate-200 dark:border-slate-800 grid grid-cols-12 gap-4 shrink-0 relative">
+                 <div class="col-span-2 md:col-span-1 relative">
+                     <label class="text-[10px] uppercase font-bold text-slate-400">Icono</label>
+                     <button id="btn-emoji" class="w-full h-10 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-xl flex items-center justify-center hover:bg-blue-50 transition-colors">${this.meta.icon}</button>
+                     
+                     <!-- Emoji Picker Popup -->
+                     <div id="emoji-picker" class="hidden absolute top-12 left-0 w-72 bg-white dark:bg-slate-800 shadow-2xl rounded-xl border border-slate-200 dark:border-slate-700 z-50 p-2 h-64 overflow-y-auto custom-scrollbar">
+                        ${Object.entries(EMOJI_DATA).map(([cat, emojis]) => `
+                            <div class="text-[10px] font-bold text-slate-400 mt-2 mb-1 px-1 uppercase">${cat}</div>
+                            <div class="grid grid-cols-6 gap-1">
+                                ${emojis.map(e => `<button class="emoji-btn hover:bg-slate-100 dark:hover:bg-slate-700 rounded p-1 text-lg">${e}</button>`).join('')}
+                            </div>
+                        `).join('')}
+                     </div>
+                 </div>
+                 
+                 <div class="col-span-8 md:col-span-9">
+                     <label class="text-[10px] uppercase font-bold text-slate-400">Título</label>
+                     <input id="meta-title" class="w-full h-10 px-3 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg font-bold outline-none focus:ring-2 focus:ring-blue-500" value="${this.meta.title}">
+                 </div>
+                 
+                 <div class="col-span-2 md:col-span-2">
+                     <label class="text-[10px] uppercase font-bold text-slate-400">Orden</label>
+                     <input id="meta-order" type="number" class="w-full h-10 px-3 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg font-mono outline-none focus:ring-2 focus:ring-blue-500" value="${this.meta.order}">
+                 </div>
+                 
+                 <div class="col-span-12">
+                     <label class="text-[10px] uppercase font-bold text-slate-400">Descripción</label>
+                     <input id="meta-desc" class="w-full h-10 px-3 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" value="${this.meta.description}">
+                 </div>
+            </div>
+            
+            <!-- Toolbar (Only for Markdown files) -->
+            ${!isMeta ? `
+            <div class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-2 flex gap-2 overflow-x-auto shrink-0 items-center justify-center sticky top-0 z-20 shadow-sm">
+                <div class="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-1 gap-1">
+                    <button class="tool-btn w-8 h-8 rounded hover:bg-white dark:hover:bg-slate-700 font-bold" data-cmd="bold">B</button>
+                    <button class="tool-btn w-8 h-8 rounded hover:bg-white dark:hover:bg-slate-700 italic" data-cmd="italic">I</button>
+                    <button class="tool-btn w-8 h-8 rounded hover:bg-white dark:hover:bg-slate-700 font-serif font-bold" data-cmd="formatBlock" data-val="H2">H2</button>
+                </div>
+                <div class="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+                <div class="flex gap-2">
+                    <button class="block-btn px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-xs font-bold hover:bg-green-100" data-type="quiz">+ Quiz</button>
+                    <button class="block-btn px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold hover:bg-blue-100" data-type="section">+ Sección</button>
+                    <button class="block-btn px-3 py-1.5 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded-lg text-xs font-bold hover:bg-yellow-100" data-type="callout">+ Nota</button>
+                    <button class="block-btn px-3 py-1.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-lg text-xs font-bold hover:bg-purple-100" data-type="image">+ Imagen</button>
+                </div>
+            </div>` : ''}
+
+            <!-- Visual Editor Area (Paged Document Style) -->
+            <div class="flex-1 relative bg-slate-200 dark:bg-slate-950 overflow-y-auto custom-scrollbar p-4 md:p-8 flex justify-center">
+                 <div id="visual-editor" 
+                      class="w-full max-w-4xl bg-white dark:bg-slate-900 shadow-2xl min-h-[800px] p-8 md:p-12 prose prose-slate dark:prose-invert max-w-none focus:outline-none rounded-none md:rounded-lg" 
+                      contenteditable="${!isMeta}" 
+                      spellcheck="false">
+                      ${bodyContent}
+                 </div>
             </div>
         </div>`;
-    }
-
-    renderEditor() {
-        const ui = store.ui;
-        // Generate Emoji Categories HTML
-        const categories = Object.keys(this.emojiCategories);
-        const defaultCat = categories[0];
-
-        this.innerHTML = `
-        <style>
-            #wysiwyg-editor:focus { outline: none; }
-            #wysiwyg-editor h1 { font-size: 2.5em; font-weight: 900; line-height: 1.2; margin-bottom: 1rem; }
-            #wysiwyg-editor h2 { font-size: 1.75em; font-weight: 800; line-height: 1.3; margin-top: 2em; margin-bottom: 0.75rem; }
-            #wysiwyg-editor p { margin-bottom: 1em; line-height: 1.6; }
-            .arbor-block {
-                padding: 1rem;
-                margin: 1.5rem 0;
-                border-radius: 1rem;
-                background: #f1f5f9;
-                border: 2px solid #e2e8f0;
-            }
-            .dark .arbor-block {
-                background: #1e293b;
-                border-color: #334155;
-            }
-            .arbor-block[contenteditable="false"] { user-select: none; }
-            .arbor-block input {
-                background: white;
-                border: 1px solid #cbd5e1;
-                border-radius: 0.5rem;
-                padding: 0.5rem 0.75rem;
-                width: 100%;
-                font-size: 1rem;
-            }
-            .dark .arbor-block input {
-                background: #0f172a;
-                border-color: #475569;
-                color: #e2e8f0;
-            }
-            .emoji-tab-active {
-                background-color: #38bdf8;
-                color: white;
-            }
-        </style>
-        <div id="editor-overlay" class="fixed inset-0 z-[80] bg-[#f7f9fa] dark:bg-slate-950 animate-in fade-in duration-200">
-            <div class="w-full h-full flex flex-col">
-                
-                <!-- HEADER -->
-                <div class="flex-shrink-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm z-20 p-4">
-                    <div class="flex justify-between items-center mb-4">
-                        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">${this.node.sourcePath}</p>
-                        <div class="flex items-center gap-3">
-                             <button id="btn-cancel" class="px-4 py-2 text-sm text-slate-500 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">${ui.editorCancel}</button>
-                             <button id="btn-submit" class="px-6 py-2 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg shadow-lg flex items-center gap-2 transition-transform active:scale-95">${ui.editorChanges}</button>
-                        </div>
-                    </div>
-                    <!-- Metadata Fields -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-slate-100 dark:border-slate-800 pt-4">
-                        <div class="flex items-start gap-3 col-span-1 md:col-span-2">
-                            <div class="relative group">
-                                <button id="btn-emoji" class="w-14 h-14 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-sky-500 text-3xl flex items-center justify-center transition-colors">${this.meta.icon}</button>
-                                
-                                <!-- EMOJI PICKER DROPDOWN -->
-                                <div class="absolute top-16 left-0 w-80 md:w-96 bg-white dark:bg-slate-900 shadow-2xl rounded-xl border border-slate-200 dark:border-slate-700 p-0 hidden group-hover:block z-50">
-                                    <div class="flex items-center justify-between p-2 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/50 rounded-t-xl overflow-x-auto custom-scrollbar gap-1">
-                                        <h3 class="font-bold text-xs uppercase text-slate-400 px-2 flex-shrink-0">Select Icon</h3>
-                                        <button class="text-slate-400 hover:text-slate-600 dark:hover:text-white px-2" onclick="this.closest('.group').style.display='none'">✕</button>
-                                    </div>
-                                    <div class="p-2 border-b border-slate-100 dark:border-slate-700 flex gap-2 overflow-x-auto custom-scrollbar">
-                                        ${categories.map((cat, i) => `
-                                            <button class="emoji-cat-btn px-3 py-1 text-xs font-bold rounded-full transition-colors whitespace-nowrap border border-slate-200 dark:border-slate-700 ${i === 0 ? 'bg-sky-500 text-white border-sky-500' : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}" data-cat="${cat}">${cat}</button>
-                                        `).join('')}
-                                    </div>
-                                    <div id="emoji-grid" class="grid grid-cols-6 gap-2 p-3 max-h-60 overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-900">
-                                         ${this.emojiCategories[defaultCat].map(e => `<button class="btn-emoji-opt w-10 h-10 flex items-center justify-center text-xl hover:bg-white dark:hover:bg-slate-800 hover:shadow-md rounded transition-all" data-emoji="${e}">${e}</button>`).join('')}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="flex-1">
-                                <label class="text-xs font-bold text-slate-400">${ui.appSubtitle}</label>
-                                <input id="editor-description" type="text" class="w-full bg-transparent text-sm font-medium text-slate-600 dark:text-slate-300 outline-none" value="${this.meta.description}" placeholder="${ui.noDescription}">
-                            </div>
-                        </div>
-                        <div class="flex flex-wrap items-center gap-x-6 gap-y-4 col-span-1 md:col-span-2">
-                            <!-- ORDEN -->
-                            <div class="flex items-center gap-2">
-                                <label for="editor-order" class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase">ORDEN</label>
-                                <input id="editor-order" type="number" class="w-20 bg-slate-100 dark:bg-slate-800 px-2 py-1.5 rounded-lg font-bold text-center" value="${this.meta.order}">
-                            </div>
-
-                            <!-- TIPO -->
-                            <div class="flex items-center gap-2">
-                                <label class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase">TIPO</label>
-                                <div class="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg p-1 text-sm font-bold">
-                                    <label class="radio-label cursor-pointer">
-                                        <input type="radio" name="type" class="sr-only peer" id="editor-type-lesson" ${!this.meta.isExam ? 'checked' : ''}>
-                                        <div class="px-3 py-1 rounded-md flex items-center gap-1.5 text-slate-500 dark:text-slate-400 peer-checked:bg-white dark:peer-checked:bg-slate-700 peer-checked:text-slate-800 dark:peer-checked:text-white peer-checked:shadow-sm transition-colors">
-                                            <span>🌱</span>
-                                            <span>Lección</span>
-                                        </div>
-                                    </label>
-                                    <label class="radio-label cursor-pointer">
-                                        <input type="radio" name="type" class="sr-only peer" id="editor-type-exam" ${this.meta.isExam ? 'checked' : ''}>
-                                        <div class="px-3 py-1 rounded-md flex items-center gap-1.5 text-slate-500 dark:text-slate-400 peer-checked:bg-white dark:peer-checked:bg-slate-700 peer-checked:text-slate-800 dark:peer-checked:text-white peer-checked:shadow-sm transition-colors">
-                                            <span>⚔️</span>
-                                            <span>Examen</span>
-                                        </div>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- TOOLBAR -->
-                <div class="flex-shrink-0 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 p-2 flex items-center justify-center gap-1">
-                     <button class="tb-btn p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 font-bold" data-cmd="bold">B</button>
-                     <button class="tb-btn p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 italic" data-cmd="italic">I</button>
-                     <div class="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-2"></div>
-                     <button class="tb-btn p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 font-bold text-xs" data-cmd="formatBlock" data-val="h1">H1</button>
-                     <button class="tb-btn p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 font-bold text-xs" data-cmd="formatBlock" data-val="h2">H2</button>
-                     <div class="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-2"></div>
-                     <button id="btn-add-img" class="p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700">🖼️</button>
-                     <button id="btn-add-vid" class="p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700">🎥</button>
-                     <button id="btn-add-aud" class="p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700">🎵</button>
-                     <button id="btn-add-quiz" class="p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700">❓</button>
-                </div>
-
-                <!-- EDITOR AREA -->
-                <div class="flex-1 flex overflow-hidden">
-                    <div class="flex-1 overflow-y-auto bg-slate-100 dark:bg-slate-800/50 p-4 md:p-8 custom-scrollbar">
-                        <div id="wysiwyg-editor" class="max-w-3xl mx-auto min-h-full bg-white dark:bg-slate-900 shadow-lg rounded-xl p-8 md:p-12 outline-none prose-slate dark:prose-invert" contenteditable="true" spellcheck="false">
-                            ${this.bodyToHtml(this.bodyContent)}
-                        </div>
-                    </div>
-                </div>
-                 <input type="file" id="image-upload" class="hidden" accept="image/*">
-            </div>
-        </div>
-            
-        <!-- MODAL DE GUARDADO -->
-        <dialog id="commit-dialog" class="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-2xl backdrop:bg-slate-900/50 max-w-md w-full border border-slate-200 dark:border-slate-700">
-            <h3 class="font-black text-xl mb-4 text-slate-800 dark:text-white">${ui.editorChanges}</h3>
-            <p class="text-sm text-slate-500 mb-2">${ui.editorCommitMsg}</p>
-            <textarea id="commit-msg" class="w-full h-24 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg mb-4 border border-slate-200 dark:border-slate-700 outline-none text-sm dark:text-white" placeholder="Ej: Corregí la fecha de la batalla..."></textarea>
-            <div class="flex justify-end gap-3">
-                <button id="btn-commit-cancel" class="px-4 py-2 text-slate-500 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">${ui.editorCancel}</button>
-                <button id="btn-commit-confirm" class="px-6 py-2 bg-green-600 text-white font-bold rounded-lg shadow-lg">${ui.editorCommitBtn}</button>
-            </div>
-        </dialog>
-        `;
-        this.bindEvents();
-    }
-
-    bodyToHtml(md) {
-        // Start with the main title from metadata as the first H1
-        let html = `<h1>${this.meta.title}</h1>`;
         
-        const lines = md.split('\n');
-        let currentQuiz = null;
-
-        const closeQuiz = () => {
-            if (currentQuiz) {
-                const optionsHtml = currentQuiz.options.map(opt => `
-                    <div class="option-item flex items-center gap-3" data-type="${opt.correct ? 'correct' : 'option'}">
-                        <span class="w-8 h-8 rounded-full flex items-center justify-center text-lg ${opt.correct ? 'bg-green-100 text-green-600' : 'bg-red-50 text-red-400'}">${opt.correct ? '✔' : '✖'}</span>
-                        <input type="text" class="flex-1" value="${opt.text}" placeholder="Texto de la opción...">
-                        <button class="btn-remove-option p-2 text-slate-400 hover:text-red-500 rounded-full">
-                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12h-15" /></svg>
-                        </button>
-                    </div>
-                `).join('');
-
-                html += `<div class="arbor-block quiz-block" contenteditable="false">
-                    <h4 class="font-bold text-green-700 dark:text-green-300 uppercase text-xs mb-2">Pregunta de Evaluación</h4>
-                    <input type="text" class="quiz-question-input mb-4 font-bold text-lg" value="${currentQuiz.question}" placeholder="Escribe la pregunta...">
-                    <div class="options-container space-y-3">${optionsHtml}</div>
-                    <div class="mt-4 flex items-center gap-2">
-                        <button class="btn-add-option text-xs font-bold bg-green-100 text-green-700 px-3 py-1.5 rounded-md hover:bg-green-200" data-type="correct">+ Opción Correcta</button>
-                        <button class="btn-add-option text-xs font-bold bg-red-50 text-red-600 px-3 py-1.5 rounded-md hover:bg-red-100" data-type="option">+ Opción Incorrecta</button>
-                    </div>
-                </div>`;
-                currentQuiz = null;
-            }
-        };
-
-        for (const line of lines) {
-            const t = line.trim();
-            if (t.startsWith('@quiz:')) {
-                closeQuiz();
-                currentQuiz = { question: t.substring(6).trim(), options: [] };
-            } else if (currentQuiz && (t.startsWith('@option:') || t.startsWith('@correct:'))) {
-                currentQuiz.options.push({
-                    text: t.substring(t.indexOf(':') + 1).trim(),
-                    correct: t.startsWith('@correct:')
-                });
-            } else if (t.startsWith('@image:')) {
-                closeQuiz();
-                html += `<div class="arbor-block image-block" contenteditable="false">
-                    <img src="${t.substring(7).trim()}" class="w-full rounded-lg shadow">
-                </div>`;
-            } else if (t.startsWith('@video:')) {
-                closeQuiz();
-                html += `<div class="arbor-block video-block" contenteditable="false">
-                    <h4 class="font-bold text-sky-700 dark:text-sky-300 uppercase text-xs mb-2">Video</h4>
-                    <input type="text" placeholder="URL (https://...)" class="url-input" value="${t.substring(7).trim()}">
-                </div>`;
-            } else if (t.startsWith('@audio:')) {
-                closeQuiz();
-                html += `<div class="arbor-block audio-block" contenteditable="false">
-                    <h4 class="font-bold text-purple-700 dark:text-purple-300 uppercase text-xs mb-2">Audio</h4>
-                    <input type="text" placeholder="URL (https://...)" class="url-input" value="${t.substring(7).trim()}">
-                </div>`;
-            } else if (t.startsWith('# ')) {
-                // Ignore H1 from body, as it's handled by the main title
-                // html += `<h1>${t.substring(2)}</h1>`;
-            } else if (t.startsWith('## ')) {
-                closeQuiz(); html += `<h2>${t.substring(3)}</h2>`;
-            } else if (t.trim()) {
-                closeQuiz();
-                const inlineParsed = t.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\*(.*?)\*/g, '<i>$1</i>');
-                html += `<p>${inlineParsed}</p>`;
-            }
-        }
-        closeQuiz(); // Close any pending quiz at the end
-        return html;
-    }
-    
-    // --- Event Handling & DOM Manipulation ---
-
-    bindEvents() {
-        const ui = store.ui;
-        // Main overlay
-        this.querySelector('#editor-overlay').onclick = (e) => {
-             if(e.target.id === 'editor-overlay' && confirm(ui.editorCancel + '?')) store.setModal(null);
-        };
-        this.querySelector('#btn-cancel').onclick = () => { if(confirm(ui.editorCancel + '?')) store.setModal(null); };
-
-        // Toolbar
-        this.querySelectorAll('.tb-btn').forEach(b => b.onclick = (e) => {
-            e.preventDefault();
-            this.formatText(b.dataset.cmd, b.dataset.val);
-        });
-
-        // Insert blocks
-        this.querySelector('#btn-add-img').onclick = (e) => { e.preventDefault(); this.querySelector('#image-upload').click(); };
-        this.querySelector('#btn-add-vid').onclick = (e) => { e.preventDefault(); this.insertBlock('video'); };
-        this.querySelector('#btn-add-aud').onclick = (e) => { e.preventDefault(); this.insertBlock('audio'); };
-        this.querySelector('#btn-add-quiz').onclick = (e) => { e.preventDefault(); this.insertBlock('quiz'); };
+        this.querySelector('#btn-cancel').onclick = () => store.setModal(null);
+        this.querySelector('#btn-submit').onclick = () => this.submitChanges();
         
-        // Image upload handling
-        this.querySelector('#image-upload').onchange = (e) => this.handleImageUpload(e);
-
-        // Delegated events for dynamic quiz options
-        const editor = this.querySelector('#wysiwyg-editor');
-        if (editor) {
-            editor.addEventListener('click', (e) => {
-                const removeBtn = e.target.closest('.btn-remove-option');
-                if (removeBtn) {
-                    e.preventDefault();
-                    removeBtn.closest('.option-item')?.remove();
-                    return;
-                }
-
-                const addBtn = e.target.closest('.btn-add-option');
-                if (addBtn) {
-                    e.preventDefault();
-                    const type = addBtn.dataset.type;
-                    const isCorrect = type === 'correct';
-                    const optionsContainer = addBtn.closest('.quiz-block').querySelector('.options-container');
-                    
-                    const newOption = document.createElement('div');
-                    newOption.className = 'option-item flex items-center gap-3';
-                    newOption.dataset.type = type;
-                    newOption.innerHTML = `
-                        <span class="w-8 h-8 rounded-full flex items-center justify-center text-lg ${isCorrect ? 'bg-green-100 text-green-600' : 'bg-red-50 text-red-400'}">${isCorrect ? '✔' : '✖'}</span>
-                        <input type="text" class="flex-1" placeholder="${isCorrect ? 'Respuesta Correcta' : 'Respuesta Incorrecta'}">
-                        <button class="btn-remove-option p-2 text-slate-400 hover:text-red-500 rounded-full">
-                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12h-15" /></svg>
-                        </button>
-                    `;
-                    optionsContainer.appendChild(newOption);
-                    newOption.querySelector('input').focus();
-                }
-            });
-        }
-
-        // Emoji picker
-        this.bindEmojiPickerEvents();
-
-        // Commit dialog
-        const dialog = this.querySelector('#commit-dialog');
-        this.querySelector('#btn-submit').onclick = () => dialog.showModal();
-        this.querySelector('#btn-commit-cancel').onclick = () => dialog.close();
-        this.querySelector('#btn-commit-confirm').onclick = () => this.submitChanges();
-    }
-
-    bindEmojiPickerEvents() {
-        // Tab switching logic
-        this.querySelectorAll('.emoji-cat-btn').forEach(btn => {
+        this.querySelector('#btn-emoji').onclick = (e) => {
+            e.stopPropagation();
+            this.toggleEmojiPicker();
+        };
+        
+        this.querySelectorAll('.emoji-btn').forEach(btn => {
             btn.onclick = (e) => {
                 e.stopPropagation();
-                // 1. Update active tab style
-                this.querySelectorAll('.emoji-cat-btn').forEach(b => {
-                    b.classList.remove('bg-sky-500', 'text-white', 'border-sky-500');
-                    b.classList.add('bg-white', 'dark:bg-slate-800', 'text-slate-500', 'dark:text-slate-400', 'hover:bg-slate-100', 'dark:hover:bg-slate-700');
-                });
-                
-                const target = e.currentTarget;
-                target.classList.remove('bg-white', 'dark:bg-slate-800', 'text-slate-500', 'dark:text-slate-400', 'hover:bg-slate-100', 'dark:hover:bg-slate-700');
-                target.classList.add('bg-sky-500', 'text-white', 'border-sky-500');
-
-                // 2. Refresh Grid
-                const cat = target.dataset.cat;
-                const grid = this.querySelector('#emoji-grid');
-                grid.innerHTML = this.emojiCategories[cat].map(emoji => 
-                    `<button class="btn-emoji-opt w-10 h-10 flex items-center justify-center text-xl hover:bg-white dark:hover:bg-slate-800 hover:shadow-md rounded transition-all" data-emoji="${emoji}">${emoji}</button>`
-                ).join('');
-                
-                // 3. Rebind click events for new emoji buttons
-                this.bindEmojiSelection();
+                this.selectEmoji(e.currentTarget.textContent);
             };
         });
-
-        this.bindEmojiSelection();
-    }
-
-    bindEmojiSelection() {
-        this.querySelectorAll('.btn-emoji-opt').forEach(b => b.onclick = (e) => {
-            e.stopPropagation();
-            this.querySelector('#btn-emoji').textContent = e.currentTarget.dataset.emoji;
-        });
-    }
-    
-    formatText(cmd, value = null) {
-        if (cmd === 'formatBlock') {
-            document.execCommand('formatBlock', false, `<${value}>`);
-        } else {
-            document.execCommand(cmd, false, null);
-        }
-        this.querySelector('#wysiwyg-editor').focus();
-    }
-    
-    insertBlock(type) {
-        const editor = this.querySelector('#wysiwyg-editor');
-        let blockHtml = '';
-
-        if (type === 'quiz') {
-            blockHtml = `<div class="arbor-block quiz-block" contenteditable="false">
-                <h4 class="font-bold text-green-700 dark:text-green-300 uppercase text-xs mb-2">Pregunta de Evaluación</h4>
-                <input type="text" class="quiz-question-input mb-4 font-bold text-lg" placeholder="Escribe la pregunta...">
-                <div class="options-container space-y-3">
-                    <div class="option-item flex items-center gap-3" data-type="correct">
-                        <span class="w-8 h-8 rounded-full flex items-center justify-center text-lg bg-green-100 text-green-600">✔</span>
-                        <input type="text" class="flex-1" placeholder="Respuesta Correcta">
-                        <button class="btn-remove-option p-2 text-slate-400 hover:text-red-500 rounded-full"><svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12h-15" /></svg></button>
-                    </div>
-                    <div class="option-item flex items-center gap-3" data-type="option">
-                        <span class="w-8 h-8 rounded-full flex items-center justify-center text-lg bg-red-50 text-red-400">✖</span>
-                        <input type="text" class="flex-1" placeholder="Respuesta Incorrecta">
-                        <button class="btn-remove-option p-2 text-slate-400 hover:text-red-500 rounded-full"><svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12h-15" /></svg></button>
-                    </div>
-                </div>
-                <div class="mt-4 flex items-center gap-2">
-                    <button class="btn-add-option text-xs font-bold bg-green-100 text-green-700 px-3 py-1.5 rounded-md hover:bg-green-200" data-type="correct">+ Opción Correcta</button>
-                    <button class="btn-add-option text-xs font-bold bg-red-50 text-red-600 px-3 py-1.5 rounded-md hover:bg-red-100" data-type="option">+ Opción Incorrecta</button>
-                </div>
-            </div><p><br></p>`;
-        } else if (type === 'video') {
-            blockHtml = `<div class="arbor-block video-block" contenteditable="false">
-                <h4 class="font-bold text-sky-700 dark:text-sky-300 uppercase text-xs mb-2">Video</h4>
-                <input type="text" placeholder="URL (https://...)" class="url-input">
-            </div><p><br></p>`;
-        } else if (type === 'audio') {
-            blockHtml = `<div class="arbor-block audio-block" contenteditable="false">
-                <h4 class="font-bold text-purple-700 dark:text-purple-300 uppercase text-xs mb-2">Audio</h4>
-                <input type="text" placeholder="URL (https://...)" class="url-input">
-            </div><p><br></p>`;
-        }
-        document.execCommand('insertHTML', false, blockHtml);
-    }
-
-    async handleImageUpload(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        this.isUploading = true;
-        this.render(); // Re-render to show loading state maybe
         
-        try {
-            const url = await github.uploadImage(file);
-            const imgBlock = `<div class="arbor-block image-block" contenteditable="false"><img src="${url}" class="w-full rounded-lg shadow"></div><p><br></p>`;
-            document.execCommand('insertHTML', false, imgBlock);
-        } catch (err) {
-            alert('Error al subir imagen: ' + err.message);
-        } finally {
-            this.isUploading = false;
-            // Re-render to hide loading
+        if (!isMeta) {
+            this.querySelectorAll('.tool-btn').forEach(btn => {
+                btn.onclick = () => this.execCmd(btn.dataset.cmd, btn.dataset.val);
+            });
+            this.querySelectorAll('.block-btn').forEach(btn => {
+                btn.onclick = () => this.insertBlock(btn.dataset.type);
+            });
         }
+        
+        this.onclick = (e) => {
+            if(!e.target.closest('#emoji-picker') && !e.target.closest('#btn-emoji')) {
+                const p = this.querySelector('#emoji-picker');
+                if(p) p.classList.add('hidden');
+            }
+        };
     }
 
     async submitChanges() {
-        const ui = store.ui;
-        const msg = this.querySelector('#commit-msg').value.trim() || `Update ${this.querySelector('#wysiwyg-editor h1')?.textContent.trim() || 'content'}`;
-        const btn = this.querySelector('#btn-commit-confirm');
-        
+        const btn = this.querySelector('#btn-submit');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = "Procesando...";
         btn.disabled = true;
-        btn.innerHTML = `<div class="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin"></div>`;
-
-        const finalMarkdown = this.generateFinalMarkdown();
-
-        // Check if content has actually changed
-        if (finalMarkdown.trim() === this.originalContent.trim()) {
-            alert("No changes detected.");
-            this.querySelector('#commit-dialog').close();
-            btn.disabled = false;
-            btn.textContent = ui.editorCommitBtn;
-            return;
-        }
-
+        
+        const finalContent = this.generateFinalContent();
+        const msg = `Update ${this.meta.title || 'File'}`;
+        
         try {
-            const prUrl = await github.createPullRequest(this.node.sourcePath, finalMarkdown, msg);
-            store.setModal({ type: 'prSuccess', url: prUrl });
-        } catch (e) {
-            alert(ui.prError + ": " + e.message);
+            if (this.hasWriteAccess) {
+                await github.commitFile(this.node.sourcePath, finalContent, msg, this.currentSha);
+                alert("✅ Guardado y Publicado en Main.");
+            } else {
+                const prUrl = await github.createPullRequest(this.node.sourcePath, finalContent, msg);
+                alert("🚀 Solicitud enviada para revisión.\n" + prUrl);
+            }
+            store.setModal(null);
+        } catch(e) {
+            alert("Error: " + e.message);
+            btn.innerHTML = originalText;
             btn.disabled = false;
-            btn.textContent = ui.editorCommitBtn;
         }
     }
 }
-
 customElements.define('arbor-editor', ArborEditor);

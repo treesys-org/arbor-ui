@@ -1,12 +1,12 @@
 
 
-
 import { store } from '../store.js';
 
 class ArborSidebar extends HTMLElement {
     constructor() { 
         super();
         this.isMobileMenuOpen = false;
+        this.renderKey = null;
     }
 
     connectedCallback() {
@@ -20,6 +20,19 @@ class ArborSidebar extends HTMLElement {
     }
 
     render() {
+        // Debounce / Memoize Render
+        const { theme, lang, viewMode, gamification, githubUser } = store.value;
+        const currentKey = JSON.stringify({
+            theme, lang, viewMode, 
+            streak: gamification.streak, 
+            fruitsLen: gamification.fruits.length,
+            ghUser: githubUser?.login,
+            mobileOpen: this.isMobileMenuOpen
+        });
+        
+        if (currentKey === this.renderKey) return;
+        this.renderKey = currentKey;
+
         const ui = store.ui;
         const g = store.value.gamification;
 

@@ -11,6 +11,11 @@ export const UI_LABELS = {
       searchKeepTyping: 'Keep typing to filter...',
       searchBroadLoading: 'Loading all topics for this letter...',
       
+      // TAGS
+      tagModule: 'MODULE',
+      tagLesson: 'LESSON',
+      tagExam: 'EXAM',
+      
       // MERGED WELCOME & TUTORIAL (Narrated by Owl)
       tutorialTitle: 'Arbor\'s Guide',
       tutorialSkip: 'Skip Intro',
@@ -166,6 +171,11 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       languageSelect: 'Select your preferred language',
       moduleEmpty: 'This module is empty.',
       
+      // Empty Module / Contribution
+      emptyModuleTitle: 'Empty Branch',
+      emptyModuleDesc: 'This module has no content yet. Help us grow the tree by contributing new lessons!',
+      contributeBtn: 'Contribute Content',
+
       // Contributor & Editor (SIMPLIFIED)
       contribTitle: 'Editor Mode',
       contribDesc: 'Help us grow the garden. Connect your GitHub account to enable the "Edit" button on lessons and submit improvements to the team.',
@@ -261,6 +271,11 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       searchKeepTyping: 'Sigue escribiendo para filtrar...',
       searchBroadLoading: 'Cargando todo el contenido de esta letra...',
       
+      // TAGS
+      tagModule: 'MÓDULO',
+      tagLesson: 'LECCIÓN',
+      tagExam: 'EXAMEN',
+
       // MERGED WELCOME & TUTORIAL
       tutorialTitle: 'Guía de Arbor',
       tutorialSkip: 'Saltar Intro',
@@ -421,6 +436,11 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       languageSelect: 'Selecciona tu idioma preferido',
       moduleEmpty: 'Este módulo no tiene contenido.',
 
+      // Empty Module / Contribution
+      emptyModuleTitle: 'Rama Vacía',
+      emptyModuleDesc: 'Este módulo aún no tiene contenido. ¡Ayúdanos a cultivar el árbol añadiendo nuevas lecciones!',
+      contributeBtn: 'Contribuir Contenido',
+
       // Contributor & Editor (SIMPLIFIED)
       contribTitle: 'Modo Editor',
       contribDesc: 'Ayuda a cultivar este jardín. Conecta tu cuenta de GitHub para activar el botón "Editar" en las lecciones y enviar tus mejoras al equipo.',
@@ -464,7 +484,7 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       // Gamification
       streak: 'Racha',
       days: 'días',
-      todayGoal: 'Fotosíntesis',
+      todayGoal: 'Photosynthesis',
       xpUnit: 'lúmenes',
       gardenTitle: 'Mi Cosecha',
       gardenEmpty: 'Completa módulos para cosechar frutos.',

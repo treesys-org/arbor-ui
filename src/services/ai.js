@@ -51,7 +51,12 @@ class HybridAIService {
     async initializeClient() {
         // Gemini
         if (this.config.provider === 'gemini' && this.config.apiKey) {
-            this.client = new GoogleGenAI({ apiKey: this.config.apiKey });
+            try {
+                this.client = new GoogleGenAI({ apiKey: this.config.apiKey });
+            } catch (e) {
+                console.error("Failed to init Gemini client", e);
+                this.client = null;
+            }
         } 
         
         // WebLLM (Needs specific init)
@@ -71,10 +76,9 @@ class HybridAIService {
 
         // SECURITY CHECK
         if (!window.crossOriginIsolated) {
-            const warning = "⚠️ ADVERTENCIA: Tu navegador no tiene activado 'Cross-Origin Isolation'. WebGPU fallará o será muy lento. Si estás en local, usa 'python -m http.server' o una extensión que habilite COOP/COEP.";
+            const warning = "⚠️ ADVERTENCIA: Tu navegador no tiene activado 'Cross-Origin Isolation'. WebGPU fallará o será muy lento.";
             console.warn(warning);
             if(progressCallback) progressCallback(warning);
-            // We attempt anyway, but it often fails
         }
         
         if (!navigator.gpu) {
@@ -273,8 +277,9 @@ class HybridAIService {
         // --- GEMINI (CLOUD) ---
         if (this.config.provider === 'gemini' && this.client) {
             try {
+                // Correct @google/genai v1.0 syntax
                 const response = await this.client.models.generateContent({
-                    model: 'gemini-2.5-flash',
+                    model: 'gemini-2.5-flash', // Updated to latest flash model
                     contents: [
                         { role: 'user', parts: [{ text: systemContext + `\n\nUSER QUESTION: ${lastMsg}` }] }
                     ],
@@ -285,6 +290,7 @@ class HybridAIService {
                 
                 const text = response.text;
                 let sources = [];
+                // Correct extraction of grounding chunks
                 const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
                 if (groundingChunks) {
                     sources = groundingChunks
@@ -296,7 +302,7 @@ class HybridAIService {
 
             } catch (e) {
                 console.error("Gemini Error:", e);
-                return { text: "🦉 Error en la nube (Gemini). Revisa tu API Key." };
+                return { text: "🦉 Error en la nube (Gemini). Revisa tu API Key o conexión." };
             }
         }
 
@@ -322,14 +328,13 @@ class HybridAIService {
 
              } catch (e) {
                  console.error("WebLLM Error", e);
-                 return { text: "🦉 Error WebLLM. Revisa si tu GPU soporta 'SmolLM2' o modelos pequeños." };
+                 return { text: "🦉 Error WebLLM. Revisa si tu GPU soporta WebGPU." };
              }
         }
 
         // --- OLLAMA (LOCAL CPU) ---
         if (this.config.provider === 'ollama') {
             try {
-                // Prepare messages for Ollama format
                 const ollamaMessages = [
                     { role: 'system', content: systemContext },
                     ...messages
@@ -337,10 +342,9 @@ class HybridAIService {
 
                 this.currentController = new AbortController();
                 
-                // Add a timeout signal (Safety fallback)
                 const timeoutId = setTimeout(() => {
                     if (this.currentController) this.currentController.abort();
-                }, 300000); // 5 minute hard timeout
+                }, 300000); 
 
                 const response = await fetch(`${this.ollamaHost}/api/chat`, {
                     method: 'POST',
@@ -350,9 +354,8 @@ class HybridAIService {
                         messages: ollamaMessages,
                         stream: false,
                         options: {
-                            num_predict: 2048, // Reverted to original
+                            num_predict: 2048,
                             temperature: 0.7
-                            // num_ctx removed to let Ollama use model defaults
                         }
                     }),
                     signal: this.currentController.signal
@@ -375,7 +378,7 @@ class HybridAIService {
                 if (e.name === 'AbortError') {
                     return { text: "🦉 ...(Detenido por el usuario o timeout)..." };
                 }
-                return { text: `🦉 Error conectando con tu cerebro local.\n\nDiagnóstico posible:\n1. El modelo '${this.config.ollamaModel}' falló al cargar (Logs: "llm server error").\n2. Asegúrate de que Ollama siga corriendo en el puerto 11434.` };
+                return { text: `🦉 Error conectando con tu cerebro local.\n\nDiagnóstico: Asegúrate de que Ollama corre en el puerto 11434.` };
             }
         }
 

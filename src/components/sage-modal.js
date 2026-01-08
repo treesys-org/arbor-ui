@@ -15,6 +15,7 @@ class ArborSage extends HTMLElement {
         this.pullStatus = '';
         this.webllmStatus = '';
         this.hasTriedLoadingModels = false; // Prevents infinite loops
+        this.lastRenderKey = null;
     }
     
     determineInitialTab() {
@@ -55,6 +56,7 @@ class ArborSage extends HTMLElement {
     
     close() {
         this.isVisible = false;
+        this.lastRenderKey = null;
         this.innerHTML = '';
         this.className = '';
         store.setModal(null);
@@ -166,10 +168,36 @@ class ArborSage extends HTMLElement {
 
     render() {
         if (!this.isVisible) {
-            this.innerHTML = '';
-            this.className = '';
+            if (this.innerHTML !== '') {
+                this.innerHTML = '';
+                this.className = '';
+                this.lastRenderKey = null;
+            }
             return;
         }
+
+        const { ai } = store.value;
+        const stateKey = JSON.stringify({
+             visible: this.isVisible,
+             mode: this.mode,
+             settingsTab: this.settingsTab,
+             ollamaModels: this.ollamaModels,
+             pullStatus: this.pullStatus,
+             webllmStatus: this.webllmStatus,
+             aiStatus: ai.status,
+             msgCount: ai.messages.length,
+             lastMsgLen: ai.messages.length ? ai.messages[ai.messages.length-1].content.length : 0
+        });
+
+        if (stateKey === this.lastRenderKey) return;
+
+        // Save input state before re-rendering
+        const activeId = document.activeElement?.id;
+        const selectionStart = document.activeElement?.selectionStart;
+        const selectionEnd = document.activeElement?.selectionEnd;
+        const currentVal = document.activeElement?.value;
+
+        this.lastRenderKey = stateKey;
 
         const isSmart = aiService.isSmartMode();
 
@@ -179,6 +207,20 @@ class ArborSage extends HTMLElement {
             this.renderMenu();
         } else {
             this.renderChat(isSmart);
+        }
+
+        // Restore input state
+        if (activeId) {
+             const el = this.querySelector('#' + activeId);
+             if (el) {
+                 el.focus();
+                 // Only restore if it's a text input
+                 if (el.setSelectionRange && selectionStart !== undefined) {
+                     // Restore value first if it's the main input to prevent loss
+                     if (currentVal !== undefined && activeId === 'sage-input') el.value = currentVal;
+                     el.setSelectionRange(selectionStart, selectionEnd || selectionStart);
+                 }
+             }
         }
     }
 
