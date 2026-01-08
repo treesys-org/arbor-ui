@@ -5,8 +5,12 @@
 
 
 
+
+
+
 import { store } from '../store.js';
 import { parseArborFile, markdownToVisualHTML } from '../utils/editor-engine.js';
+import { pdfGenerator } from '../services/pdf-generator.js';
 import './admin-panel.js';
 
 class ArborModals extends HTMLElement {
@@ -22,7 +26,8 @@ class ArborModals extends HTMLElement {
             profileTab: 'garden',
             showAllCerts: false, 
             certSearchQuery: '',
-            isGeneratingPdf: false
+            isGeneratingPdf: false,
+            pdfProgress: 0
         };
         this.searchTimer = null;
         this.lastRenderKey = null;
@@ -52,6 +57,7 @@ class ArborModals extends HTMLElement {
         this.state.showAllCerts = false;
         this.state.certSearchQuery = '';
         this.state.isGeneratingPdf = false;
+        this.state.pdfProgress = 0;
         this.lastRenderKey = null;
         if (this.searchTimer) clearTimeout(this.searchTimer);
         store.setModal(null); 
@@ -162,9 +168,7 @@ class ArborModals extends HTMLElement {
                 </div>
              </div>`;
              
-             // Removed backdrop click closing logic
              this.querySelector('.btn-close-search').onclick = () => this.close();
-             
              this.bindEvents(type, ui);
              return;
         }
@@ -178,14 +182,13 @@ class ArborModals extends HTMLElement {
             </div>
         </div>`;
 
-        // Removed backdrop click closing logic
         const closeBtn = this.querySelector('.btn-close');
         if (closeBtn) closeBtn.onclick = () => this.close();
         
         this.bindEvents(type, ui);
     }
 
-    // --- PREVIEW LOGIC (Fixing the "Click Course" Issue) ---
+    // --- PREVIEW LOGIC ---
     renderPreviewModal(node, ui) {
         const isComplete = store.isCompleted(node.id);
         const icon = node.icon || (node.type === 'exam' ? '⚔️' : '📄');
@@ -217,7 +220,6 @@ class ArborModals extends HTMLElement {
             </div>
         </div>`;
 
-        // Removed backdrop click closing logic
         this.querySelector('.btn-enter').onclick = () => store.enterLesson();
         this.querySelectorAll('.btn-cancel').forEach(b => b.onclick = () => store.closePreview());
     }
@@ -309,7 +311,6 @@ class ArborModals extends HTMLElement {
             </div>
         </div>`;
         
-        // Removed backdrop click closing logic
         this.querySelector('.btn-close-certs').onclick = () => store.setViewMode('explore');
         
         const searchInput = this.querySelector('#inp-cert-search');
@@ -344,8 +345,15 @@ class ArborModals extends HTMLElement {
         if (this.state.isGeneratingPdf) {
              return `
              <div class="p-12 flex flex-col items-center justify-center text-center">
-                 <div class="w-16 h-16 border-4 border-slate-200 border-t-purple-600 rounded-full animate-spin mb-6"></div>
+                 <div class="relative w-20 h-20 mb-6 flex items-center justify-center">
+                     <svg class="w-20 h-20 text-slate-200 dark:text-slate-700" viewBox="0 0 100 100">
+                        <circle stroke-width="8" stroke="currentColor" fill="transparent" r="42" cx="50" cy="50" />
+                        <circle class="text-purple-600 transition-all duration-300 ease-out" stroke-width="8" stroke-dasharray="264" stroke-dashoffset="${264 * (1 - this.state.pdfProgress / 100)}" stroke-linecap="round" stroke="currentColor" fill="transparent" r="42" cx="50" cy="50" style="transform: rotate(-90deg); transform-origin: 50% 50%;" />
+                     </svg>
+                     <span class="absolute font-black text-slate-700 dark:text-white text-lg">${this.state.pdfProgress}%</span>
+                 </div>
                  <h2 class="text-xl font-bold text-slate-800 dark:text-white animate-pulse">${ui.generatingPdf}</h2>
+                 <p class="text-xs text-slate-400 mt-2">Processing lessons...</p>
              </div>`;
         }
 
@@ -372,7 +380,7 @@ class ArborModals extends HTMLElement {
     }
 
     async handleExport(mode, node) {
-        this.updateState({ isGeneratingPdf: true });
+        this.updateState({ isGeneratingPdf: true, pdfProgress: 0 });
         
         try {
             let nodesToPrint = [];
@@ -396,8 +404,12 @@ class ArborModals extends HTMLElement {
                      nodesToPrint = await Promise.all(siblings.map(async (child) => child));
                 }
             }
-
-            this.generatePrintDocument(nodesToPrint);
+            
+            // Delegate logic to dedicated service
+            await pdfGenerator.generate(nodesToPrint, (progress) => {
+                this.updateState({ pdfProgress: progress });
+            });
+            
             this.close();
 
         } catch (e) {
@@ -405,221 +417,6 @@ class ArborModals extends HTMLElement {
             alert("Error generating PDF: " + e.message);
             this.close();
         }
-    }
-
-    generatePrintDocument(nodes) {
-        const printWindow = window.open('', '_blank');
-        if (!printWindow) {
-            alert("Pop-up blocked. Please allow pop-ups for printing.");
-            return;
-        }
-
-        // Get Metadata for Footer
-        const source = store.value.activeSource;
-        const isOfficial = source.isDefault || source.url.includes('treesys-org');
-        const repoName = source.name;
-        const licenseText = isOfficial ? "Licensed under GPL-3.0" : "Content provided by third-party repository";
-        const dateStr = new Date().toLocaleDateString();
-        
-        // Generate Content HTML
-        const contentHtml = nodes.map((n, index) => {
-            const parsed = parseArborFile(n.content || '');
-            const bodyHtml = markdownToVisualHTML(parsed.body);
-            
-            // Add page break only between lessons, not before the first one (handled by CSS)
-            const breakClass = index > 0 ? 'page-break-before' : '';
-            
-            return `
-            <article class="lesson-page ${breakClass}">
-                <header class="lesson-header">
-                    <h1>${n.name}</h1>
-                    ${n.path ? `<p class="meta">${n.path}</p>` : ''}
-                </header>
-                <div class="content">
-                    ${bodyHtml}
-                </div>
-            </article>
-            `;
-        }).join('');
-
-        // Generate Cover Page
-        const mainTitle = nodes.length > 1 ? (nodes[0].path ? nodes[0].path.split('/')[nodes[0].path.split('/').length - 2] : 'Module Export') : nodes[0].name;
-        
-        const coverHtml = `
-        <div class="cover-page">
-            <div class="cover-content">
-                <div class="logo">🌳 ARBOR</div>
-                <h1 class="cover-title">${mainTitle.trim()}</h1>
-                <p class="cover-subtitle">${nodes.length} Lesson${nodes.length > 1 ? 's' : ''}</p>
-                <div class="cover-footer">
-                    <p>Generated on ${dateStr}</p>
-                    <p class="small">${repoName}</p>
-                </div>
-            </div>
-        </div>
-        <div class="page-break-after"></div>
-        `;
-
-        const styles = `
-            @import url('https://fonts.googleapis.com/css2?family=Georgia&family=Nunito:wght@400;700;900&display=swap');
-            
-            :root {
-                --primary: #333;
-                --accent: #555;
-            }
-
-            @page {
-                size: A4;
-                margin: 2.5cm;
-                @bottom-center {
-                    content: "Page " counter(page);
-                    font-family: 'Nunito', sans-serif;
-                    font-size: 9pt;
-                    color: #888;
-                }
-            }
-
-            body { 
-                font-family: 'Georgia', serif; 
-                color: #222; 
-                line-height: 1.6; 
-                font-size: 11pt;
-                max-width: 100%;
-                margin: 0;
-                padding: 0;
-                -webkit-print-color-adjust: exact;
-            }
-
-            /* --- Typography --- */
-            h1, h2, h3, h4 { font-family: 'Nunito', sans-serif; color: #111; font-weight: 800; }
-            
-            h1 { font-size: 24pt; border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 25px; margin-top: 0; }
-            h2 { font-size: 16pt; margin-top: 30px; margin-bottom: 15px; color: #333; }
-            h3 { font-size: 13pt; margin-top: 20px; color: #555; }
-            
-            p { margin-bottom: 15px; text-align: justify; }
-            
-            a { color: #000; text-decoration: underline; }
-            
-            img { max-width: 100%; height: auto; border-radius: 4px; margin: 20px 0; max-height: 500px; object-fit: contain; }
-            
-            blockquote { 
-                border-left: 3px solid #ccc; 
-                padding-left: 15px; 
-                font-style: italic; 
-                color: #555; 
-                margin: 20px 0; 
-                background: #f9f9f9;
-                padding: 10px 15px;
-            }
-            
-            code { 
-                background: #f0f0f0; 
-                padding: 2px 5px; 
-                border-radius: 3px; 
-                font-family: 'Courier New', monospace; 
-                font-size: 0.9em;
-            }
-            pre { 
-                background: #f5f5f5; 
-                padding: 15px; 
-                border-radius: 5px; 
-                overflow-x: auto; 
-                border: 1px solid #eee;
-                font-size: 0.85em;
-            }
-
-            /* --- Structural --- */
-            .lesson-page { margin-bottom: 50px; }
-            .lesson-header { margin-bottom: 30px; }
-            .meta { font-size: 9pt; color: #777; text-transform: uppercase; font-family: 'Nunito', sans-serif; letter-spacing: 1px; margin-top: -20px; }
-            
-            .page-break-before { page-break-before: always; }
-            .page-break-after { page-break-after: always; }
-
-            /* --- Cover Page --- */
-            .cover-page {
-                height: 90vh; /* Approximate A4 height minus margins */
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-                text-align: center;
-                border: 10px double #eee;
-                padding: 40px;
-                box-sizing: border-box;
-            }
-            .cover-content { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; }
-            .logo { font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 20pt; color: #444; margin-bottom: 40px; }
-            .cover-title { font-size: 36pt; border: none; margin: 20px 0; line-height: 1.2; }
-            .cover-subtitle { font-size: 14pt; color: #666; font-style: italic; }
-            .cover-footer { margin-top: auto; font-family: 'Nunito', sans-serif; color: #888; font-size: 10pt; }
-            .small { font-size: 9pt; opacity: 0.7; }
-
-            /* --- Footer (Fixed) --- */
-            .print-footer {
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                border-top: 1px solid #ddd;
-                padding-top: 10px;
-                background: white;
-                text-align: center;
-                font-family: 'Nunito', sans-serif;
-                font-size: 8pt;
-                color: #666;
-            }
-            .print-footer a { color: #666; text-decoration: none; font-weight: bold; }
-
-            /* --- Hiding Elements --- */
-            /* Crucial: Hide all quizzes, videos, and interactive elements */
-            .arbor-quiz-edit, 
-            .quiz-container,
-            iframe, 
-            .arbor-video-edit,
-            .edit-block-wrapper[data-type="video"] { 
-                display: none !important; 
-            }
-            
-            /* Hide print UI if any slipped in */
-            @media print {
-                .no-print { display: none !important; }
-                /* Ensure quizzes are hidden in print media specifically */
-                .arbor-quiz-edit { display: none !important; }
-            }
-        `;
-
-        printWindow.document.write(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>${mainTitle}</title>
-                <style>${styles}</style>
-            </head>
-            <body>
-                ${coverHtml}
-                
-                <main>
-                    ${contentHtml}
-                </main>
-
-                <div class="print-footer">
-                    <p>${footerText} <br> <a href="https://github.com/treesys-org/arbor-ui">github.com/treesys-org/arbor-ui</a></p>
-                </div>
-
-                <script>
-                    window.onload = function() { 
-                        // Small delay to ensure images render
-                        setTimeout(() => {
-                            window.print(); 
-                            // window.close(); // Optional: Auto-close
-                        }, 500);
-                    }
-                </script>
-            </body>
-            </html>
-        `);
-        printWindow.document.close();
     }
 
     bindEvents(type, ui) {
