@@ -1,6 +1,7 @@
 
 
 
+
 export const UI_LABELS = {
     EN: {
       appTitle: 'ARBOR',
@@ -61,6 +62,7 @@ export const UI_LABELS = {
       navSearch: 'Search',
       navCertificates: 'Certificates',
       navSources: 'Trees',
+      navOffline: 'Save / Offline',
       navHelp: 'Tutorial',
       navContributor: 'Editor Mode',
       navSage: 'Ask the Sage',
@@ -173,6 +175,11 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       moduleEmpty: 'This module is empty.',
       
       // Offline / Download
+      offlineTitle: 'Offline Mode',
+      offlineDesc: 'Download the current tree to your device to access it without an internet connection.',
+      offlineBtnDownload: 'Download Content',
+      offlineBtnDelete: 'Clear Cache',
+      offlineStatus: 'Cache Status',
       downloadOffline: 'Make Available Offline',
       downloading: 'Downloading Course...',
       downloadSuccess: 'Course downloaded! You can now use Arbor without internet.',
@@ -329,6 +336,7 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       navSearch: 'Buscar',
       navCertificates: 'Certificados',
       navSources: 'Árboles',
+      navOffline: 'Guardar / Offline',
       navHelp: 'Tutorial',
       navContributor: 'Modo Editor',
       navSage: 'Preguntar al Sabio',
@@ -446,6 +454,11 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       moduleEmpty: 'Este módulo no tiene contenido.',
 
       // Offline / Download
+      offlineTitle: 'Modo Sin Conexión',
+      offlineDesc: 'Descarga el árbol actual en tu dispositivo para acceder sin internet.',
+      offlineBtnDownload: 'Descargar Contenido',
+      offlineBtnDelete: 'Borrar Caché',
+      offlineStatus: 'Estado de Caché',
       downloadOffline: 'Disponible sin conexión',
       downloading: 'Descargando Curso...',
       downloadSuccess: '¡Curso descargado! Ahora puedes usar Arbor sin internet.',

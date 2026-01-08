@@ -3,6 +3,8 @@
 
 
 
+
+
 import { store } from '../store.js';
 import './admin-panel.js';
 
@@ -130,6 +132,7 @@ class ArborModals extends HTMLElement {
             case 'welcome': 
             case 'tutorial': content = this.renderWelcome(ui); break;
             case 'sources': content = this.renderSources(ui); break;
+            case 'offline': content = this.renderOffline(ui); break;
             case 'about': content = this.renderAbout(ui); break;
             case 'language': content = this.renderLanguage(ui); break;
             case 'impressum': content = this.renderImpressum(ui); break;
@@ -335,6 +338,7 @@ class ArborModals extends HTMLElement {
         if (type === 'search') this.bindSearchEvents();
         if (type === 'welcome' || type === 'tutorial') this.bindWelcomeEvents(ui);
         if (type === 'sources') this.bindSourcesEvents();
+        if (type === 'offline') this.bindOfflineEvents();
         if (type === 'profile') this.bindProfileEvents();
         if (type === 'language') {
             this.querySelectorAll('.btn-lang-sel').forEach(b => b.onclick = (e) => {
@@ -510,15 +514,6 @@ class ArborModals extends HTMLElement {
             <h2 class="text-2xl font-black mb-2 dark:text-white">${ui.sourceManagerTitle}</h2>
             <p class="text-sm text-slate-500 mb-6">${ui.sourceManagerDesc}</p>
             
-            <div class="flex gap-2 mb-4">
-                <button id="btn-download-offline" class="flex-1 py-3 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 font-bold rounded-xl text-xs hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors flex items-center justify-center gap-2">
-                    <span>⬇️</span> ${ui.downloadOffline}
-                </button>
-                <button id="btn-delete-offline" class="py-3 px-4 bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-red-500 font-bold rounded-xl text-xs transition-colors" title="${ui.deleteOffline}">
-                    🗑️
-                </button>
-            </div>
-
             <div class="flex-1 overflow-y-auto custom-scrollbar space-y-3 mb-4 pr-1">
                 ${sources.map(s => `
                     <div class="p-4 rounded-xl border-2 transition-all group relative ${s.id === activeId ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20' : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900'}">
@@ -578,8 +573,38 @@ class ArborModals extends HTMLElement {
                 }
             };
         }
-        
-        // Offline Buttons
+    }
+    
+    // --- OFFLINE / DOWNLOAD ---
+    renderOffline(ui) {
+        return `
+        <div class="p-8 text-center flex flex-col items-center justify-center h-full relative">
+             <div class="w-20 h-20 bg-green-50 dark:bg-green-900/20 rounded-full flex items-center justify-center text-4xl mb-6 shadow-inner border border-green-100 dark:border-green-800 text-green-600">💾</div>
+             <h2 class="text-2xl font-black mb-2 dark:text-white">${ui.offlineTitle}</h2>
+             <p class="text-sm text-slate-500 dark:text-slate-400 mb-8 max-w-xs leading-relaxed">${ui.offlineDesc}</p>
+             
+             <div class="w-full max-w-sm space-y-3">
+                 <button id="btn-download-offline" class="w-full py-4 bg-green-600 text-white font-bold rounded-xl shadow-lg hover:bg-green-500 active:scale-95 transition-all flex items-center justify-center gap-2">
+                    <span>⬇️</span> ${ui.offlineBtnDownload}
+                 </button>
+                 
+                 <button id="btn-delete-offline" class="w-full py-4 bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400 font-bold rounded-xl transition-colors flex items-center justify-center gap-2">
+                    <span>🗑️</span> ${ui.offlineBtnDelete}
+                 </button>
+             </div>
+             
+             <div class="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800 w-full max-w-xs">
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">${ui.offlineStatus}</p>
+                <div class="flex items-center justify-center gap-2">
+                     <span class="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600"></span>
+                     <span class="text-xs text-slate-500">IndexedDB: ArborDB</span>
+                </div>
+             </div>
+        </div>
+        `;
+    }
+    
+    bindOfflineEvents() {
         const btnDownload = this.querySelector('#btn-download-offline');
         if (btnDownload) {
              btnDownload.onclick = () => {
@@ -593,6 +618,7 @@ class ArborModals extends HTMLElement {
             btnDeleteOffline.onclick = () => {
                 if(confirm("Clear offline cache?")) {
                     store.deleteOfflineData();
+                    this.close();
                 }
             };
         }
