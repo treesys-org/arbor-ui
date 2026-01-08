@@ -1,5 +1,7 @@
 
 
+
+
 import { store } from '../store.js';
 import { aiService } from '../services/ai.js';
 
@@ -214,7 +216,7 @@ class ArborSage extends HTMLElement {
              const el = this.querySelector('#' + activeId);
              if (el) {
                  el.focus();
-                 // Only restore if it's a text input
+                 // Only restore if it's the main input to prevent loss
                  if (el.setSelectionRange && selectionStart !== undefined) {
                      // Restore value first if it's the main input to prevent loss
                      if (currentVal !== undefined && activeId === 'sage-input') el.value = currentVal;
@@ -235,7 +237,7 @@ class ArborSage extends HTMLElement {
                         <span class="text-3xl">🦉</span>
                         <h3 class="font-black text-xl text-slate-800 dark:text-white">${ui.sageMenuTitle}</h3>
                     </div>
-                    <button class="btn-close text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors">✕</button>
+                    <button class="btn-close w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors">✕</button>
                 </div>
                 
                 <div class="p-6 space-y-4">
@@ -332,7 +334,7 @@ class ArborSage extends HTMLElement {
                             <p class="text-xs text-slate-500">${ui.sageConfigDesc}</p>
                         </div>
                     </div>
-                    <button class="btn-close text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors">✕</button>
+                    <button class="btn-close w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors">✕</button>
                 </div>
                 
                 <div class="flex border-b border-slate-100 dark:border-slate-800 shrink-0">

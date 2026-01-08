@@ -1,4 +1,5 @@
 
+
 import { store } from '../store.js';
 import { github } from '../services/github.js';
 
@@ -296,7 +297,8 @@ class ArborAdminPanel extends HTMLElement {
         // Login Screen
         if (!user) {
             this.innerHTML = `
-            <div class="p-8 text-center flex flex-col items-center justify-center h-full">
+            <div class="p-8 text-center flex flex-col items-center justify-center h-full relative">
+                <button id="btn-close-login" class="absolute top-4 right-4 w-10 h-10 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 transition-colors">✕</button>
                 <div class="w-16 h-16 bg-slate-800 text-white rounded-full flex items-center justify-center text-3xl mb-6 shadow-xl">🐙</div>
                 <h2 class="text-2xl font-black mb-2 dark:text-white">${ui.contribTitle}</h2>
                 <p class="text-sm text-slate-500 mb-6 max-w-md">${ui.contribDesc}</p>
@@ -460,6 +462,10 @@ class ArborAdminPanel extends HTMLElement {
     }
     
     bindLoginEvents() {
+        // Close button handler for login screen
+        const btnClose = this.querySelector('#btn-close-login');
+        if (btnClose) btnClose.onclick = () => store.setModal(null);
+
         const btnCon = this.querySelector('#btn-gh-connect');
         if (btnCon) {
             btnCon.onclick = async () => {

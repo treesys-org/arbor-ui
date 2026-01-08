@@ -1,5 +1,7 @@
 
 
+
+
 import { store } from '../store.js';
 import { github } from '../services/github.js';
 import { BLOCKS, parseArborFile, visualHTMLToMarkdown, markdownToVisualHTML, reconstructArborFile } from '../utils/editor-engine.js';
@@ -178,7 +180,7 @@ class ArborEditor extends HTMLElement {
             <!-- Header -->
             <div class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 flex justify-between items-center shadow-sm shrink-0">
                 <div class="flex items-center gap-4">
-                    <button id="btn-cancel" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500">✕</button>
+                    <button id="btn-cancel" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors">✕</button>
                     <div>
                         <h2 class="font-black text-slate-800 dark:text-white leading-none text-lg truncate max-w-md">${this.meta.title || 'Nuevo Archivo'}</h2>
                         <span class="text-xs text-slate-400 font-mono">${this.node.sourcePath}</span>

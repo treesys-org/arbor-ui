@@ -243,7 +243,7 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       sageMenuTitle: 'How can I help?',
       sageMenuHelp: 'Explain Arbor',
       sageMenuHelpDesc: 'The Sage will guide you.',
-      sageMenuAi: 'Enable True Sight',
+      sageMenuAi: 'Enable Superintelligence',
       sageMenuAiDesc: 'Connect Local AI or Cloud AI.',
       
       // AI Upgrade
@@ -508,7 +508,7 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       sageMenuTitle: '¿Cómo puedo ayudar?',
       sageMenuHelp: 'Explícame Arbor',
       sageMenuHelpDesc: 'El Sabio te guiará.',
-      sageMenuAi: 'Activar Visión Verdadera',
+      sageMenuAi: 'Activar Superinteligencia',
       sageMenuAiDesc: 'Conectar IA Local o Nube.',
 
       // AI Upgrade

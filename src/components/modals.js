@@ -1,5 +1,6 @@
 
 
+
 import { store } from '../store.js';
 import './admin-panel.js';
 
@@ -164,7 +165,7 @@ class ArborModals extends HTMLElement {
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
             <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl ${sizeClass} w-full relative overflow-hidden flex flex-col max-h-[95vh] border border-slate-200 dark:border-slate-800 cursor-auto">
-                ${type !== 'contributor' ? `<button class="btn-close absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 z-20 transition-colors">✕</button>` : ''}
+                ${type !== 'contributor' ? `<button class="btn-close absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 z-20 transition-colors">✕</button>` : ''}
                 ${content}
             </div>
         </div>`;
@@ -186,7 +187,7 @@ class ArborModals extends HTMLElement {
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
             <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-sm w-full relative overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800 cursor-auto">
-                <button class="btn-cancel absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 z-20 transition-colors">✕</button>
+                <button class="btn-cancel absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 z-20 transition-colors">✕</button>
                 
                 <div class="p-8 text-center">
                     <div class="w-24 h-24 mx-auto bg-slate-50 dark:bg-slate-800 rounded-3xl flex items-center justify-center text-5xl mb-6 shadow-inner border border-slate-100 dark:border-slate-700/50 transform rotate-3">
@@ -278,7 +279,7 @@ class ArborModals extends HTMLElement {
                              <span class="text-3xl">🏆</span>
                              <h2 class="text-xl font-black text-slate-800 dark:text-white">${ui.navCertificates}</h2>
                         </div>
-                        <button class="btn-close-certs p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 transition-colors">✕</button>
+                        <button class="btn-close-certs w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 transition-colors">✕</button>
                     </div>
 
                     <div class="flex gap-3">
@@ -581,23 +582,42 @@ class ArborModals extends HTMLElement {
     }
     
     renderWelcome(ui) {
-         return `<div class="p-8">
-            <h2 class="text-2xl font-black mb-4 text-center">${ui.tutorialTitle}</h2>
-            <div class="space-y-4">
+         return `<div class="p-8 md:p-10 relative overflow-hidden">
+            <!-- Decorative Background -->
+            <div class="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 bg-green-50 dark:bg-green-900/10 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="absolute bottom-0 left-0 -ml-20 -mb-20 w-64 h-64 bg-blue-50 dark:bg-blue-900/10 rounded-full blur-3xl pointer-events-none"></div>
+
+            <div class="text-center mb-8 relative z-10">
+                <div class="w-20 h-20 bg-gradient-to-br from-green-400 to-emerald-600 rounded-3xl mx-auto flex items-center justify-center text-4xl shadow-xl shadow-green-500/20 mb-4 transform -rotate-3">🦉</div>
+                <h2 class="text-3xl font-black text-slate-800 dark:text-white tracking-tight">${ui.tutorialTitle}</h2>
+                <div class="w-12 h-1 bg-slate-200 dark:bg-slate-700 mx-auto mt-4 rounded-full"></div>
+            </div>
+
+            <div class="space-y-6 relative z-10 mb-10">
                 ${ui.welcomeSteps.map(step => `
-                    <div class="flex gap-4 items-start">
-                        <div class="text-2xl bg-slate-100 rounded-full w-12 h-12 flex items-center justify-center shrink-0">${step.icon}</div>
+                    <div class="flex gap-5 items-start p-4 rounded-2xl hover:bg-white/60 dark:hover:bg-slate-800/60 transition-colors border border-transparent hover:border-slate-100 dark:hover:border-slate-700/50">
+                        <div class="text-3xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl w-14 h-14 flex items-center justify-center shrink-0 shadow-sm text-slate-700 dark:text-slate-200">${step.icon}</div>
                         <div>
-                            <h3 class="font-bold text-lg">${step.title}</h3>
-                            <p class="text-slate-600">${step.text}</p>
+                            <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-1">${step.title}</h3>
+                            <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed font-medium">${step.text}</p>
                         </div>
                     </div>
                 `).join('')}
             </div>
-            <button class="w-full mt-8 py-3 bg-slate-900 text-white font-bold rounded-xl" onclick="store.setModal(null)">${ui.tutorialFinish}</button>
+            
+            <button id="btn-tutorial-finish" class="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold rounded-2xl shadow-xl hover:shadow-2xl hover:scale-[1.01] active:scale-[0.98] transition-all flex items-center justify-center gap-2 relative z-10 group">
+                <span>${ui.tutorialFinish}</span>
+                <span class="group-hover:translate-x-1 transition-transform">→</span>
+            </button>
          </div>`;
     }
-    bindWelcomeEvents(ui) {}
+    
+    bindWelcomeEvents(ui) {
+        const btn = this.querySelector('#btn-tutorial-finish');
+        if (btn) {
+            btn.onclick = () => this.close();
+        }
+    }
     renderProfile(ui) { 
         const g = store.value.gamification;
         return `<div class="p-8 text-center">
