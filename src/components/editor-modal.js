@@ -175,12 +175,16 @@ class ArborEditor extends HTMLElement {
                </div>`
             : bodyHTML;
 
-        // NEW: Modal Layout Structure (Fixed Centered Box on Desktop, Full on Mobile)
+        // FULLSCREEN LAYOUT CHANGES:
+        // 1. Removed backdrop padding (p-0 md:p-6 -> p-0)
+        // 2. Container is now w-full h-full rounded-none (Removed max-width/height constraints)
+        // 3. Visual Editor has min-h-full and massive bottom padding to create "infinite" scroll feel
+        
         this.innerHTML = `
-        <div id="editor-backdrop" class="fixed inset-0 z-[80] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-0 md:p-6 animate-in fade-in">
+        <div id="editor-backdrop" class="fixed inset-0 z-[80] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-0 animate-in fade-in">
             
-            <!-- Main Modal Container -->
-            <div id="editor-container" class="bg-[#f7f9fa] dark:bg-slate-900 w-full h-full md:w-[95vw] md:h-[90vh] md:max-w-6xl rounded-none md:rounded-3xl shadow-2xl flex flex-col overflow-hidden relative border border-slate-200 dark:border-slate-800">
+            <!-- Main Modal Container (FULLSCREEN) -->
+            <div id="editor-container" class="bg-[#f7f9fa] dark:bg-slate-900 w-full h-full rounded-none shadow-2xl flex flex-col overflow-hidden relative">
                 
                 <!-- Header -->
                 <div class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 flex justify-between items-center shadow-sm shrink-0">
@@ -247,9 +251,9 @@ class ArborEditor extends HTMLElement {
                 </div>` : ''}
 
                 <!-- Visual Editor Area (Paged Document Style) -->
-                <div class="flex-1 relative bg-slate-200 dark:bg-slate-950 overflow-y-auto custom-scrollbar p-0 md:p-8 flex justify-center">
+                <div class="flex-1 relative bg-slate-200 dark:bg-slate-950 overflow-y-auto custom-scrollbar p-0 flex justify-center">
                      <div id="visual-editor" 
-                          class="w-full max-w-4xl bg-white dark:bg-slate-900 shadow-none md:shadow-2xl min-h-[500px] md:min-h-[800px] p-6 md:p-12 prose prose-slate dark:prose-invert max-w-none focus:outline-none rounded-none md:rounded-lg" 
+                          class="w-full max-w-4xl bg-white dark:bg-slate-900 shadow-xl min-h-full my-4 md:my-8 p-8 md:p-16 pb-[50vh] prose prose-slate dark:prose-invert max-w-none focus:outline-none rounded-none md:rounded-lg" 
                           contenteditable="${!isMeta}" 
                           spellcheck="false">
                           ${bodyContent}
