@@ -3,6 +3,8 @@
 
 
 
+
+
 import { store } from '../store.js';
 import { parseArborFile, markdownToVisualHTML } from '../utils/editor-engine.js';
 import './admin-panel.js';
@@ -383,43 +385,20 @@ class ArborModals extends HTMLElement {
                 let parentNode = store.findNode(parentId);
                 
                 if (!parentNode) {
-                     // Fallback if current node is root or orphan, just print it
                      nodesToPrint = [node];
                 } else {
                      // Ensure children are loaded
                      if (parentNode.hasUnloadedChildren) {
                          await store.loadNodeChildren(parentNode);
                      }
-                     // Get all children (lessons)
-                     // If children are loaded, we assume their structure is in memory.
-                     // IMPORTANT: We need their content. Usually only current lesson content is full in memory?
-                     // Actually, Arbor's logic usually fetches content on demand for leaves. 
-                     // BUT, the builder script puts content inside the node object for leaves! 
-                     // So iterating parentNode.children should give us nodes with content property.
-                     
-                     // Filter only leaves/exams
+                     // Filter only leaves
                      const siblings = parentNode.children.filter(n => n.type === 'leaf' || n.type === 'exam');
-                     
-                     // If for some reason content is missing (e.g. huge tree lazy loading optimization in future), we might need to fetch.
-                     // For now, assuming standard Arbor behavior where leaves have content property.
-                     
-                     // Edge case: If content is missing, we fetch it (simulated)
-                     const promises = siblings.map(async (child) => {
-                         if (!child.content && child.sourcePath) {
-                              // We can try to fetch the raw file if missing
-                              // This relies on knowing the raw URL pattern, which is tricky without the source URL logic.
-                              // Fallback: Skip empty content or assume it is there.
-                              return child; 
-                         }
-                         return child;
-                     });
-                     
-                     nodesToPrint = await Promise.all(promises);
+                     nodesToPrint = await Promise.all(siblings.map(async (child) => child));
                 }
             }
 
             this.generatePrintDocument(nodesToPrint);
-            this.close(); // Close modal on success (print window opens)
+            this.close();
 
         } catch (e) {
             console.error(e);
@@ -435,12 +414,24 @@ class ArborModals extends HTMLElement {
             return;
         }
 
-        const contentHtml = nodes.map(n => {
+        // Get Metadata for Footer
+        const source = store.value.activeSource;
+        const isOfficial = source.isDefault || source.url.includes('treesys-org');
+        const repoName = source.name;
+        const licenseText = isOfficial ? "Licensed under GPL-3.0" : "Content provided by third-party repository";
+        const dateStr = new Date().toLocaleDateString();
+        
+        // Generate Content HTML
+        const contentHtml = nodes.map((n, index) => {
             const parsed = parseArborFile(n.content || '');
             const bodyHtml = markdownToVisualHTML(parsed.body);
+            
+            // Add page break only between lessons, not before the first one (handled by CSS)
+            const breakClass = index > 0 ? 'page-break-before' : '';
+            
             return `
-            <article class="lesson-page">
-                <header>
+            <article class="lesson-page ${breakClass}">
+                <header class="lesson-header">
                     <h1>${n.name}</h1>
                     ${n.path ? `<p class="meta">${n.path}</p>` : ''}
                 </header>
@@ -449,28 +440,152 @@ class ArborModals extends HTMLElement {
                 </div>
             </article>
             `;
-        }).join('<div class="page-break"></div>');
+        }).join('');
+
+        // Generate Cover Page
+        const mainTitle = nodes.length > 1 ? (nodes[0].path ? nodes[0].path.split('/')[nodes[0].path.split('/').length - 2] : 'Module Export') : nodes[0].name;
+        
+        const coverHtml = `
+        <div class="cover-page">
+            <div class="cover-content">
+                <div class="logo">🌳 ARBOR</div>
+                <h1 class="cover-title">${mainTitle.trim()}</h1>
+                <p class="cover-subtitle">${nodes.length} Lesson${nodes.length > 1 ? 's' : ''}</p>
+                <div class="cover-footer">
+                    <p>Generated on ${dateStr}</p>
+                    <p class="small">${repoName}</p>
+                </div>
+            </div>
+        </div>
+        <div class="page-break-after"></div>
+        `;
 
         const styles = `
-            @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap');
-            body { font-family: 'Nunito', sans-serif; color: #1e293b; line-height: 1.6; max-width: 800px; mx-auto; padding: 40px; }
-            h1 { font-size: 24pt; font-weight: 900; margin-bottom: 10px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
-            h2 { font-size: 18pt; margin-top: 20px; color: #334155; }
-            h3 { font-size: 14pt; color: #475569; }
-            p { margin-bottom: 15px; text-align: justify; }
-            img { max-width: 100%; height: auto; border-radius: 8px; margin: 20px 0; }
-            blockquote { border-left: 4px solid #fbbf24; padding-left: 15px; font-style: italic; color: #4b5563; margin: 20px 0; }
-            code, pre { background: #f1f5f9; padding: 2px 5px; border-radius: 4px; font-family: monospace; }
-            pre { padding: 15px; overflow-x: auto; }
-            .meta { font-size: 9pt; color: #94a3b8; margin-bottom: 30px; text-transform: uppercase; font-weight: bold; }
-            .lesson-page { margin-bottom: 50px; }
-            .page-break { page-break-after: always; height: 0; margin: 0; padding: 0; }
+            @import url('https://fonts.googleapis.com/css2?family=Georgia&family=Nunito:wght@400;700;900&display=swap');
             
-            /* Hide UI elements from print */
+            :root {
+                --primary: #333;
+                --accent: #555;
+            }
+
+            @page {
+                size: A4;
+                margin: 2.5cm;
+                @bottom-center {
+                    content: "Page " counter(page);
+                    font-family: 'Nunito', sans-serif;
+                    font-size: 9pt;
+                    color: #888;
+                }
+            }
+
+            body { 
+                font-family: 'Georgia', serif; 
+                color: #222; 
+                line-height: 1.6; 
+                font-size: 11pt;
+                max-width: 100%;
+                margin: 0;
+                padding: 0;
+                -webkit-print-color-adjust: exact;
+            }
+
+            /* --- Typography --- */
+            h1, h2, h3, h4 { font-family: 'Nunito', sans-serif; color: #111; font-weight: 800; }
+            
+            h1 { font-size: 24pt; border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 25px; margin-top: 0; }
+            h2 { font-size: 16pt; margin-top: 30px; margin-bottom: 15px; color: #333; }
+            h3 { font-size: 13pt; margin-top: 20px; color: #555; }
+            
+            p { margin-bottom: 15px; text-align: justify; }
+            
+            a { color: #000; text-decoration: underline; }
+            
+            img { max-width: 100%; height: auto; border-radius: 4px; margin: 20px 0; max-height: 500px; object-fit: contain; }
+            
+            blockquote { 
+                border-left: 3px solid #ccc; 
+                padding-left: 15px; 
+                font-style: italic; 
+                color: #555; 
+                margin: 20px 0; 
+                background: #f9f9f9;
+                padding: 10px 15px;
+            }
+            
+            code { 
+                background: #f0f0f0; 
+                padding: 2px 5px; 
+                border-radius: 3px; 
+                font-family: 'Courier New', monospace; 
+                font-size: 0.9em;
+            }
+            pre { 
+                background: #f5f5f5; 
+                padding: 15px; 
+                border-radius: 5px; 
+                overflow-x: auto; 
+                border: 1px solid #eee;
+                font-size: 0.85em;
+            }
+
+            /* --- Structural --- */
+            .lesson-page { margin-bottom: 50px; }
+            .lesson-header { margin-bottom: 30px; }
+            .meta { font-size: 9pt; color: #777; text-transform: uppercase; font-family: 'Nunito', sans-serif; letter-spacing: 1px; margin-top: -20px; }
+            
+            .page-break-before { page-break-before: always; }
+            .page-break-after { page-break-after: always; }
+
+            /* --- Cover Page --- */
+            .cover-page {
+                height: 90vh; /* Approximate A4 height minus margins */
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                text-align: center;
+                border: 10px double #eee;
+                padding: 40px;
+                box-sizing: border-box;
+            }
+            .cover-content { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; }
+            .logo { font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 20pt; color: #444; margin-bottom: 40px; }
+            .cover-title { font-size: 36pt; border: none; margin: 20px 0; line-height: 1.2; }
+            .cover-subtitle { font-size: 14pt; color: #666; font-style: italic; }
+            .cover-footer { margin-top: auto; font-family: 'Nunito', sans-serif; color: #888; font-size: 10pt; }
+            .small { font-size: 9pt; opacity: 0.7; }
+
+            /* --- Footer (Fixed) --- */
+            .print-footer {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                border-top: 1px solid #ddd;
+                padding-top: 10px;
+                background: white;
+                text-align: center;
+                font-family: 'Nunito', sans-serif;
+                font-size: 8pt;
+                color: #666;
+            }
+            .print-footer a { color: #666; text-decoration: none; font-weight: bold; }
+
+            /* --- Hiding Elements --- */
+            /* Crucial: Hide all quizzes, videos, and interactive elements */
+            .arbor-quiz-edit, 
+            .quiz-container,
+            iframe, 
+            .arbor-video-edit,
+            .edit-block-wrapper[data-type="video"] { 
+                display: none !important; 
+            }
+            
+            /* Hide print UI if any slipped in */
             @media print {
-                body { padding: 0; max-width: 100%; }
-                a { text-decoration: none; color: black; }
-                .arbor-quiz-edit, .arbor-media-edit { border: 1px solid #ccc; break-inside: avoid; }
+                .no-print { display: none !important; }
+                /* Ensure quizzes are hidden in print media specifically */
+                .arbor-quiz-edit { display: none !important; }
             }
         `;
 
@@ -478,13 +593,28 @@ class ArborModals extends HTMLElement {
             <!DOCTYPE html>
             <html>
             <head>
-                <title>Arbor Export</title>
+                <title>${mainTitle}</title>
                 <style>${styles}</style>
             </head>
             <body>
-                ${contentHtml}
+                ${coverHtml}
+                
+                <main>
+                    ${contentHtml}
+                </main>
+
+                <div class="print-footer">
+                    <p>${footerText} <br> <a href="https://github.com/treesys-org/arbor-ui">github.com/treesys-org/arbor-ui</a></p>
+                </div>
+
                 <script>
-                    window.onload = function() { window.print(); window.close(); }
+                    window.onload = function() { 
+                        // Small delay to ensure images render
+                        setTimeout(() => {
+                            window.print(); 
+                            // window.close(); // Optional: Auto-close
+                        }, 500);
+                    }
                 </script>
             </body>
             </html>
