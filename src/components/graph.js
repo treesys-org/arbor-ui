@@ -277,12 +277,12 @@ class ArborGraph extends HTMLElement {
             if (d.y > maxY) maxY = d.y;
         });
 
-        // --- COUPLED EXTENT LOGIC ---
+        // --- COUPLED EXTENT LOGIC (FIXED: Tighter bounds) ---
         // Instead of infinite canvas, we set the extent based on the current tree nodes
-        // plus a healthy padding (e.g. 80% of screen size) so user can drag around comfortably
-        // but hits a wall if they go too far into empty space.
-        const paddingX = this.width * 0.8;
-        const paddingY = this.height * 0.8;
+        // plus a modest padding so user can drag around without getting lost.
+        // Reduced from 0.8 to 0.2 to prevent excessive empty space.
+        const paddingX = Math.max(200, this.width * 0.2);
+        const paddingY = Math.max(200, this.height * 0.2);
         
         // We use a safe fallback if minX/maxX are weird (e.g. single node)
         if (!isFinite(minX)) minX = 0;
