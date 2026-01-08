@@ -1,6 +1,8 @@
 
 
 
+
+
 import { store } from '../store.js';
 import './admin-panel.js';
 
@@ -507,6 +509,15 @@ class ArborModals extends HTMLElement {
         <div class="p-6 h-full flex flex-col">
             <h2 class="text-2xl font-black mb-2 dark:text-white">${ui.sourceManagerTitle}</h2>
             <p class="text-sm text-slate-500 mb-6">${ui.sourceManagerDesc}</p>
+            
+            <div class="flex gap-2 mb-4">
+                <button id="btn-download-offline" class="flex-1 py-3 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 font-bold rounded-xl text-xs hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors flex items-center justify-center gap-2">
+                    <span>⬇️</span> ${ui.downloadOffline}
+                </button>
+                <button id="btn-delete-offline" class="py-3 px-4 bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-red-500 font-bold rounded-xl text-xs transition-colors" title="${ui.deleteOffline}">
+                    🗑️
+                </button>
+            </div>
 
             <div class="flex-1 overflow-y-auto custom-scrollbar space-y-3 mb-4 pr-1">
                 ${sources.map(s => `
@@ -564,6 +575,24 @@ class ArborModals extends HTMLElement {
                 if (url) {
                     store.addSource(url);
                     this.querySelector('#inp-source-url').value = ''; 
+                }
+            };
+        }
+        
+        // Offline Buttons
+        const btnDownload = this.querySelector('#btn-download-offline');
+        if (btnDownload) {
+             btnDownload.onclick = () => {
+                 store.downloadCurrentTree();
+                 this.close();
+             };
+        }
+        
+        const btnDeleteOffline = this.querySelector('#btn-delete-offline');
+        if (btnDeleteOffline) {
+            btnDeleteOffline.onclick = () => {
+                if(confirm("Clear offline cache?")) {
+                    store.deleteOfflineData();
                 }
             };
         }

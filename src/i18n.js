@@ -1,5 +1,6 @@
 
 
+
 export const UI_LABELS = {
     EN: {
       appTitle: 'ARBOR',
@@ -171,6 +172,14 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       languageSelect: 'Select your preferred language',
       moduleEmpty: 'This module is empty.',
       
+      // Offline / Download
+      downloadOffline: 'Make Available Offline',
+      downloading: 'Downloading Course...',
+      downloadSuccess: 'Course downloaded! You can now use Arbor without internet.',
+      downloadError: 'Download failed.',
+      deleteOffline: 'Delete Offline Data',
+      offlineReady: 'Available Offline',
+
       // Empty Module / Contribution
       emptyModuleTitle: 'Empty Branch',
       emptyModuleDesc: 'This module has no content yet. Help us grow the tree by contributing new lessons!',
@@ -435,6 +444,14 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       languageTitle: 'Idioma',
       languageSelect: 'Selecciona tu idioma preferido',
       moduleEmpty: 'Este módulo no tiene contenido.',
+
+      // Offline / Download
+      downloadOffline: 'Disponible sin conexión',
+      downloading: 'Descargando Curso...',
+      downloadSuccess: '¡Curso descargado! Ahora puedes usar Arbor sin internet.',
+      downloadError: 'Error en la descarga.',
+      deleteOffline: 'Borrar Datos Offline',
+      offlineReady: 'Disponible Offline',
 
       // Empty Module / Contribution
       emptyModuleTitle: 'Rama Vacía',
