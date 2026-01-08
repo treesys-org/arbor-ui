@@ -1,5 +1,7 @@
 
 
+
+
 import { AVAILABLE_LANGUAGES } from './i18n.js';
 import { github } from './services/github.js';
 import { aiService } from './services/ai.js';
@@ -272,7 +274,7 @@ class Store extends EventTarget {
         if (!str) return "";
         return str.toLowerCase()
             .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove accents
-            .replace(/[^a-z0-9]/g, ""); // Remove non-alphanumeric
+            .replace(/[^a-z0-9\s]/g, ""); // Remove non-alphanumeric but KEEP spaces for word checks
     }
 
     findNode(id, node = this.state.data) {
@@ -322,9 +324,9 @@ class Store extends EventTarget {
 
             // If not found, try robust/fuzzy matching (handles "Exam: " prefix vs raw name)
             if (!nextNode && currentNode.children) {
-                const cleanTarget = this.cleanString(ancestorName);
+                const cleanTarget = this.cleanString(ancestorName).replace(/\s+/g, '');
                 nextNode = currentNode.children.find(child => {
-                     const cleanChild = this.cleanString(child.name);
+                     const cleanChild = this.cleanString(child.name).replace(/\s+/g, '');
                      // 1. Normalized match (ignores accents/case)
                      if (cleanChild === cleanTarget) return true;
                      // 2. Inclusion match (If path says "Final Exam" but Node says "Exam: Final Exam")
@@ -575,8 +577,12 @@ class Store extends EventTarget {
         return flat.filter(item => {
             if(seen.has(item.id)) return false;
             
-            // STRICT NAME CHECK (Filter out items that might have been indexed by description in the JSON)
-            if (!this.cleanString(item.name).includes(c)) return false; 
+            // STRICT INITIAL LETTER CHECK
+            // Split name into words and check if any word STARTS with the char
+            const words = this.cleanString(item.name).split(/\s+/);
+            const matchesInitial = words.some(w => w.startsWith(c));
+            
+            if (!matchesInitial) return false; 
             
             seen.add(item.id);
             return true;

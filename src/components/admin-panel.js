@@ -1,6 +1,8 @@
 
 
 
+
+
 import { store } from '../store.js';
 import { github } from '../services/github.js';
 
@@ -127,7 +129,11 @@ class ArborAdminPanel extends HTMLElement {
         };
 
         window.editFile = (path) => {
-             store.setModal({ type: 'editor', node: { name: path.split('/').pop(), sourcePath: path, id: 'edit-'+Date.now() } });
+             store.setModal({ 
+                 type: 'editor', 
+                 returnTo: 'contributor',
+                 node: { name: path.split('/').pop(), sourcePath: path, id: 'edit-'+Date.now() } 
+             });
         };
         
         window.deleteFileAction = async (path, type) => {
@@ -603,7 +609,11 @@ class ArborAdminPanel extends HTMLElement {
              if(!name) return;
              const folder = 'content/EN'; 
              const path = `${folder}/${name}`;
-             store.setModal({ type: 'editor', node: { name: name, sourcePath: path, id: 'new-'+Date.now() } });
+             store.setModal({ 
+                 type: 'editor', 
+                 returnTo: 'contributor',
+                 node: { name: name, sourcePath: path, id: 'new-'+Date.now() } 
+             });
         };
         
         const btnCreateFolder = this.querySelector('#btn-create-folder');

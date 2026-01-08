@@ -8,6 +8,8 @@
 
 
 
+
+
 import { store } from '../store.js';
 import { parseArborFile, markdownToVisualHTML } from '../utils/editor-engine.js';
 import { pdfGenerator } from '../services/pdf-generator.js';
@@ -20,6 +22,7 @@ class ArborModals extends HTMLElement {
             step: 0,
             searchQuery: '',
             searchResults: [],
+            isSearching: false, // New state for processing indicator
             pendingUrl: null,
             showWarning: false,
             showImpressum: false,
@@ -51,6 +54,7 @@ class ArborModals extends HTMLElement {
     close() { 
         this.state.searchQuery = '';
         this.state.searchResults = [];
+        this.state.isSearching = false;
         this.state.pendingUrl = null;
         this.state.showWarning = false;
         this.state.showImpressum = false;
@@ -67,7 +71,7 @@ class ArborModals extends HTMLElement {
         this.state = { ...this.state, ...partial };
         // If we are in search, manual update of list instead of full re-render
         if (store.value.modal === 'search' || store.value.modal?.type === 'search') {
-            if (partial.searchResults) {
+            if (partial.searchResults !== undefined || partial.isSearching !== undefined) {
                 this.updateSearchResultsDOM();
                 return;
             }
@@ -464,6 +468,14 @@ class ArborModals extends HTMLElement {
     }
     
     getSearchResultsHTML(ui) {
+         if (this.state.isSearching) {
+             return `
+             <div class="text-center text-slate-400 py-8 flex flex-col items-center gap-2">
+                 <div class="w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+                 <span class="text-sm font-bold text-sky-400 animate-pulse">${ui.editorProcessing || 'Processing...'}</span>
+             </div>`;
+         }
+
          if (this.state.searchResults.length === 0) {
              return `<div class="text-center text-slate-400 py-8 flex flex-col items-center gap-2"><span class="text-2xl opacity-50">🍃</span><span>${ui.noResults}</span></div>`;
          }
@@ -510,6 +522,14 @@ class ArborModals extends HTMLElement {
         const msgArea = this.querySelector('#search-msg-area');
         
         if (list && msgArea) {
+            // Priority: isSearching > hasResults > singleCharWait
+            if (this.state.isSearching) {
+                list.innerHTML = this.getSearchResultsHTML(store.ui);
+                list.classList.remove('hidden');
+                msgArea.classList.add('hidden');
+                return;
+            }
+
             if (this.state.searchQuery.length > 0) {
                 // Determine visibility based on query length logic
                 if (this.state.searchResults.length > 0 || (this.state.searchQuery.length >= 2)) {
@@ -517,13 +537,14 @@ class ArborModals extends HTMLElement {
                     list.classList.remove('hidden');
                     msgArea.classList.add('hidden');
                 } else if (this.state.searchQuery.length === 1) {
+                    // Waiting for the 3s timeout
                     list.classList.add('hidden');
                     msgArea.classList.remove('hidden');
                     msgArea.textContent = store.ui.searchKeepTyping;
                 } else {
-                    list.classList.add('hidden');
-                    msgArea.classList.remove('hidden');
-                    msgArea.textContent = store.ui.noResults;
+                    list.innerHTML = this.getSearchResultsHTML(store.ui); // Show empty state
+                    list.classList.remove('hidden');
+                    msgArea.classList.add('hidden');
                 }
             } else {
                 list.classList.add('hidden');
@@ -569,24 +590,24 @@ class ArborModals extends HTMLElement {
                 if (this.searchTimer) clearTimeout(this.searchTimer);
                 
                 if (q.length === 0) {
-                    this.updateState({ searchResults: [] });
+                    this.updateState({ searchResults: [], isSearching: false });
                 } else if (q.length === 1) {
-                    // Update UI to show "Keep typing..." immediately
-                    this.updateSearchResultsDOM();
+                    // Update UI to show "Processing..." specifically for the 1-char delay logic
+                    this.updateState({ isSearching: true });
                     
                     // Set 3 second delay for single char search
                     this.searchTimer = setTimeout(async () => {
                          // Double check current query in case it changed
                          if (this.state.searchQuery === q) {
                              const results = await store.searchBroad(q);
-                             this.updateState({ searchResults: results });
+                             this.updateState({ searchResults: results, isSearching: false });
                          }
                     }, 3000);
                 } else {
                     // Standard search debounce
                     this.searchTimer = setTimeout(async () => {
                          const results = await store.search(q);
-                         this.updateState({ searchResults: results });
+                         this.updateState({ searchResults: results, isSearching: false });
                     }, 300);
                 }
             };
@@ -631,7 +652,7 @@ class ArborModals extends HTMLElement {
                 <label class="text-[10px] font-bold text-slate-400 uppercase mb-2 block">${ui.sourceAdd}</label>
                 <div class="flex gap-2">
                     <input id="inp-source-url" type="text" placeholder="https://.../data.json" class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-purple-500 dark:text-white">
-                    <button id="btn-add-source" class="bg-purple-600 text-white px-4 py-2 rounded-xl font-bold shadow-lg hover:bg-purple-500 active:scale-95 transition-transform">
+                    <button id="btn-add-source" class="bg-purple-600 text-white px-4 py-2 rounded-xl font-bold shadow-lg hover:bg-purple-50 active:scale-95 transition-transform">
                         +
                     </button>
                 </div>

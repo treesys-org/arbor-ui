@@ -1,6 +1,8 @@
 
 
 
+
+
 import { store } from '../store.js';
 import { github } from '../services/github.js';
 import { BLOCKS, parseArborFile, visualHTMLToMarkdown, markdownToVisualHTML, reconstructArborFile } from '../utils/editor-engine.js';
@@ -21,6 +23,7 @@ class ArborEditor extends HTMLElement {
         this.hasWriteAccess = false;
         this.isMetaJson = false;
         this.currentSha = null;
+        this.returnTo = null;
     }
 
     connectedCallback() {
@@ -32,11 +35,13 @@ class ArborEditor extends HTMLElement {
         if (modal && modal.type === 'editor' && modal.node) {
             if (this.node?.id !== modal.node.id) {
                 this.node = modal.node;
+                this.returnTo = modal.returnTo || null;
                 this.loadContent();
             }
         } else {
             if (this.node) {
                 this.node = null;
+                this.returnTo = null;
                 this.innerHTML = '';
             }
         }
@@ -82,6 +87,14 @@ class ArborEditor extends HTMLElement {
 
         } catch (e) {
             alert("Error: " + e.message);
+            this.closeEditor();
+        }
+    }
+    
+    closeEditor() {
+        if (this.returnTo === 'contributor') {
+            store.setModal('contributor');
+        } else {
             store.setModal(null);
         }
     }
@@ -125,7 +138,7 @@ class ArborEditor extends HTMLElement {
                  <button id="btn-cancel-loading" class="mt-4 text-xs text-red-500 hover:underline">${ui.editorCancelLoading}</button>
              </div>
         </div>`;
-        this.querySelector('#btn-cancel-loading').onclick = () => store.setModal(null);
+        this.querySelector('#btn-cancel-loading').onclick = () => this.closeEditor();
     }
     
     toggleEmojiPicker() {
@@ -268,7 +281,7 @@ class ArborEditor extends HTMLElement {
             </div>
         </div>`;
         
-        this.querySelector('#btn-cancel').onclick = () => store.setModal(null);
+        this.querySelector('#btn-cancel').onclick = () => this.closeEditor();
         this.querySelector('#btn-submit').onclick = () => this.submitChanges();
         
         this.querySelector('#btn-emoji').onclick = (e) => {
@@ -317,7 +330,7 @@ class ArborEditor extends HTMLElement {
                 const prUrl = await github.createPullRequest(this.node.sourcePath, finalContent, msg);
                 alert(store.ui.editorSuccessProposal + prUrl);
             }
-            store.setModal(null);
+            this.closeEditor();
         } catch(e) {
             alert("Error: " + e.message);
             btn.innerHTML = originalText;

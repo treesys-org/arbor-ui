@@ -178,7 +178,7 @@ class ArborGraph extends HTMLElement {
         
         this.svg.call(this.zoom).on("dblclick.zoom", null);
         
-        // Initial generic extent, updated later in updateGraph
+        // Use a safe initial extent, but updateGraph will tighten it
         this.zoom.translateExtent([[-5000, -5000], [5000, 5000]]);
 
         this.resetZoom(0);
@@ -207,10 +207,10 @@ class ArborGraph extends HTMLElement {
         const color = theme === 'dark' ? '#1e293b' : '#22c55e';
         const backColor = theme === 'dark' ? '#0f172a' : '#4ade80';
 
-        // Make the ground VERY wide to support horizontal scrolling of large trees
+        // Ground visual is large but not infinite
         const cx = this.width / 2;
         const groundY = this.height;
-        const groundWidth = 10000; // Large enough to cover horizontal expansion
+        const groundWidth = 10000; 
         const groundDepth = 4000;
 
         // Bottom-Up Ground (Standard for both Mobile & Desktop)
@@ -257,53 +257,46 @@ class ArborGraph extends HTMLElement {
         const levelHeight = isMobile ? 180 : 200; 
         const bottomOffset = 150;
         
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+
         root.descendants().forEach(d => {
             // Y: Grow upwards from bottom
             d.y = (this.height - bottomOffset) - (d.depth * levelHeight);
             
-            // X: If tree is narrower than screen, center it.
-            // If tree is wider, d3.tree uses 0..treeWidth, so it's aligned to left by default.
-            // We want to center the whole group relative to the screen center.
+            // X: Center alignment logic
             if (treeWidth < this.width) {
                  d.x += (this.width - treeWidth) / 2;
             } else {
-                 // Tree is wider than screen.
-                 // d.x ranges from 0 to treeWidth.
-                 // We shift it so the CENTER of the tree aligns with CENTER of screen roughly if zoomed out,
-                 // but mainly we just leave it in coordinate space relative to 0.
-                 // To make "Center" of tree be x=0 (for easier zooming logic), we can shift:
                  d.x = d.x - (treeWidth / 2) + (this.width / 2);
             }
-        });
 
-        const nodes = root.descendants();
-        const links = root.links();
-
-        // --- DYNAMIC NAV RESTRICTION (No side navigation if empty) ---
-        // Calculate the Bounding Box of the *visible* nodes
-        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-        nodes.forEach(d => {
+            // Track Bounds
             if (d.x < minX) minX = d.x;
             if (d.x > maxX) maxX = d.x;
             if (d.y < minY) minY = d.y;
             if (d.y > maxY) maxY = d.y;
         });
 
-        // Add padding to the constraints
-        const padX = isMobile ? 50 : 200;
-        const padYTop = 200;
-        const padYBot = 200;
+        // --- COUPLED EXTENT LOGIC ---
+        // Instead of infinite canvas, we set the extent based on the current tree nodes
+        // plus a healthy padding (e.g. 80% of screen size) so user can drag around comfortably
+        // but hits a wall if they go too far into empty space.
+        const paddingX = this.width * 0.8;
+        const paddingY = this.height * 0.8;
+        
+        // We use a safe fallback if minX/maxX are weird (e.g. single node)
+        if (!isFinite(minX)) minX = 0;
+        if (!isFinite(maxX)) maxX = this.width;
+        if (!isFinite(minY)) minY = 0;
+        if (!isFinite(maxY)) maxY = this.height;
 
-        // Apply strict translation extent to preventing panning into void
-        if (this.zoom && nodes.length > 0) {
-            // Extent: [[x0, y0], [x1, y1]]
-            // We lock X to the tree width. We lock Y to allow some vertical movement but not infinite.
-            this.zoom.translateExtent([
-                [minX - padX, minY - padYTop], 
-                [maxX + padX, this.height + padYBot] 
-            ]);
-        }
+        this.zoom.translateExtent([
+            [minX - paddingX, minY - paddingY], 
+            [maxX + paddingX, maxY + paddingY]
+        ]);
 
+        const nodes = root.descendants();
+        const links = root.links();
 
         // --- RENDER VISUALS ---
 
