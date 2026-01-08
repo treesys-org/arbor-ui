@@ -13,11 +13,21 @@ export class PdfGenerator {
 
         // Get Metadata for Footer
         const source = store.value.activeSource;
-        const isOfficial = source.isDefault || source.url.includes('treesys-org');
         const repoName = source.name;
-        const licenseText = isOfficial ? "Licensed under GPL-3.0" : "Content provided by third-party repository";
+        const repoUrl = source.url;
         const dateStr = new Date().toLocaleDateString();
-        const footerText = `${licenseText} • ${repoName}`;
+        
+        // LIABILITY DISCLAIMER TEXT
+        const disclaimerTitle = "CONTENT LIABILITY DISCLAIMER / RENUNCIA DE RESPONSABILIDAD";
+        const disclaimerText = `
+            This document has been automatically rendered by <strong>Arbor UI</strong>, a decentralized knowledge browser.<br>
+            <strong>Source Repository:</strong> ${repoUrl}<br><br>
+            The content, text, images, and intellectual property contained herein belong <strong>exclusively</strong> to the authors and maintainers of the external repository linked above.
+            <strong>Arbor UI</strong> (Treesys) acts solely as a visualization engine and bears <strong>no responsibility</strong> for the accuracy, legality, copyright status, or safety of the material presented in this document.
+            Users are responsible for verifying the source of the information.
+        `;
+
+        const footerText = `Generated via Arbor UI • Source: ${repoName}`;
         
         // Generate Content HTML with Progress
         let contentHtml = '';
@@ -60,10 +70,15 @@ export class PdfGenerator {
                 <div class="logo">🌳 ARBOR</div>
                 <h1 class="cover-title">${mainTitle.trim()}</h1>
                 <p class="cover-subtitle">${nodes.length} Lesson${nodes.length > 1 ? 's' : ''}</p>
+                
+                <div class="legal-box">
+                    <p class="legal-title">${disclaimerTitle}</p>
+                    <p class="legal-text">${disclaimerText}</p>
+                </div>
+
                 <div class="cover-footer">
                     <p>Generated on ${dateStr}</p>
                     <p class="small">${repoName}</p>
-                    <p class="small" style="margin-top:5px; font-size: 8pt;">Please save as PDF. Do not print unless necessary.</p>
                 </div>
             </div>
         </div>
@@ -97,7 +112,7 @@ export class PdfGenerator {
                 </main>
 
                 <div class="print-footer">
-                    <p>${footerText} <br> <a href="https://github.com/treesys-org/arbor-ui">github.com/treesys-org/arbor-ui</a></p>
+                    <p>${footerText} <br> <span style="font-size: 7pt; opacity: 0.5;">Disclaimer: Arbor UI is not responsible for external content content.</span></p>
                 </div>
 
                 <script>
@@ -202,12 +217,40 @@ export class PdfGenerator {
                 border: 10px double #eee;
                 padding: 40px;
                 box-sizing: border-box;
+                position: relative;
             }
-            .cover-content { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; }
+            .cover-content { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; width: 100%; }
             .logo { font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 20pt; color: #444; margin-bottom: 40px; }
             .cover-title { font-size: 36pt; border: none; margin: 20px 0; line-height: 1.2; }
-            .cover-subtitle { font-size: 14pt; color: #666; font-style: italic; }
-            .cover-footer { margin-top: auto; font-family: 'Nunito', sans-serif; color: #888; font-size: 10pt; }
+            .cover-subtitle { font-size: 14pt; color: #666; font-style: italic; margin-bottom: 40px; }
+            
+            /* --- Legal Disclaimer Box --- */
+            .legal-box {
+                margin-top: auto;
+                margin-bottom: 40px;
+                border: 1px solid #ccc;
+                background-color: #f9f9f9;
+                padding: 15px;
+                width: 90%;
+                font-family: 'Nunito', sans-serif;
+                text-align: left;
+            }
+            .legal-title {
+                font-weight: 800;
+                font-size: 8pt;
+                color: #333;
+                text-transform: uppercase;
+                margin-bottom: 5px;
+            }
+            .legal-text {
+                font-size: 8pt;
+                color: #555;
+                margin: 0;
+                line-height: 1.4;
+                text-align: left;
+            }
+
+            .cover-footer { margin-top: 20px; font-family: 'Nunito', sans-serif; color: #888; font-size: 10pt; }
             .small { font-size: 9pt; opacity: 0.7; }
 
             /* --- Footer (Fixed) --- */
