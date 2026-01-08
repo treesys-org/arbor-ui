@@ -8,8 +8,10 @@
 
 
 
+
 import { store } from '../store.js';
 import { parseContent } from '../utils/parser.js';
+import { github } from '../services/github.js';
 
 class ArborContent extends HTMLElement {
     constructor() {
@@ -260,6 +262,34 @@ class ArborContent extends HTMLElement {
         return blocks.slice(startIndex, endIndex);
     }
 
+    proposeChange() {
+        const repoInfo = github.getRepositoryInfo();
+        if (!repoInfo || !this.currentNode) {
+            alert('Cannot determine the source repository.');
+            return;
+        }
+
+        const title = `Sugerencia de Cambio: ${this.currentNode.name}`;
+        const bodyTemplate = `
+### 📝 Descripción del Cambio
+<!-- Por favor, describe aquí el cambio que propones. Sé lo más específico posible. -->
+
+
+### 📍 Ubicación
+- **Archivo:** \`${this.currentNode.sourcePath}\`
+- **Lección:** ${this.currentNode.name}
+
+---
+*Este issue fue generado automáticamente desde la interfaz de Arbor.*
+        `;
+
+        const encodedTitle = encodeURIComponent(title);
+        const encodedBody = encodeURIComponent(bodyTemplate.trim());
+
+        const url = `https://github.com/${repoInfo.owner}/${repoInfo.repo}/issues/new?title=${encodedTitle}&body=${encodedBody}`;
+        window.open(url, '_blank');
+    }
+
     // --- Render ---
 
     render() {
@@ -353,6 +383,10 @@ class ArborContent extends HTMLElement {
                       🦉 <span class="hidden sm:inline">${ui.navSage}</span>
                    </button>
                    
+                   <button id="btn-propose-change" class="w-9 h-9 flex items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors" title="${ui.proposeChange}">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3v1.5M3 21v-6m0 0l2.77-.693a9 9 0 016.208.682l.108.054a9 9 0 006.086.71l3.114-.732a48.524 48.524 0 01-.005-10.499l-3.11.732a9 9 0 01-6.085-.711l-.108-.054a9 9 0 00-6.208-.682L3 4.5M3 15V4.5" /></svg>
+                   </button>
+
                    <button id="btn-export-pdf" class="w-9 h-9 flex items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors" title="${ui.exportTitle}">
                         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M12 9.75l-3 3m0 0l3 3m-3-3h7.5M3 16.5v2.25" /></svg>
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v12m0 0l-3-3m3 3l3-3" class="opacity-0" /> <!-- Fallback invisible path to maintain viewbox ratio if needed -->
@@ -501,6 +535,9 @@ class ArborContent extends HTMLElement {
             store.setModal({ type: 'export-pdf', node: this.currentNode });
         });
         
+        // Propose Change (GitHub Issue)
+        safeBind('#btn-propose-change', () => this.proposeChange());
+
         safeBind('#btn-toggle-toc', () => this.toggleToc());
         safeBind('#toc-mobile-backdrop', () => this.toggleToc());
 

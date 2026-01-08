@@ -79,6 +79,7 @@ export const UI_LABELS = {
       readLater: 'READ LATER',
       completeAndNext: 'FINISH LESSON',
       editButton: 'EDIT',
+      proposeChange: 'Propose a Change',
       
       aboutTitle: 'Arbor Manifesto',
       missionTitle: 'Free and Open Knowledge',
@@ -348,6 +349,7 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       readLater: 'LEER DESPUÉS',
       completeAndNext: 'FINALIZAR LECCIÓN',
       editButton: 'EDITAR',
+      proposeChange: 'Proponer un Cambio',
       
       aboutTitle: 'Manifiesto de Arbor',
       missionTitle: 'Conocimiento Libre y Abierto',
