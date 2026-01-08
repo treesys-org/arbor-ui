@@ -1,4 +1,6 @@
 
+
+
 import { store } from "../store.js";
 import { parseArborFile, markdownToVisualHTML } from "../utils/editor-engine.js";
 
@@ -16,18 +18,12 @@ export class PdfGenerator {
         const repoName = source.name;
         const repoUrl = source.url;
         const dateStr = new Date().toLocaleDateString();
+        const ui = store.ui;
         
-        // LIABILITY DISCLAIMER TEXT
-        const disclaimerTitle = "CONTENT LIABILITY DISCLAIMER / RENUNCIA DE RESPONSABILIDAD";
-        const disclaimerText = `
-            This document has been automatically rendered by <strong>Arbor UI</strong>, a decentralized knowledge browser.<br>
-            <strong>Source Repository:</strong> ${repoUrl}<br><br>
-            The content, text, images, and intellectual property contained herein belong <strong>exclusively</strong> to the authors and maintainers of the external repository linked above.
-            <strong>Arbor UI</strong> (Treesys) acts solely as a visualization engine and bears <strong>no responsibility</strong> for the accuracy, legality, copyright status, or safety of the material presented in this document.
-            Users are responsible for verifying the source of the information.
-        `;
-
-        const footerText = `Generated via Arbor UI • Source: ${repoName}`;
+        // LIABILITY DISCLAIMER TEXT (Localized)
+        const disclaimerTitle = ui.pdfDisclaimerTitle;
+        const disclaimerText = ui.pdfDisclaimerText.replace('{url}', repoUrl);
+        const footerText = ui.pdfFooter.replace('{name}', repoName);
         
         // Generate Content HTML with Progress
         let contentHtml = '';
@@ -112,7 +108,7 @@ export class PdfGenerator {
                 </main>
 
                 <div class="print-footer">
-                    <p>${footerText} <br> <span style="font-size: 7pt; opacity: 0.5;">Disclaimer: Arbor UI is not responsible for external content content.</span></p>
+                    <p>${footerText}</p>
                 </div>
 
                 <script>

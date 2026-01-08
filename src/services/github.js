@@ -102,6 +102,37 @@ class GitHubService {
         return true;
     }
 
+    // AUTOMATIC BRANCH PROTECTION (The "Master Lock" for Timmy)
+    async protectBranch() {
+        if (!this.octokit) throw new Error("Not authenticated");
+        const repo = this.getRepositoryInfo();
+        
+        // 1. Get Default Branch
+        const { data: repoData } = await this.octokit.request('GET /repos/{owner}/{repo}', {
+             owner: repo.owner, repo: repo.repo
+        });
+        const branch = repoData.default_branch;
+
+        // 2. Apply Protection Rules
+        // This enforces PRs, but allows the owner (Timmy) to bypass if needed, 
+        // while blocking everyone else (Lola).
+        await this.octokit.request('PUT /repos/{owner}/{repo}/branches/{branch}/protection', {
+            owner: repo.owner,
+            repo: repo.repo,
+            branch: branch,
+            required_status_checks: null,
+            enforce_admins: false, // Allows Admin (Timmy) to bypass rules if necessary
+            required_pull_request_reviews: {
+                dismiss_stale_reviews: false,
+                require_code_owner_reviews: false,
+                required_approving_review_count: 0 // 0 means just opening the PR is enough to allow merging (if you have write access), but prevents direct push.
+            },
+            restrictions: null // Available for orgs, null for public repos usually
+        });
+        
+        return true;
+    }
+
     // --- CONTENT OPS ---
 
     async getFileContent(path) {

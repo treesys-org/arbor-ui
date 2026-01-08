@@ -2,6 +2,8 @@
 
 
 
+
+
 import { store } from '../store.js';
 import { aiService } from '../services/ai.js';
 
@@ -84,7 +86,7 @@ class ArborSage extends HTMLElement {
             if (aiService.webllmEngine) {
                  this.finishConfig();
             } else {
-                alert("Debes cargar el modelo en memoria primero.");
+                alert("Load the model into memory first.");
             }
         }
     }
@@ -111,7 +113,7 @@ class ArborSage extends HTMLElement {
         const model = this.querySelector('#inp-webllm-model').value;
         aiService.setConfig({ provider: 'webllm', webllmModel: model });
         
-        this.webllmStatus = 'Iniciando descarga (esto puede tardar unos minutos)...';
+        this.webllmStatus = 'Downloading...';
         this.render();
         
         const success = await aiService.loadWebLLM((progressText) => {
@@ -121,10 +123,10 @@ class ArborSage extends HTMLElement {
         });
         
         if(success) {
-            this.webllmStatus = "Modelo cargado y listo para usar.";
+            this.webllmStatus = "Model loaded and ready.";
             this.finishConfig();
         } else {
-            this.webllmStatus = "Error al cargar. Revisa la consola o intenta otro modelo.";
+            this.webllmStatus = "Error loading model. Check console.";
             this.render();
         }
     }
@@ -133,7 +135,7 @@ class ArborSage extends HTMLElement {
         const name = this.querySelector('#inp-pull-model').value.trim();
         if(!name) return;
 
-        this.pullStatus = 'Iniciando descarga...';
+        this.pullStatus = store.ui.sageDownloading || 'Downloading...';
         this.render();
 
         const success = await aiService.pullOllamaModel(name, (status) => {
@@ -142,7 +144,7 @@ class ArborSage extends HTMLElement {
             if(statusEl) statusEl.textContent = status;
         });
 
-        this.pullStatus = success ? '¡Descarga completada!' : 'Error en descarga.';
+        this.pullStatus = success ? 'Done!' : 'Error.';
         await this.loadOllamaModels();
         // Update input to the downloaded model
         if(success) {
@@ -152,7 +154,7 @@ class ArborSage extends HTMLElement {
     }
 
     async deleteModel(name) {
-        if(confirm(`¿Eliminar modelo ${name}?`)) {
+        if(confirm(`Delete model ${name}?`)) {
             await aiService.deleteOllamaModel(name);
             await this.loadOllamaModels();
         }
@@ -291,13 +293,13 @@ class ArborSage extends HTMLElement {
             if (this.ollamaModels.length === 0 && !this.hasTriedLoadingModels && this.pullStatus === '') {
                  // Trigger load if empty and haven't tried yet
                  setTimeout(() => this.loadOllamaModels(), 0);
-                 modelsListHtml = `<div class="text-center p-4 text-slate-400 text-xs animate-pulse">Buscando modelos locales...</div>`;
+                 modelsListHtml = `<div class="text-center p-4 text-slate-400 text-xs animate-pulse">${ui.sageSearchingModels}</div>`;
             } else if (this.ollamaModels.length === 0) {
                  modelsListHtml = `
                  <div class="text-center p-4 text-slate-400 text-xs border border-dashed border-slate-300 dark:border-slate-700 rounded-lg">
-                    <p class="mb-2">No se detectaron modelos.</p>
-                    <p class="mb-2">Asegúrate de que <strong class="text-slate-600 dark:text-slate-300">Ollama</strong> está corriendo en el puerto 11434.</p>
-                    <button id="btn-retry-models" class="text-blue-500 hover:text-blue-600 font-bold underline">Reintentar conexión</button>
+                    <p class="mb-2">${ui.sageNoModels}</p>
+                    <p class="mb-2">${ui.sageEnsureOllama}</p>
+                    <button id="btn-retry-models" class="text-blue-500 hover:text-blue-600 font-bold underline">${ui.sageRetryConnection}</button>
                  </div>`;
             } else {
                  modelsListHtml = this.ollamaModels.map(m => {
@@ -309,7 +311,7 @@ class ArborSage extends HTMLElement {
                         <button class="flex-1 text-left btn-select-model truncate font-mono text-xs text-slate-700 dark:text-slate-300" data-name="${m.name}">
                             ${isSelected ? '✅ ' : ''}${m.name} <span class="text-[9px] text-slate-400">(${sizeGB}GB)</span>
                         </button>
-                        <button class="btn-delete-model p-1.5 text-slate-400 hover:text-red-500" data-name="${m.name}" title="Eliminar">🗑</button>
+                        <button class="btn-delete-model p-1.5 text-slate-400 hover:text-red-500" data-name="${m.name}" title="Delete">🗑</button>
                      </div>`;
                  }).join('');
             }
@@ -317,10 +319,10 @@ class ArborSage extends HTMLElement {
 
         // Updated WebLLM Models (Prioritizing small/compatible ones)
         const webLlmOptions = [
-            { id: "SmolLM2-135M-Instruct-q0f16-MLC", name: "SmolLM2 135M (Super Rápido - 100MB)" },
-            { id: "SmolLM2-360M-Instruct-q0f16-MLC", name: "SmolLM2 360M (Equilibrado)" },
-            { id: "Llama-3.2-1B-Instruct-q4f16_1-MLC", name: "Llama 3.2 1B (Recomendado)" },
-            { id: "Llama-3.1-8B-Instruct-q4f32_1-MLC", name: "Llama 3.1 8B (Requiere GPU potente)" },
+            { id: "SmolLM2-135M-Instruct-q0f16-MLC", name: "SmolLM2 135M (Fast - 100MB)" },
+            { id: "SmolLM2-360M-Instruct-q0f16-MLC", name: "SmolLM2 360M (Balanced)" },
+            { id: "Llama-3.2-1B-Instruct-q4f16_1-MLC", name: "Llama 3.2 1B (Recommended)" },
+            { id: "Llama-3.1-8B-Instruct-q4f32_1-MLC", name: "Llama 3.1 8B (Heavy)" },
             { id: "gemma-2-2b-it-q4f16_1-MLC", name: "Gemma 2 2B (Google)" }
         ];
 
@@ -373,14 +375,14 @@ class ArborSage extends HTMLElement {
                         
                         <!-- Model Manager -->
                         <div class="border-t border-orange-200 dark:border-orange-800 pt-4">
-                            <p class="text-xs font-bold text-slate-500 uppercase mb-2">Descargar Modelo</p>
+                            <p class="text-xs font-bold text-slate-500 uppercase mb-2">${ui.sageDownloadModel}</p>
                             <div class="flex gap-2 mb-2">
-                                <input id="inp-pull-model" type="text" placeholder="ej: mistral" class="flex-1 text-xs p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                                <input id="inp-pull-model" type="text" placeholder="e.g. mistral" class="flex-1 text-xs p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
                                 <button id="btn-pull" class="px-3 py-1 bg-slate-800 text-white text-xs font-bold rounded-lg hover:bg-black">Pull</button>
                             </div>
                             <p id="pull-status" class="text-[10px] font-mono text-blue-500 h-4 mb-4">${this.pullStatus}</p>
 
-                            <p class="text-xs font-bold text-slate-500 uppercase mb-2">Modelos Disponibles</p>
+                            <p class="text-xs font-bold text-slate-500 uppercase mb-2">${ui.sageAvailableModels}</p>
                             <div class="space-y-2 max-h-32 overflow-y-auto custom-scrollbar bg-white/50 dark:bg-slate-900/50 rounded-lg p-1">
                                 ${modelsListHtml}
                             </div>
@@ -399,18 +401,18 @@ class ArborSage extends HTMLElement {
                          </select>
 
                          <p class="text-[11px] text-slate-500 leading-tight mb-4">
-                            Ejecuta modelos directamente en tu navegador. Si Llama 3 falla, prueba <strong>SmolLM2</strong>.
+                            Executes models directly in your browser. If Llama 3 fails, try <strong>SmolLM2</strong>.
                          </p>
 
                          <div class="bg-white dark:bg-slate-900 p-3 rounded-lg border border-blue-200 dark:border-blue-800/50 mb-4">
                             <p class="text-[10px] font-bold text-slate-400 uppercase mb-1">${ui.sageModelStatus}</p>
                             <p id="webllm-status-text" class="text-xs font-mono text-slate-700 dark:text-slate-300 break-words">
-                                ${this.webllmStatus || (aiService.webllmEngine ? "Modelo cargado." : "No cargado.")}
+                                ${this.webllmStatus || (aiService.webllmEngine ? "Loaded." : "Not loaded.")}
                             </p>
                          </div>
                          
                          <button id="btn-load-webllm" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-sm transition-colors shadow-md">
-                            ${ui.sageLoadModel} (Descargar)
+                            ${ui.sageLoadModel} (Download)
                          </button>
                     </div>
                     ` : ''}
@@ -462,10 +464,11 @@ class ArborSage extends HTMLElement {
     }
 
     renderChat(isSmart) {
+        const ui = store.ui;
         this.className = "fixed inset-x-0 bottom-0 z-[100] flex flex-col items-end md:bottom-6 md:right-6 md:w-auto pointer-events-none";
 
         const aiState = store.value.ai;
-        const displayMessages = aiState.messages.length > 0 ? aiState.messages : [{ role: 'assistant', content: "🦉 Hola. Hazme preguntas sobre esta lección." }];
+        const displayMessages = aiState.messages.length > 0 ? aiState.messages : [{ role: 'assistant', content: "🦉 Hello. Ask me anything." }];
         const displayStatus = aiState.status;
         
         const isOllama = aiService.config.provider === 'ollama';
@@ -497,7 +500,7 @@ class ArborSage extends HTMLElement {
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-xl backdrop-blur-sm shadow-inner">🦉</div>
                         <div>
-                            <h3 class="font-black text-sm leading-none">Sabio de Arbor</h3>
+                            <h3 class="font-black text-sm leading-none">Arbor Sage</h3>
                             <div class="flex items-center gap-1 mt-0.5">
                                 <span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
                                 <p class="text-[10px] opacity-80 font-medium">${providerName}</p>
@@ -505,8 +508,8 @@ class ArborSage extends HTMLElement {
                         </div>
                     </div>
                     <div class="flex items-center gap-2">
-                        <button id="btn-clear" class="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 transition-colors" title="Limpiar Chat">🗑️</button>
-                        <button id="btn-settings" class="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 transition-colors" title="Configuración">⚙️</button>
+                        <button id="btn-clear" class="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 transition-colors" title="${ui.sageClearChat}">🗑️</button>
+                        <button id="btn-settings" class="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 transition-colors" title="${ui.sageSettings}">⚙️</button>
                         <button class="btn-close w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 transition-colors">✕</button>
                     </div>
                 </div>
@@ -539,15 +542,15 @@ class ArborSage extends HTMLElement {
                 <!-- Quick Actions -->
                 ${!isThinking ? `
                 <div class="px-3 py-2 flex gap-2 overflow-x-auto custom-scrollbar bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0">
-                    <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 rounded-lg text-xs font-bold hover:bg-purple-100 transition-colors border border-purple-100 dark:border-purple-800" data-action="summarize">📝 Resumir</button>
-                    <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-100 dark:border-blue-800" data-action="explain">🎓 Explicar</button>
+                    <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 rounded-lg text-xs font-bold hover:bg-purple-100 transition-colors border border-purple-100 dark:border-purple-800" data-action="summarize">📝 Summarize</button>
+                    <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-100 dark:border-blue-800" data-action="explain">🎓 Explain</button>
                     <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-lg text-xs font-bold hover:bg-green-100 transition-colors border border-green-100 dark:border-green-800" data-action="quiz">❓ Quiz</button>
                 </div>
                 ` : ''}
 
                 <!-- Input -->
                 <form id="sage-form" class="p-3 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex gap-2 shrink-0 pb-[calc(0.75rem+env(safe-area-inset-bottom,20px))] md:pb-3">
-                    <input id="sage-input" type="text" ${isThinking ? 'disabled' : ''} class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 ${isOllama ? 'focus:ring-orange-500' : (isWebLLM ? 'focus:ring-blue-500' : 'focus:ring-purple-500')} dark:text-white placeholder:text-slate-400 disabled:opacity-50" placeholder="Pregunta sobre la lección..." autocomplete="off">
+                    <input id="sage-input" type="text" ${isThinking ? 'disabled' : ''} class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 ${isOllama ? 'focus:ring-orange-500' : (isWebLLM ? 'focus:ring-blue-500' : 'focus:ring-purple-500')} dark:text-white placeholder:text-slate-400 disabled:opacity-50" placeholder="${ui.sageInputPlaceholder}" autocomplete="off">
                     
                     ${isThinking ? `
                     <button type="button" id="btn-stop" class="w-11 h-11 bg-red-500 text-white rounded-xl hover:opacity-90 transition-all flex items-center justify-center shadow-lg active:scale-95 animate-pulse">

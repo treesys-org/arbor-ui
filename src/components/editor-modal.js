@@ -1,5 +1,6 @@
 
 
+
 import { store } from '../store.js';
 import { github } from '../services/github.js';
 import { BLOCKS, parseArborFile, visualHTMLToMarkdown, markdownToVisualHTML, reconstructArborFile } from '../utils/editor-engine.js';
@@ -115,12 +116,13 @@ class ArborEditor extends HTMLElement {
     }
 
     renderLoading() {
+        const ui = store.ui;
         this.innerHTML = `
         <div class="fixed inset-0 z-[80] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center">
              <div class="bg-white dark:bg-slate-900 p-8 rounded-2xl shadow-2xl flex flex-col items-center">
                  <div class="animate-spin text-4xl mb-4">⏳</div>
-                 <p class="text-slate-400 font-bold animate-pulse">Cargando...</p>
-                 <button id="btn-cancel-loading" class="mt-4 text-xs text-red-500 hover:underline">Cancelar</button>
+                 <p class="text-slate-400 font-bold animate-pulse">${ui.editorLoading}</p>
+                 <button id="btn-cancel-loading" class="mt-4 text-xs text-red-500 hover:underline">${ui.editorCancelLoading}</button>
              </div>
         </div>`;
         this.querySelector('#btn-cancel-loading').onclick = () => store.setModal(null);
@@ -163,7 +165,8 @@ class ArborEditor extends HTMLElement {
     }
 
     renderEditor(bodyHTML) {
-        const saveLabel = this.hasWriteAccess ? 'Publicar' : 'Proponer Cambio';
+        const ui = store.ui;
+        const saveLabel = this.hasWriteAccess ? ui.editorBtnPublish : ui.editorBtnPropose;
         const saveColor = this.hasWriteAccess ? 'bg-green-600' : 'bg-orange-500';
         
         // If meta.json, disable body editing
@@ -171,7 +174,7 @@ class ArborEditor extends HTMLElement {
         const bodyContent = isMeta 
             ? `<div class="p-8 text-center text-slate-400 italic border-2 border-dashed border-slate-200 rounded-xl">
                  <span class="text-4xl block mb-2">📂</span>
-                 Estás editando las propiedades de una carpeta.<br>Usa el panel superior para cambiar Nombre, Icono y Orden.
+                 ${ui.editorMetaWarning.replace('\n', '<br>')}
                </div>`
             : bodyHTML;
 
@@ -190,7 +193,7 @@ class ArborEditor extends HTMLElement {
                 <div class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 flex justify-between items-center shadow-sm shrink-0">
                     <div class="flex items-center gap-4">
                         <div>
-                            <h2 class="font-black text-slate-800 dark:text-white leading-none text-lg truncate max-w-[200px] md:max-w-md">${this.meta.title || 'Nuevo Archivo'}</h2>
+                            <h2 class="font-black text-slate-800 dark:text-white leading-none text-lg truncate max-w-[200px] md:max-w-md">${this.meta.title || ui.adminNewFile}</h2>
                             <span class="text-xs text-slate-400 font-mono hidden md:inline-block">${this.node.sourcePath}</span>
                         </div>
                     </div>
@@ -206,7 +209,7 @@ class ArborEditor extends HTMLElement {
                 <!-- Metadata Form -->
                 <div class="bg-slate-50 dark:bg-slate-950/50 p-4 md:p-6 border-b border-slate-200 dark:border-slate-800 grid grid-cols-12 gap-4 shrink-0 relative">
                      <div class="col-span-2 md:col-span-1 relative">
-                         <label class="text-[10px] uppercase font-bold text-slate-400">Icono</label>
+                         <label class="text-[10px] uppercase font-bold text-slate-400">${ui.editorLabelIcon}</label>
                          <button id="btn-emoji" class="w-full h-10 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-xl flex items-center justify-center hover:bg-blue-50 transition-colors">${this.meta.icon}</button>
                          
                          <!-- Emoji Picker Popup -->
@@ -221,17 +224,17 @@ class ArborEditor extends HTMLElement {
                      </div>
                      
                      <div class="col-span-8 md:col-span-9">
-                         <label class="text-[10px] uppercase font-bold text-slate-400">Título</label>
+                         <label class="text-[10px] uppercase font-bold text-slate-400">${ui.editorLabelTitle}</label>
                          <input id="meta-title" class="w-full h-10 px-3 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg font-bold outline-none focus:ring-2 focus:ring-blue-500" value="${this.meta.title}">
                      </div>
                      
                      <div class="col-span-2 md:col-span-2">
-                         <label class="text-[10px] uppercase font-bold text-slate-400">Orden</label>
+                         <label class="text-[10px] uppercase font-bold text-slate-400">${ui.editorLabelOrder}</label>
                          <input id="meta-order" type="number" class="w-full h-10 px-3 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg font-mono outline-none focus:ring-2 focus:ring-blue-500" value="${this.meta.order}">
                      </div>
                      
                      <div class="col-span-12">
-                         <label class="text-[10px] uppercase font-bold text-slate-400">Descripción</label>
+                         <label class="text-[10px] uppercase font-bold text-slate-400">${ui.editorLabelDesc}</label>
                          <input id="meta-desc" class="w-full h-10 px-3 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" value="${this.meta.description}">
                      </div>
                 </div>
@@ -247,9 +250,9 @@ class ArborEditor extends HTMLElement {
                     <div class="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
                     <div class="flex gap-2">
                         <button class="block-btn px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-xs font-bold hover:bg-green-100" data-type="quiz">+ Quiz</button>
-                        <button class="block-btn px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold hover:bg-blue-100" data-type="section">+ Sección</button>
-                        <button class="block-btn px-3 py-1.5 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded-lg text-xs font-bold hover:bg-yellow-100" data-type="callout">+ Nota</button>
-                        <button class="block-btn px-3 py-1.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-lg text-xs font-bold hover:bg-purple-100" data-type="image">+ Imagen</button>
+                        <button class="block-btn px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold hover:bg-blue-100" data-type="section">+ Section</button>
+                        <button class="block-btn px-3 py-1.5 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded-lg text-xs font-bold hover:bg-yellow-100" data-type="callout">+ Note</button>
+                        <button class="block-btn px-3 py-1.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-lg text-xs font-bold hover:bg-purple-100" data-type="image">+ Image</button>
                     </div>
                 </div>` : ''}
 
@@ -300,7 +303,7 @@ class ArborEditor extends HTMLElement {
     async submitChanges() {
         const btn = this.querySelector('#btn-submit');
         const originalText = btn.innerHTML;
-        btn.innerHTML = "Procesando...";
+        btn.innerHTML = store.ui.editorProcessing;
         btn.disabled = true;
         
         const finalContent = this.generateFinalContent();
@@ -309,10 +312,10 @@ class ArborEditor extends HTMLElement {
         try {
             if (this.hasWriteAccess) {
                 await github.commitFile(this.node.sourcePath, finalContent, msg, this.currentSha);
-                alert("✅ Guardado y Publicado en Main.");
+                alert(store.ui.editorSuccessPublish);
             } else {
                 const prUrl = await github.createPullRequest(this.node.sourcePath, finalContent, msg);
-                alert("🚀 Solicitud enviada para revisión.\n" + prUrl);
+                alert(store.ui.editorSuccessProposal + prUrl);
             }
             store.setModal(null);
         } catch(e) {

@@ -1,6 +1,6 @@
 
 
-import { UI_LABELS, AVAILABLE_LANGUAGES } from './i18n.js';
+import { AVAILABLE_LANGUAGES } from './i18n.js';
 import { github } from './services/github.js';
 import { aiService } from './services/ai.js';
 
@@ -30,6 +30,7 @@ class Store extends EventTarget {
         this.state = {
             theme: localStorage.getItem('arbor-theme') || 'light',
             lang: localStorage.getItem('arbor-lang') || 'EN',
+            i18nData: null, // Holds the loaded JSON language
             sources: [],
             activeSource: null,
             data: null, // Current Tree Root (Lazy Loaded)
@@ -64,18 +65,13 @@ class Store extends EventTarget {
             githubUser: null
         };
         
-        this.loadProgress();
-        this.checkStreak(); // Run daily check
-        this.loadSources();
-        
-        // Welcome Screen Check
-        const welcomeSeen = localStorage.getItem('arbor-welcome-seen');
-        if (!welcomeSeen) {
-            setTimeout(() => {
-                this.setModal('welcome');
-            }, 50); // Immediate but safe
-        }
-        
+        // Initial setup sequence
+        this.initialize().then(() => {
+             this.loadProgress();
+             this.checkStreak();
+             this.loadSources();
+        });
+
         const ghToken = localStorage.getItem('arbor-gh-token') || sessionStorage.getItem('arbor-gh-token');
         if (ghToken) {
             github.initialize(ghToken).then(user => {
@@ -86,7 +82,37 @@ class Store extends EventTarget {
         document.documentElement.classList.toggle('dark', this.state.theme === 'dark');
     }
 
-    get ui() { return UI_LABELS[this.state.lang]; }
+    // New Async Initialization for Language
+    async initialize() {
+        await this.loadLanguage(this.state.lang);
+        
+        // Welcome Screen Check
+        const welcomeSeen = localStorage.getItem('arbor-welcome-seen');
+        if (!welcomeSeen) {
+            setTimeout(() => {
+                this.setModal('welcome');
+            }, 50); 
+        }
+    }
+
+    // Lazy load the JSON language file
+    async loadLanguage(langCode) {
+        try {
+            const path = `./locales/${langCode.toLowerCase()}.json`;
+            const res = await fetch(path);
+            if (!res.ok) throw new Error(`Missing language file: ${path}`);
+            const data = await res.json();
+            this.update({ i18nData: data });
+        } catch (e) {
+            console.error("Language load failed, falling back to EN", e);
+            if (langCode !== 'EN') await this.loadLanguage('EN');
+        }
+    }
+
+    get ui() { 
+        return this.state.i18nData || {}; 
+    }
+    
     get value() { return this.state; }
     get availableLanguages() { return AVAILABLE_LANGUAGES; }
     get currentLangInfo() { return AVAILABLE_LANGUAGES.find(l => l.code === this.state.lang); }
@@ -108,12 +134,16 @@ class Store extends EventTarget {
 
     setTheme(theme) { this.update({ theme }); }
     toggleTheme() { this.update({ theme: this.state.theme === 'light' ? 'dark' : 'light' }); }
-    setLanguage(lang) { 
+    
+    async setLanguage(lang) { 
         if(this.state.lang !== lang) {
-            this.update({ lang, searchCache: {} }); // Clear cache on lang change 
-            this.loadData(this.state.activeSource); 
+            // Update state immediately to trigger UI spinners if needed, but data comes after fetch
+            this.update({ lang, searchCache: {} });
+            await this.loadLanguage(lang); // Fetch new JSON
+            this.loadData(this.state.activeSource); // Reload content tree to match language folder
         }
     }
+    
     setModal(modal) { this.update({ modal }); }
     setViewMode(viewMode) { 
         this.update({ viewMode });
@@ -175,6 +205,7 @@ class Store extends EventTarget {
     }
 
     async loadData(source) {
+        if (!source) return;
         this.update({ loading: true, error: null, activeSource: source });
         localStorage.setItem('arbor-active-source-id', source.id);
 
@@ -194,6 +225,9 @@ class Store extends EventTarget {
             if (!res.ok) throw new Error(`Failed to fetch data from ${source.name} (Status ${res.status}).`);
             const json = await res.json();
             
+            // Ensure language data is ready before trying to display content
+            if (!this.state.i18nData) await this.loadLanguage(this.state.lang);
+
             let langData = json.languages?.[this.state.lang] || Object.values(json.languages)[0];
             
             if (json.universeName && json.universeName !== source.name) {
@@ -203,7 +237,7 @@ class Store extends EventTarget {
             }
             
             // --- Apply i18n prefix to exam names in main tree ---
-            const examPrefix = this.ui.examLabelPrefix;
+            const examPrefix = this.ui.examLabelPrefix || "Exam: ";
             if (examPrefix) {
                 const applyPrefix = (node) => {
                     if (node.type === 'exam' && !node.name.startsWith(examPrefix)) {
@@ -410,7 +444,7 @@ class Store extends EventTarget {
                     children.forEach(child => child.parentId = node.id);
                     node.children = children;
 
-                    const examPrefix = this.ui.examLabelPrefix;
+                    const examPrefix = this.ui.examLabelPrefix || "Exam: ";
                     if (examPrefix) {
                         node.children.forEach(child => {
                             if (child.type === 'exam' && !child.name.startsWith(examPrefix)) {
@@ -702,7 +736,7 @@ class Store extends EventTarget {
         // 1. Mark the branch folder itself
         this.state.completedNodes.add(branchId);
 
-        const branchNode = this.findNode(branchId);
+        constbranchNode = this.findNode(branchId);
         
         if (branchNode) {
             // Helper to recursively mark loaded nodes
