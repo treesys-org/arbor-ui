@@ -164,6 +164,7 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       exitLeave: 'Leave',
       languageTitle: 'Language',
       languageSelect: 'Select your preferred language',
+      moduleEmpty: 'This module is empty.',
       
       // Contributor & Editor (SIMPLIFIED)
       contribTitle: 'Editor Mode',
@@ -418,6 +419,7 @@ Gemäß § 19 UStG wird keine Umsatzsteuer berechnet`,
       exitLeave: 'Salir',
       languageTitle: 'Idioma',
       languageSelect: 'Selecciona tu idioma preferido',
+      moduleEmpty: 'Este módulo no tiene contenido.',
 
       // Contributor & Editor (SIMPLIFIED)
       contribTitle: 'Modo Editor',

@@ -1,5 +1,4 @@
 
-
 import { UI_LABELS, AVAILABLE_LANGUAGES } from './i18n.js';
 import { github } from './services/github.js';
 import { aiService } from './services/ai.js';
@@ -402,18 +401,23 @@ class Store extends EventTarget {
                 if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
                 const children = JSON.parse(text.trim());
                 
-                children.forEach(child => child.parentId = node.id);
-                node.children = children;
+                if (children.length === 0) {
+                    node.children = [];
+                    this.update({ lastActionMessage: this.ui.moduleEmpty });
+                    setTimeout(() => this.update({ lastActionMessage: null }), 3000);
+                } else {
+                    children.forEach(child => child.parentId = node.id);
+                    node.children = children;
 
-                const examPrefix = this.ui.examLabelPrefix;
-                if (examPrefix) {
-                    node.children.forEach(child => {
-                        if (child.type === 'exam' && !child.name.startsWith(examPrefix)) {
-                            child.name = examPrefix + child.name;
-                        }
-                    });
+                    const examPrefix = this.ui.examLabelPrefix;
+                    if (examPrefix) {
+                        node.children.forEach(child => {
+                            if (child.type === 'exam' && !child.name.startsWith(examPrefix)) {
+                                child.name = examPrefix + child.name;
+                            }
+                        });
+                    }
                 }
-
                 node.hasUnloadedChildren = false;
             } else {
                 throw new Error(`Failed to load children: ${node.apiPath}.json`);

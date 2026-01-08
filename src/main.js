@@ -10,9 +10,16 @@ import './components/sage-modal.js';
 
 // Initialize App
 document.addEventListener('DOMContentLoaded', () => {
-    // Check local storage for theme
-    const savedTheme = localStorage.getItem('arbor-theme') || 'light';
-    store.setTheme(savedTheme);
+    // Check local storage for theme, falling back to system preference
+    let initialTheme = localStorage.getItem('arbor-theme');
+    if (!initialTheme) {
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            initialTheme = 'dark';
+        } else {
+            initialTheme = 'light';
+        }
+    }
+    store.setTheme(initialTheme);
 
     // Initial Load
     store.loadSources();

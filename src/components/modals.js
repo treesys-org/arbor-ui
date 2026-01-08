@@ -1,6 +1,5 @@
 
 
-
 import { store } from '../store.js';
 import { github } from '../services/github.js';
 
@@ -144,7 +143,7 @@ class ArborModals extends HTMLElement {
     renderWelcome(ui) {
         // Build language buttons
         const langButtons = store.availableLanguages.map(l => `
-            <button class="btn-welcome-lang text-xl transition-all duration-200 p-1.5 rounded-lg ${store.value.lang === l.code ? 'bg-white dark:bg-slate-800 shadow-sm scale-110 ring-1 ring-slate-200 dark:ring-slate-700' : 'opacity-40 hover:opacity-100 hover:bg-slate-100 dark:hover:bg-slate-800'}" data-code="${l.code}" title="${l.nativeName}">
+            <button class="btn-welcome-lang text-xl transition-all duration-200 p-1.5 rounded-lg ${store.value.lang === l.code ? 'bg-white dark:bg-slate-800 shadow-sm' : 'opacity-40 hover:opacity-100'}" data-code="${l.code}" title="${l.nativeName}">
                 ${l.flag}
             </button>
         `).join('');
@@ -164,9 +163,17 @@ class ArborModals extends HTMLElement {
             <!-- Header Image / Icon -->
             <div class="pt-8 pb-4 flex flex-col items-center justify-center bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 rounded-t-3xl relative">
                 
-                <!-- Language Switcher (Top Right) -->
-                <div class="absolute top-4 right-12 md:right-14 flex gap-1 bg-slate-50 dark:bg-slate-900/50 p-1 rounded-xl border border-slate-100 dark:border-slate-800 z-30">
-                    ${langButtons}
+                <!-- Top Right Controls -->
+                <div class="absolute top-4 right-14 flex items-center gap-2 z-30">
+                    <!-- Language Switcher -->
+                    <div class="flex gap-1 bg-slate-50 dark:bg-slate-900/50 p-1 rounded-xl border border-slate-100 dark:border-slate-800">
+                        ${langButtons}
+                    </div>
+                    <!-- Theme Switcher -->
+                    <div class="flex gap-1 bg-slate-50 dark:bg-slate-900/50 p-1 rounded-xl border border-slate-100 dark:border-slate-800">
+                        <button class="btn-welcome-theme text-xl transition-all duration-200 p-1.5 rounded-lg ${store.value.theme === 'light' ? 'bg-white dark:bg-slate-800 shadow-sm' : 'opacity-40 hover:opacity-100'}" data-theme="light" title="Light Mode">☀️</button>
+                        <button class="btn-welcome-theme text-xl transition-all duration-200 p-1.5 rounded-lg ${store.value.theme === 'dark' ? 'bg-white dark:bg-slate-800 shadow-sm' : 'opacity-40 hover:opacity-100'}" data-theme="dark" title="Dark Mode">🌙</button>
+                    </div>
                 </div>
 
                 <!-- Animated Owl Avatar -->
@@ -260,6 +267,14 @@ class ArborModals extends HTMLElement {
             btn.onclick = (e) => {
                 const code = e.currentTarget.dataset.code;
                 store.setLanguage(code);
+            };
+        });
+
+        // Theme switcher events
+        this.querySelectorAll('.btn-welcome-theme').forEach(btn => {
+            btn.onclick = (e) => {
+                const theme = e.currentTarget.dataset.theme;
+                store.setTheme(theme);
             };
         });
     }
