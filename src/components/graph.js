@@ -40,6 +40,8 @@ class ArborGraph extends HTMLElement {
         store.addEventListener('graph-update', () => this.updateGraph());
         store.addEventListener('state-change', (e) => {
              if(this.g) this.drawGround(); 
+             // Force graph update on theme change to repaint labels
+             if(e.detail.theme && this.svg) this.updateGraph();
              this.renderOverlays();
         });
         
@@ -87,9 +89,14 @@ class ArborGraph extends HTMLElement {
         }
 
         if (state.lastActionMessage) {
+            // Check if it's the "Empty Module" message to style it differently
+            const isEmptyMsg = state.lastActionMessage === ui.moduleEmpty;
+            const bgClass = isEmptyMsg ? 'bg-slate-700/90 text-slate-100 backdrop-blur-md' : 'bg-green-500 text-white';
+            const icon = isEmptyMsg ? '🍂' : '';
+
             html += `
-            <div class="absolute top-20 left-1/2 -translate-x-1/2 z-[60] bg-green-500 text-white px-8 py-3 rounded-full shadow-2xl animate-in fade-in zoom-in font-bold pointer-events-none">
-                ${state.lastActionMessage}
+            <div class="absolute top-20 left-1/2 -translate-x-1/2 z-[60] ${bgClass} px-8 py-3 rounded-full shadow-2xl animate-in fade-in zoom-in font-bold pointer-events-none flex items-center gap-3">
+                ${icon} ${state.lastActionMessage}
             </div>`;
         }
 
@@ -228,6 +235,7 @@ class ArborGraph extends HTMLElement {
 
         const isMobile = this.width < 768;
         const harvestedFruits = store.value.gamification.fruits;
+        const isDark = store.value.theme === 'dark';
 
         // 1. Calculate Hierarchy
         const root = d3.hierarchy(store.value.data, d => d.expanded ? d.children : null);
@@ -427,6 +435,15 @@ class ArborGraph extends HTMLElement {
             .attr("transform", d => {
                 return `translate(0, ${isMobile ? 55 : (d.data.type === 'leaf' || d.data.type === 'exam' ? 65 : 55)})`;
             });
+
+        // --- DARK MODE LABEL UPDATES ---
+        nodeMerged.select(".label-group rect")
+            .attr("fill", isDark ? "rgba(15, 23, 42, 0.95)" : "rgba(255,255,255,0.9)")
+            .attr("stroke", isDark ? "#334155" : "#e2e8f0");
+
+        nodeMerged.select(".label-group text")
+            .attr("fill", isDark ? "#f1f5f9" : "#334155");
+        // -------------------------------
 
         nodeMerged.select(".label-text").attr("text-anchor", "middle");
 
