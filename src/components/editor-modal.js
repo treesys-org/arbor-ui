@@ -1,4 +1,5 @@
 
+
 import { store } from '../store.js';
 import { github } from '../services/github.js';
 import { BLOCKS, parseArborFile, visualHTMLToMarkdown, markdownToVisualHTML, reconstructArborFile } from '../utils/editor-engine.js';
@@ -114,7 +115,13 @@ class ArborEditor extends HTMLElement {
     }
 
     renderLoading() {
-        this.innerHTML = `<div class="fixed inset-0 z-[80] bg-white dark:bg-slate-900 flex items-center justify-center"><div class="animate-spin text-4xl">⏳</div></div>`;
+        this.innerHTML = `
+        <div class="fixed inset-0 z-[80] bg-white dark:bg-slate-900 flex flex-col items-center justify-center">
+             <button id="btn-cancel-loading" class="absolute top-6 right-6 w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-red-500 transition-colors z-50">✕</button>
+             <div class="animate-spin text-4xl mb-4">⏳</div>
+             <p class="text-slate-400 font-bold animate-pulse">Cargando...</p>
+        </div>`;
+        this.querySelector('#btn-cancel-loading').onclick = () => store.setModal(null);
     }
     
     toggleEmojiPicker() {
