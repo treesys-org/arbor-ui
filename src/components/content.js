@@ -1,6 +1,8 @@
 
 
 
+
+
 import { store } from '../store.js';
 import { parseContent } from '../utils/parser.js';
 
@@ -474,7 +476,7 @@ class ArborContent extends HTMLElement {
             if(el) el.onclick = fn;
         };
 
-        safeBind('#backdrop-overlay', () => this.handleClose());
+        // Removed backdrop click closing logic
         safeBind('#btn-close-content', () => this.handleClose());
         safeBind('#btn-edit-content', () => store.openEditor(this.currentNode));
         

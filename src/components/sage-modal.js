@@ -569,8 +569,7 @@ class ArborSage extends HTMLElement {
              store.clearSageChat();
         };
 
-        const backdrop = this.querySelector('#sage-backdrop');
-        if(backdrop) backdrop.onclick = () => this.close();
+        // Removed backdrop click closing logic
         
         const area = this.querySelector('#sage-chat-area');
         if(area) area.scrollTop = area.scrollHeight;

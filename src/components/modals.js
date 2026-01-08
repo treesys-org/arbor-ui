@@ -142,8 +142,8 @@ class ArborModals extends HTMLElement {
         // Custom styling wrapper for Search vs Standard modals
         if (type === 'search') {
              this.innerHTML = `
-             <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-start justify-center pt-20 bg-slate-900/80 backdrop-blur-md p-4 animate-in fade-in cursor-pointer">
-                <div class="w-full max-w-2xl flex flex-col max-h-[80vh] relative cursor-auto" onclick="event.stopPropagation()">
+             <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-start justify-center pt-20 bg-slate-900/80 backdrop-blur-md p-4 animate-in fade-in">
+                <div class="w-full max-w-2xl flex flex-col max-h-[80vh] relative cursor-auto">
                     <div class="absolute -top-10 right-0 flex justify-end w-full pb-2">
                         <button class="btn-close-search text-white/80 hover:text-white font-bold text-sm flex items-center gap-2 bg-slate-800/50 px-3 py-1.5 rounded-full transition-colors backdrop-blur-sm border border-white/10">
                             <span>${ui.close || 'Close'}</span> ✕
@@ -153,7 +153,7 @@ class ArborModals extends HTMLElement {
                 </div>
              </div>`;
              
-             this.querySelector('#modal-backdrop').onclick = () => this.close();
+             // Removed backdrop click closing logic
              this.querySelector('.btn-close-search').onclick = () => this.close();
              
              this.bindEvents(type, ui);
@@ -162,14 +162,14 @@ class ArborModals extends HTMLElement {
 
         // Standard Modal Wrapper
         this.innerHTML = `
-        <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in cursor-pointer">
-            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl ${sizeClass} w-full relative overflow-hidden flex flex-col max-h-[95vh] border border-slate-200 dark:border-slate-800 cursor-auto" onclick="event.stopPropagation()">
+        <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl ${sizeClass} w-full relative overflow-hidden flex flex-col max-h-[95vh] border border-slate-200 dark:border-slate-800 cursor-auto">
                 ${type !== 'contributor' ? `<button class="btn-close absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 z-20 transition-colors">✕</button>` : ''}
                 ${content}
             </div>
         </div>`;
 
-        this.querySelector('#modal-backdrop').onclick = () => this.close();
+        // Removed backdrop click closing logic
         const closeBtn = this.querySelector('.btn-close');
         if (closeBtn) closeBtn.onclick = () => this.close();
         
@@ -184,8 +184,8 @@ class ArborModals extends HTMLElement {
         const btnClass = isComplete ? 'bg-green-600 hover:bg-green-500' : 'bg-purple-600 hover:bg-purple-500';
 
         this.innerHTML = `
-        <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in cursor-pointer">
-            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-sm w-full relative overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800 cursor-auto" onclick="event.stopPropagation()">
+        <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-sm w-full relative overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800 cursor-auto">
                 <button class="btn-cancel absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 z-20 transition-colors">✕</button>
                 
                 <div class="p-8 text-center">
@@ -208,7 +208,7 @@ class ArborModals extends HTMLElement {
             </div>
         </div>`;
 
-        this.querySelector('#modal-backdrop').onclick = () => store.closePreview();
+        // Removed backdrop click closing logic
         this.querySelector('.btn-enter').onclick = () => store.enterLesson();
         this.querySelectorAll('.btn-cancel').forEach(b => b.onclick = () => store.closePreview());
     }
@@ -270,8 +270,8 @@ class ArborModals extends HTMLElement {
         }
 
         this.innerHTML = `
-        <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in cursor-pointer">
-            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-3xl w-full relative overflow-hidden flex flex-col max-h-[85vh] border border-slate-200 dark:border-slate-800 cursor-auto" onclick="event.stopPropagation()">
+        <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-3xl w-full relative overflow-hidden flex flex-col max-h-[85vh] border border-slate-200 dark:border-slate-800 cursor-auto">
                 <div class="p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex flex-col gap-4 shrink-0">
                     <div class="flex justify-between items-center">
                         <div class="flex items-center gap-3">
@@ -300,8 +300,7 @@ class ArborModals extends HTMLElement {
             </div>
         </div>`;
         
-        // Bindings
-        this.querySelector('#modal-backdrop').onclick = () => store.setViewMode('explore');
+        // Removed backdrop click closing logic
         this.querySelector('.btn-close-certs').onclick = () => store.setViewMode('explore');
         
         const searchInput = this.querySelector('#inp-cert-search');
