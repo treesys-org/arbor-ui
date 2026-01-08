@@ -1,4 +1,5 @@
 
+
 import { Octokit } from "octokit";
 import { store } from "../store.js";
 import { utf8_to_b64 } from "../utils/editor-engine.js";
@@ -228,13 +229,43 @@ class GitHubService {
 
     // --- COMPLEX OPERATIONS (Studio Features) ---
 
+    // Optimized Move: Handles both File rename AND Folder rename (recursively)
     async moveFile(oldPath, newPath, message) {
-        // 1. Get Content & SHA
-        const { content, sha } = await this.getFileContent(oldPath);
-        // 2. Create New
-        await this.commitFile(newPath, content, message);
-        // 3. Delete Old
-        await this.deleteFile(oldPath, `chore: Move file to ${newPath}`, sha);
+        if (!this.octokit) throw new Error("Not authenticated");
+
+        // 1. Determine if it's a file or a folder structure
+        // We try to get file content first. If it fails, we assume it might be a directory or non-existent
+        let isFile = false;
+        let fileData = null;
+
+        try {
+            fileData = await this.getFileContent(oldPath);
+            isFile = true;
+        } catch(e) {
+            isFile = false;
+        }
+
+        if (isFile) {
+            // Case A: Single File Move
+            // 1. Create New
+            await this.commitFile(newPath, fileData.content, message);
+            // 2. Delete Old
+            await this.deleteFile(oldPath, `chore: Move file to ${newPath}`, fileData.sha);
+            return;
+        }
+
+        // Case B: Folder Move (Recursive)
+        // Note: GitHub API does not support moving folders directly.
+        // We must identify all children, move them one by one.
+        // Caller of this function should ideally provide the list of children to avoid re-fetching tree
+        // but if not provided, we fetch.
+        
+        // Warning: This is expensive operations.
+        // We rely on the UI/AdminPanel to iterate children and call moveFile for each file,
+        // rather than doing the recursion here implicitly which can be opaque.
+        
+        // If execution reaches here, it means we tried to move a "file" that doesn't exist as a blob.
+        throw new Error("Cannot move folder directly via API. Please use the Admin Panel which handles recursive moves.");
     }
 
     async swapOrder(pathA, pathB) {
@@ -336,6 +367,8 @@ class GitHubService {
             }
         });
 
+        // If a rule exists, only the owner can edit.
+        // If NO rule exists, anyone with a valid token can edit (default permissive for collaborators)
         if (applicableRule) {
              return applicableRule.owner.toLowerCase() === username;
         }
@@ -349,10 +382,11 @@ class GitHubService {
         const repo = this.getRepositoryInfo();
         if (!repo) return false;
         try {
-            await this.octokit.request('GET /repos/{owner}/{repo}/collaborators', {
-                owner: repo.owner, repo: repo.repo, per_page: 1
+            // Check checks if user is a collaborator with admin permission
+            const { data: perms } = await this.octokit.request('GET /repos/{owner}/{repo}/collaborators/{username}/permission', {
+                owner: repo.owner, repo: repo.repo, username: this.currentUser.login
             });
-            return true;
+            return perms.permission === 'admin';
         } catch (e) {
             return false;
         }

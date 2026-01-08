@@ -183,12 +183,15 @@ class ArborAdminPanel extends HTMLElement {
                          alert("La carpeta está vacía o no se puede renombrar.");
                          return;
                     }
+                    
+                    if(!confirm(`Se moverán ${children.filter(x=>x.type!=='tree').length} archivos. ¿Continuar?`)) return;
 
                     let movedCount = 0;
                     for (let child of children) {
                         if (child.type === 'tree') continue;
                         const relPath = child.path.substring(oldPath.length); 
                         const targetPath = `${newPath}${relPath}`;
+                        // We use the simpler moveFile here because we are manually iterating
                         await github.moveFile(child.path, targetPath, `chore: Rename folder ${oldName} to ${safeName}`);
                         movedCount++;
                     }
@@ -273,12 +276,6 @@ class ArborAdminPanel extends HTMLElement {
     }
 
     getAllDescendants(folderPath) {
-        // Since we now use a tree structure, we need to flatten it back to find descendants if we want to batch process
-        // But for move/rename of folder, we usually just need the current structure.
-        // The original logic relied on a flat treeNodes.
-        // We need to re-fetch recursive flat tree or traverse our local tree.
-        // For simplicity in this action, we can traverse our local `this.state.treeNodes` to find descendants.
-        
         const descendants = [];
         const traverse = (nodes) => {
             nodes.forEach(n => {
@@ -302,6 +299,15 @@ class ArborAdminPanel extends HTMLElement {
                 <div class="w-16 h-16 bg-slate-800 text-white rounded-full flex items-center justify-center text-3xl mb-6 shadow-xl">🐙</div>
                 <h2 class="text-2xl font-black mb-2 dark:text-white">${ui.contribTitle}</h2>
                 <p class="text-sm text-slate-500 mb-6 max-w-md">${ui.contribDesc}</p>
+                
+                <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6 text-left max-w-sm rounded-r">
+                    <p class="text-xs text-yellow-800 font-bold mb-1">⚠️ Aviso de Seguridad</p>
+                    <p class="text-[10px] text-yellow-700 leading-tight">
+                        Tu Token de GitHub (PAT) se almacena localmente en este navegador. 
+                        <strong>Arbor no tiene servidor propio.</strong> Si usas un ordenador compartido, asegúrate de cerrar sesión al terminar.
+                    </p>
+                </div>
+
                 <div class="space-y-4 w-full max-w-sm">
                     <input id="inp-gh-token" type="password" placeholder="${ui.contribTokenPlaceholder}" class="w-full border rounded-xl px-4 py-3 font-bold text-slate-800 outline-none focus:ring-2 focus:ring-slate-500">
                     <div class="flex items-center justify-between px-1">
@@ -422,9 +428,15 @@ class ArborAdminPanel extends HTMLElement {
 
             content = `
             <div class="flex flex-col h-full bg-slate-50/50 dark:bg-slate-900/50">
-                <div class="p-4 bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 text-xs shrink-0 flex justify-between items-center">
-                    <span>Define quién aprueba cambios en cada carpeta.</span>
-                    <button id="btn-save-gov" class="bg-blue-600 text-white px-3 py-1.5 rounded text-xs font-bold shadow hover:bg-blue-500">Guardar Cambios</button>
+                <div class="p-4 bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 text-xs shrink-0 flex flex-col gap-1">
+                    <div class="flex justify-between items-center">
+                        <span class="font-bold">Gobernanza de Contenidos</span>
+                        <button id="btn-save-gov" class="bg-blue-600 text-white px-3 py-1.5 rounded text-xs font-bold shadow hover:bg-blue-500">Guardar Cambios</button>
+                    </div>
+                    <p class="opacity-70 text-[10px]">
+                        IMPORTANTE: Arbor usa este archivo para ocultar botones en la UI. 
+                        Para seguridad real, activa <strong>Branch Protection Rules</strong> en GitHub.com
+                    </p>
                 </div>
                 <div class="flex-1 overflow-y-auto p-4">
                     <table class="w-full text-sm text-left bg-white dark:bg-slate-800 rounded-xl shadow-sm overflow-hidden">
@@ -644,7 +656,7 @@ class ArborAdminPanel extends HTMLElement {
              
              try {
                  await github.saveCodeOwners(targetPath, content, sha);
-                 alert("Permisos guardados y CODEOWNERS actualizado.");
+                 alert("Permisos guardados y CODEOWNERS actualizado.\n\nRecuerda activar 'Branch Protection' en GitHub para que esto sea 100% efectivo.");
                  this.loadAdminData(); 
              } catch(e) { alert("Error: " + e.message); }
         };

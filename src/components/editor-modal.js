@@ -189,15 +189,18 @@ class ArborEditor extends HTMLElement {
                 <!-- Header -->
                 <div class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 flex justify-between items-center shadow-sm shrink-0">
                     <div class="flex items-center gap-4">
-                        <button id="btn-cancel" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors">✕</button>
                         <div>
                             <h2 class="font-black text-slate-800 dark:text-white leading-none text-lg truncate max-w-[200px] md:max-w-md">${this.meta.title || 'Nuevo Archivo'}</h2>
                             <span class="text-xs text-slate-400 font-mono hidden md:inline-block">${this.node.sourcePath}</span>
                         </div>
                     </div>
-                    <button id="btn-submit" class="${saveColor} text-white px-6 py-2.5 rounded-lg font-bold shadow-lg hover:brightness-110 active:scale-95 transition-all uppercase tracking-wide text-xs flex items-center gap-2">
-                        <span>💾</span> <span class="hidden md:inline">${saveLabel}</span>
-                    </button>
+                    <div class="flex items-center gap-3">
+                        <button id="btn-submit" class="${saveColor} text-white px-6 py-2.5 rounded-lg font-bold shadow-lg hover:brightness-110 active:scale-95 transition-all uppercase tracking-wide text-xs flex items-center gap-2">
+                            <span>💾</span> <span class="hidden md:inline">${saveLabel}</span>
+                        </button>
+                        <div class="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+                        <button id="btn-cancel" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-colors font-bold text-lg">✕</button>
+                    </div>
                 </div>
                 
                 <!-- Metadata Form -->
