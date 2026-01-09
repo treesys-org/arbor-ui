@@ -22,22 +22,24 @@ class ArborSidebar extends HTMLElement {
     render() {
         // Debounce / Memoize Render
         const { theme, lang, viewMode, gamification, githubUser } = store.value;
+        const g = gamification;
         
-        const seedsCount = gamification.seeds ? gamification.seeds.length : (gamification.fruits ? gamification.fruits.length : 0);
+        const seedsCount = g.seeds ? g.seeds.length : (g.fruits ? g.fruits.length : 0);
         
         const currentKey = JSON.stringify({
             theme, lang, viewMode, 
-            streak: gamification.streak, 
+            streak: g.streak, 
             seedsCount: seedsCount,
             ghUser: githubUser?.login,
-            mobileOpen: this.isMobileMenuOpen
+            mobileOpen: this.isMobileMenuOpen,
+            username: g.username,
+            avatar: g.avatar
         });
         
         if (currentKey === this.renderKey) return;
         this.renderKey = currentKey;
 
         const ui = store.ui;
-        const g = store.value.gamification;
 
         let mobileMenuHtml = '';
         if (this.isMobileMenuOpen) {
@@ -47,9 +49,9 @@ class ArborSidebar extends HTMLElement {
                 <!-- User Profile -->
                 <div class="p-2 border-b border-slate-100 dark:border-slate-700 mb-2">
                     <button class="js-btn-profile w-full flex items-center gap-3 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-left">
-                        <div class="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xl">👤</div>
+                        <div class="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xl">${g.avatar || '👤'}</div>
                         <div>
-                            <p class="text-sm font-bold text-slate-800 dark:text-white">${ui.navProfile}</p>
+                            <p class="text-sm font-bold text-slate-800 dark:text-white">${g.username || ui.navProfile}</p>
                             <p class="text-xs text-slate-500">${g.streak} ${ui.days} Streak 🔥</p>
                         </div>
                     </button>
@@ -170,9 +172,9 @@ class ArborSidebar extends HTMLElement {
                 <!-- User Profile / Login / Sync -->
                 <div class="relative group">
                     <button class="js-btn-profile w-10 h-10 rounded-full border-2 border-slate-200 dark:border-slate-700 p-0.5 overflow-hidden relative transition-transform hover:scale-105 active:scale-95">
-                         <div class="w-full h-full rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">👤</div>
+                         <div class="w-full h-full rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 text-2xl">${g.avatar || '👤'}</div>
                     </button>
-                    <span class="tooltip">${ui.navProfile}</span>
+                    <span class="tooltip">${g.username || ui.navProfile}</span>
                 </div>
                 
                 <div class="js-btn-impressum text-[9px] text-slate-400 font-bold opacity-60 hover:opacity-100 transition-opacity cursor-pointer mt-2 text-center">

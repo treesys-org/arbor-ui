@@ -1,10 +1,7 @@
 
-
-
-
-
 import { store } from '../store.js';
 import { github } from '../services/github.js';
+import { AdminRenderer } from '../utils/renderer.js';
 
 class ArborAdminPanel extends HTMLElement {
     constructor() {
@@ -24,19 +21,12 @@ class ArborAdminPanel extends HTMLElement {
 
     connectedCallback() {
         this.render();
-        
-        // Expose helper functions for inline HTML event handlers
         this.setupGlobalHandlers();
 
         // Initial Load if user exists
         if (store.value.githubUser) {
             this.initData();
         }
-    }
-
-    disconnectedCallback() {
-        // Cleanup globals if necessary, though they are harmless being overwritten
-        // window.toggleFolder = null; 
     }
 
     async initData() {
@@ -61,17 +51,14 @@ class ArborAdminPanel extends HTMLElement {
         }
     }
 
-    // Helper to convert GitHub flat tree to recursive structure
     buildTree(flatNodes) {
         const root = [];
         const map = {};
 
-        // 1. Initialize map
         flatNodes.forEach(n => {
             map[n.path] = { ...n, children: [] };
         });
 
-        // 2. Build Hierarchy
         flatNodes.forEach(n => {
             const node = map[n.path];
             const parts = n.path.split('/');
@@ -83,13 +70,11 @@ class ArborAdminPanel extends HTMLElement {
                 if (map[parentPath]) {
                     map[parentPath].children.push(node);
                 } else {
-                    // If parent path isn't in the tree (e.g. filtered query), add to root
                     root.push(node);
                 }
             }
         });
 
-        // 3. Sort (Folders first, then files)
         const sortFn = (a, b) => {
             if (a.type === b.type) return a.path.localeCompare(b.path);
             return a.type === 'tree' ? -1 : 1;
@@ -198,8 +183,7 @@ class ArborAdminPanel extends HTMLElement {
                         if (child.type === 'tree') continue;
                         const relPath = child.path.substring(oldPath.length); 
                         const targetPath = `${newPath}${relPath}`;
-                        // We use the simpler moveFile here because we are manually iterating
-                        await github.moveFile(child.path, targetPath, `chore: Rename folder ${oldName} to ${safeName}`);
+                        await github.moveFile(child.path, targetFilePath, `chore: Rename folder ${oldName} to ${safeName}`);
                         movedCount++;
                     }
                     alert(store.ui.adminRenameSuccess.replace('{count}', movedCount));
@@ -299,7 +283,6 @@ class ArborAdminPanel extends HTMLElement {
         const user = store.value.githubUser;
         const ui = store.ui;
 
-        // Login Screen with Magic Link for Lola
         if (!user) {
             this.innerHTML = `
             <div class="p-8 text-center flex flex-col items-center justify-center h-full relative">
@@ -320,7 +303,6 @@ class ArborAdminPanel extends HTMLElement {
                         <div class="relative flex justify-center text-xs uppercase"><span class="bg-white dark:bg-slate-900 px-2 text-slate-500">OR</span></div>
                     </div>
                     
-                    <!-- THE MAGIC LINK FOR LOLA -->
                     <a href="https://github.com/settings/tokens/new?scopes=repo,workflow&description=Arbor%20Studio%20Access" target="_blank" class="block w-full py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-colors border border-slate-200">
                         🔑 Generate Token (GitHub)
                     </a>
@@ -330,7 +312,6 @@ class ArborAdminPanel extends HTMLElement {
             return;
         }
 
-        // Dashboard
         const { adminTab, isAdmin, adminData, treeNodes, treeFilter, isRepoHealthy } = this.state;
         
         const header = `
@@ -391,7 +372,12 @@ class ArborAdminPanel extends HTMLElement {
                     </div>
                     <div id="tree-container" class="flex-1 overflow-y-auto custom-scrollbar p-2 select-none bg-white dark:bg-slate-900">
                         ${treeNodes.length === 0 ? `<div class="p-8 text-center text-slate-400 animate-pulse text-xs">${ui.editorLoading}</div>` : 
-                          this.renderRecursiveTree(treeNodes, 0)}
+                          AdminRenderer.renderRecursiveTree(treeNodes, 0, {
+                              filter: this.state.treeFilter.toLowerCase(),
+                              expandedPaths: this.state.expandedPaths,
+                              canEdit: (p) => github.canEdit(p),
+                              ui: ui
+                          })}
                     </div>
                  </div>`;
              }
@@ -488,7 +474,6 @@ class ArborAdminPanel extends HTMLElement {
     }
     
     bindLoginEvents() {
-        // Close button handler for login screen
         const btnClose = this.querySelector('#btn-close-login');
         if (btnClose) btnClose.onclick = () => store.setModal(null);
 
@@ -512,7 +497,6 @@ class ArborAdminPanel extends HTMLElement {
                         else sessionStorage.setItem('arbor-gh-token', token);
                         this.initData();
                     } else { 
-                         // Use store.ui for the localized string
                          throw new Error(store.ui.contribTokenError);
                     }
                 } catch(e) {
@@ -585,7 +569,6 @@ class ArborAdminPanel extends HTMLElement {
             };
         }
         
-        // Manual Protection Button (The Lock Icon)
         const btnProtect = this.querySelector('#btn-protect-branch');
         if (btnProtect) {
             btnProtect.onclick = async () => {
@@ -712,97 +695,6 @@ class ArborAdminPanel extends HTMLElement {
         this.querySelectorAll('.btn-del-gov').forEach(btn => {
              btn.onclick = (e) => e.target.closest('tr').remove();
         });
-    }
-
-    renderRecursiveTree(nodes, depth) {
-        const filter = this.state.treeFilter.toLowerCase();
-        const ui = store.ui;
-        
-        const folders = nodes.filter(n => n.type === 'tree').sort((a,b) => a.path.localeCompare(b.path));
-        const files = nodes.filter(n => n.type === 'blob').sort((a,b) => a.path.localeCompare(b.path));
-        
-        let html = '';
-        
-        folders.forEach(node => {
-             const name = node.path.split('/').pop().replace(/_/g, ' ');
-             
-             let hasMatchingChildren = false;
-             let childrenHtml = '';
-             
-             if (node.children && node.children.length > 0) {
-                 childrenHtml = this.renderRecursiveTree(node.children, depth + 1);
-                 hasMatchingChildren = childrenHtml.length > 0;
-             }
-             
-             const selfMatch = filter ? name.toLowerCase().includes(filter) : true;
-             
-             if (!selfMatch && !hasMatchingChildren && filter) return; 
-
-             const isExpanded = this.state.expandedPaths.has(node.path) || (filter && hasMatchingChildren);
-             const canWrite = github.canEdit(node.path);
-             const padding = depth * 12 + 10;
-
-             html += `
-             <div>
-                <div class="flex items-center justify-between py-1.5 px-2 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer rounded text-sm group transition-colors ${!canWrite ? 'opacity-75' : ''}"
-                     style="padding-left: ${padding}px"
-                     onclick="window.toggleFolder('${node.path}')"
-                     ondragover="window.handleDragOver(event)"
-                     ondragleave="window.handleDragLeave(event)"
-                     ondrop="window.handleDrop(event, '${node.path}', 'folder')"
-                     data-path="${node.path}">
-                    <div class="flex items-center gap-2 overflow-hidden">
-                        <span class="text-slate-400 text-xs">${isExpanded ? '📂' : '📁'}</span>
-                        <span class="font-bold text-slate-700 dark:text-slate-300 truncate select-none">${name}</span>
-                        ${!canWrite ? '<span class="text-[10px] ml-auto text-slate-400">🔒</span>' : ''}
-                    </div>
-                    
-                    ${canWrite ? `
-                    <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button class="p-1 text-slate-400 hover:text-blue-500 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30" title="${ui.editorEdit}" onclick="event.stopPropagation(); window.editFile('${node.path}/meta.json')">⚙️</button>
-                        <button class="p-1 text-slate-400 hover:text-orange-500 rounded hover:bg-orange-50 dark:hover:bg-orange-900/30" title="${ui.adminRename}" onclick="event.stopPropagation(); window.renameNode('${node.path}', 'folder')">✏️</button>
-                        <button class="p-1 text-slate-400 hover:text-red-500 rounded hover:bg-red-50 dark:hover:bg-red-900/30" title="${ui.adminDelete}" onclick="event.stopPropagation(); window.deleteFileAction('${node.path}', 'folder')">🗑️</button>
-                    </div>` : ''}
-                </div>
-                ${isExpanded ? `<div class="border-l border-slate-200 dark:border-slate-800 ml-4">${childrenHtml}</div>` : ''}
-             </div>`;
-        });
-
-        files.forEach(node => {
-            if (node.path.endsWith('meta.json')) return; 
-            const name = node.path.split('/').pop().replace('.md', '').replace(/_/g, ' ');
-            
-            if (filter && !name.toLowerCase().includes(filter)) return;
-
-            const padding = depth * 12 + 10;
-            const canWrite = github.canEdit(node.path);
-            
-            html += `
-            <div class="flex items-center justify-between py-1.5 px-2 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer rounded text-sm group file-item transition-colors"
-                 style="padding-left: ${padding}px"
-                 draggable="${canWrite}"
-                 ondragstart="window.handleDragStart(event, '${node.path}', 'file')"
-                 ondragover="window.handleDragOver(event)"
-                 ondragleave="window.handleDragLeave(event)"
-                 ondrop="window.handleDrop(event, '${node.path}', 'file')"
-                 onclick="window.editFile('${node.path}')"
-                 data-path="${node.path}">
-                 
-                <div class="flex items-center gap-2 overflow-hidden">
-                    <span class="text-slate-400 text-xs">📄</span>
-                    <span class="text-slate-600 dark:text-slate-400 truncate select-none">${name}</span>
-                    ${!canWrite ? '<span class="text-[10px] ml-auto text-slate-400">🔒</span>' : ''}
-                </div>
-
-                ${canWrite ? `
-                <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button class="p-1 text-slate-400 hover:text-orange-500 rounded hover:bg-orange-50 dark:hover:bg-orange-900/30" title="${ui.adminRename}" onclick="event.stopPropagation(); window.renameNode('${node.path}', 'file')">✏️</button>
-                    <button class="p-1 text-slate-400 hover:text-red-500 rounded hover:bg-red-50 dark:hover:bg-red-900/30" title="${ui.adminDelete}" onclick="event.stopPropagation(); window.deleteFileAction('${node.path}', 'file')">🗑️</button>
-                </div>` : ''}
-            </div>`;
-        });
-
-        return html;
     }
 }
 customElements.define('arbor-admin-panel', ArborAdminPanel);

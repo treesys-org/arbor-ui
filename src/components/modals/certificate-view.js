@@ -1,0 +1,63 @@
+
+import { store } from '../../store.js';
+
+class ArborModalCertificateView extends HTMLElement {
+    connectedCallback() {
+        this.render();
+    }
+
+    close() {
+        store.setModal(null);
+    }
+
+    render() {
+        const ui = store.ui;
+        const moduleId = store.value.modal.moduleId;
+
+        // Retrieve version hash from bookmark if available to verify content state
+        const node = store.findNode(moduleId);
+        const bookmark = node ? store.getBookmark(node.id, node.content) : null;
+        const versionId = bookmark ? bookmark.hash.substring(0, 8).toUpperCase() : 'LEGACY';
+
+        const content = `
+        <div class="p-12 text-center bg-yellow-50 dark:bg-yellow-950/20 h-full flex flex-col items-center justify-center relative overflow-hidden">
+             <div class="absolute inset-0 border-[10px] border-double border-yellow-200 dark:border-yellow-900/40 m-4 rounded-2xl pointer-events-none"></div>
+             <div class="w-24 h-24 bg-white dark:bg-slate-900 rounded-full flex items-center justify-center text-5xl shadow-lg border-4 border-yellow-400 mb-6 relative z-10">🎓</div>
+             <h2 class="font-black text-3xl text-slate-800 dark:text-white mb-2 uppercase tracking-widest relative z-10">${ui.certTitle}</h2>
+             <div class="w-24 h-1 bg-yellow-400 mb-6 relative z-10"></div>
+             <p class="text-slate-600 dark:text-slate-300 mb-2 font-serif italic text-lg relative z-10">${ui.certBody}</p>
+             <h3 class="font-bold text-2xl text-purple-600 dark:text-purple-400 mb-8 relative z-10">${moduleId}</h3>
+             
+             <div class="flex gap-8 text-center text-xs text-slate-400 font-mono relative z-10 uppercase tracking-widest">
+                <div>
+                    <div class="border-b border-slate-300 dark:border-slate-700 pb-1 mb-1 w-32 mx-auto">${new Date().toLocaleDateString()}</div>
+                    ${ui.certDate}
+                </div>
+                <div>
+                    <div class="border-b border-slate-300 dark:border-slate-700 pb-1 mb-1 w-32 mx-auto font-black text-slate-800 dark:text-slate-300">Arbor Open University</div>
+                    ${ui.certSign}
+                </div>
+             </div>
+             
+             <div class="mt-8 text-[10px] text-slate-300 dark:text-slate-600 font-mono uppercase tracking-widest">
+                 Ver. ID: ${versionId}
+             </div>
+             
+             <button id="btn-print" class="mt-4 px-6 py-2 bg-slate-900 dark:bg-slate-800 text-white rounded-lg font-bold text-xs uppercase tracking-wider hover:scale-105 transition-transform relative z-10">
+                ${ui.printCert}
+             </button>
+        </div>`;
+
+        this.innerHTML = `
+        <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-3xl w-full relative overflow-hidden flex flex-col max-h-[95vh] border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
+                <button class="btn-close absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 z-20 transition-colors">✕</button>
+                ${content}
+            </div>
+        </div>`;
+
+        this.querySelector('.btn-close').onclick = () => this.close();
+        this.querySelector('#btn-print').onclick = () => window.print();
+    }
+}
+customElements.define('arbor-modal-certificate-view', ArborModalCertificateView);

@@ -1,8 +1,8 @@
 
-
 import { AVAILABLE_LANGUAGES } from './i18n.js';
 import { github } from './services/github.js';
 import { aiService } from './services/ai.js';
+import { UserStore } from './stores/user-store.js';
 
 const OFFICIAL_DOMAINS = [
     'treesys-org.github.io',
@@ -21,13 +21,13 @@ const DEFAULT_SOURCES = [
     }
 ];
 
-// BOTANICAL SEEDS: More universal concept for knowledge trees
-// Pinecone, Acorn, Wheat, Leaf, Coconut, Peanut, Chestnut, Bean, Mushroom, Seedling
-const SEED_TYPES = ['🌲', '🌰', '🌾', '🍁', '🥥', '🥜', '🌰', '🫘', '🍄', '🌱'];
-
 class Store extends EventTarget {
     constructor() {
         super();
+        
+        // Sub-Store for User Logic (Gamification, Bookmarks, Progress)
+        this.userStore = new UserStore(() => this.ui);
+
         this.state = {
             theme: localStorage.getItem('arbor-theme') || 'light',
             lang: localStorage.getItem('arbor-lang') || 'EN',
@@ -39,15 +39,7 @@ class Store extends EventTarget {
             searchCache: {}, 
             
             path: [], 
-            completedNodes: new Set(),
-            // Gamification State
-            gamification: {
-                xp: 0, 
-                dailyXP: 0,
-                streak: 0,
-                lastLoginDate: null, 
-                seeds: [] // Changed from fruits to seeds
-            },
+            
             // AI State
             ai: {
                 status: 'idle', 
@@ -66,8 +58,9 @@ class Store extends EventTarget {
         };
         
         this.initialize().then(() => {
-             this.loadProgress();
-             this.checkStreak();
+             // User store is self-loading in its constructor
+             const streakMsg = this.userStore.checkStreak();
+             if (streakMsg) this.notify(streakMsg);
              this.loadSources();
         });
 
@@ -105,19 +98,25 @@ class Store extends EventTarget {
         }
     }
 
-    get ui() { 
-        return this.state.i18nData || {}; 
+    get ui() { return this.state.i18nData || {}; }
+    
+    // Merge main state with sub-store states for backward compatibility
+    get value() { 
+        return { 
+            ...this.state,
+            completedNodes: this.userStore.state.completedNodes,
+            bookmarks: this.userStore.state.bookmarks,
+            gamification: this.userStore.state.gamification
+        }; 
     }
     
-    get value() { return this.state; }
     get availableLanguages() { return AVAILABLE_LANGUAGES; }
     get currentLangInfo() { return AVAILABLE_LANGUAGES.find(l => l.code === this.state.lang); }
-    
-    get dailyXpGoal() { return 50; }
+    get dailyXpGoal() { return this.userStore.dailyXpGoal; }
 
     update(partialState) {
         this.state = { ...this.state, ...partialState };
-        this.dispatchEvent(new CustomEvent('state-change', { detail: this.state }));
+        this.dispatchEvent(new CustomEvent('state-change', { detail: this.value }));
         
         if (partialState.theme) {
             document.documentElement.classList.toggle('dark', this.state.theme === 'dark');
@@ -126,6 +125,11 @@ class Store extends EventTarget {
         if (partialState.lang) {
             localStorage.setItem('arbor-lang', this.state.lang);
         }
+    }
+    
+    notify(msg) {
+        this.update({ lastActionMessage: msg });
+        setTimeout(() => this.update({ lastActionMessage: null }), 3000);
     }
 
     setTheme(theme) { this.update({ theme }); }
@@ -592,133 +596,72 @@ class Store extends EventTarget {
         }
     }
 
-    // --- GAMIFICATION & PROGRESS LOGIC ---
+    // --- DELEGATED TO USER STORE ---
 
-    loadProgress() {
-        try {
-            const saved = localStorage.getItem('arbor-progress');
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                if (Array.isArray(parsed)) {
-                    this.state.completedNodes = new Set(parsed);
-                } else if (parsed.progress) {
-                    this.state.completedNodes = new Set(parsed.progress);
-                    if (parsed.gamification) {
-                        this.state.gamification = { ...this.state.gamification, ...parsed.gamification };
-                        
-                        // MIGRATION: Fruits -> Seeds
-                        if (parsed.gamification.fruits && !parsed.gamification.seeds) {
-                            this.state.gamification.seeds = parsed.gamification.fruits.map(f => ({
-                                ...f,
-                                icon: SEED_TYPES[0] // Default to first seed icon during migration
-                            }));
-                        }
-                    }
-                }
-            }
-        } catch(e) {}
-    }
-
-    checkStreak() {
-        const today = new Date().toISOString().slice(0, 10);
-        const { lastLoginDate, streak } = this.state.gamification;
-
-        if (lastLoginDate === today) {
-        } else if (lastLoginDate) {
-            const last = new Date(lastLoginDate);
-            const now = new Date(today);
-            const diffTime = Math.abs(now - last);
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-
-            if (diffDays === 1) {
-                this.updateGamification({ streak: streak + 1, lastLoginDate: today, dailyXP: 0 });
-                this.update({ lastActionMessage: this.ui.streakKept });
-                setTimeout(() => this.update({ lastActionMessage: null }), 3000);
-            } else {
-                this.updateGamification({ streak: 1, lastLoginDate: today, dailyXP: 0 });
-            }
-        } else {
-            this.updateGamification({ streak: 1, lastLoginDate: today });
-        }
+    computeHash(str) { return this.userStore.computeHash(str); }
+    loadBookmarks() { this.userStore.loadBookmarks(); }
+    saveBookmark(nodeId, contentRaw, index, visitedSet) { this.userStore.saveBookmark(nodeId, contentRaw, index, visitedSet); }
+    getBookmark(nodeId, contentRaw) { return this.userStore.getBookmark(nodeId, contentRaw); }
+    loadProgress() { this.userStore.loadProgress(); }
+    
+    checkStreak() { 
+        // Logic moved to UserStore, but we need to handle the UI feedback here
+        const msg = this.userStore.checkStreak(); 
+        if(msg) this.notify(msg);
+        this.update({}); // Trigger state refresh
     }
 
     addXP(amount, silent = false) {
-        const { gamification } = this.state;
-        const newDaily = gamification.dailyXP + amount;
-        const newTotal = gamification.xp + amount;
-        
-        let msg = `+${amount} ${this.ui.xpUnit}`;
-        if (gamification.dailyXP < this.dailyXpGoal && newDaily >= this.dailyXpGoal) {
-            msg = this.ui.goalReached + " ☀️";
-        }
-
-        this.updateGamification({ xp: newTotal, dailyXP: newDaily });
-        
-        if (!silent) {
-            this.update({ lastActionMessage: msg });
-            setTimeout(() => this.update({ lastActionMessage: null }), 3000);
-        }
+        const msg = this.userStore.addXP(amount);
+        if (!silent && msg) this.notify(msg);
+        this.update({});
     }
 
     harvestSeed(moduleId) {
-        const { gamification } = this.state;
-        if (gamification.seeds.find(f => f.id === moduleId)) return;
-
-        const charSum = moduleId.split('').reduce((a,b) => a + b.charCodeAt(0), 0);
-        const seedIcon = SEED_TYPES[charSum % SEED_TYPES.length];
-
-        const newSeed = { id: moduleId, icon: seedIcon, date: Date.now() };
-        this.updateGamification({ seeds: [...gamification.seeds, newSeed] });
-        
-        this.update({ lastActionMessage: `${this.ui.seedCollected} ${seedIcon}` });
-        setTimeout(() => this.update({ lastActionMessage: null }), 4000);
+        const msg = this.userStore.harvestSeed(moduleId);
+        if(msg) this.notify(msg);
+        this.update({});
     }
 
     updateGamification(updates) {
-        this.state.gamification = { ...this.state.gamification, ...updates };
-        this.persistProgress();
+        this.userStore.updateGamification(updates);
+        this.update({});
+    }
+
+    updateUserProfile(username, avatar) {
+        this.userStore.updateGamification({ username, avatar });
+        this.notify(this.ui.profileUpdated);
+        this.update({});
     }
 
     markComplete(nodeId, forceState = null) {
-        let isComplete = this.state.completedNodes.has(nodeId);
-        let shouldAdd = forceState !== null ? forceState : !isComplete;
-
-        if (shouldAdd) {
-             if (!isComplete) {
-                 this.state.completedNodes.add(nodeId);
-                 this.addXP(10); // 10 XP per lesson
-             }
-        } else {
-             this.state.completedNodes.delete(nodeId);
-        }
+        const xpMsg = this.userStore.markComplete(nodeId, forceState);
+        if(xpMsg) this.notify(xpMsg);
         
-        this.persistProgress();
+        this.update({}); // Refresh UI
         this.checkForModuleCompletion(nodeId);
     }
 
     markBranchComplete(branchId) {
         if (!branchId) return;
         
-        this.state.completedNodes.add(branchId);
+        // This logic is tree-traversal dependent, so it stays in Main Store,
+        // but calls userStore.markComplete for each node.
         const branchNode = this.findNode(branchId);
         
         if (branchNode) {
-            const markLoadedRecursive = (node) => {
-                this.state.completedNodes.add(node.id);
-                if (node.children) {
-                    node.children.forEach(markLoadedRecursive);
-                }
+            const markRecursive = (node) => {
+                this.userStore.state.completedNodes.add(node.id);
+                if (node.children) node.children.forEach(markRecursive);
             };
-            if (branchNode.children) {
-                branchNode.children.forEach(markLoadedRecursive);
-            }
+            markRecursive(branchNode);
             if (branchNode.leafIds && Array.isArray(branchNode.leafIds)) {
-                branchNode.leafIds.forEach(id => this.state.completedNodes.add(id));
+                branchNode.leafIds.forEach(id => this.userStore.state.completedNodes.add(id));
             }
         }
         
-        this.state.completedNodes = new Set(this.state.completedNodes); 
-        this.persistProgress(); 
+        this.userStore.persist();
+        this.update({});
         this.dispatchEvent(new CustomEvent('graph-update'));
     }
 
@@ -726,37 +669,38 @@ class Store extends EventTarget {
         const modules = this.getModulesStatus();
         modules.forEach(m => {
             if (m.isComplete) {
-                if (!this.state.completedNodes.has(m.id)) {
-                     this.state.completedNodes.add(m.id);
-                     this.persistProgress(); 
+                if (!this.userStore.state.completedNodes.has(m.id)) {
+                     this.userStore.state.completedNodes.add(m.id);
+                     this.userStore.persist();
                 }
                 this.harvestSeed(m.id);
             }
         });
     }
 
-    persistProgress() {
-        const payload = {
-            progress: Array.from(this.state.completedNodes),
-            gamification: this.state.gamification,
-            timestamp: Date.now()
+    getExportJson() {
+        const data = { 
+            v: 1, 
+            ts: Date.now(), 
+            p: Array.from(this.userStore.state.completedNodes), 
+            g: this.userStore.state.gamification,
+            b: this.userStore.state.bookmarks 
         };
-        localStorage.setItem('arbor-progress', JSON.stringify(payload));
-        this.update({}); 
-        this.dispatchEvent(new CustomEvent('graph-update'));
+        return JSON.stringify(data, null, 2);
     }
 
-    getExportData() {
-        const data = { v: 1, ts: Date.now(), p: Array.from(this.state.completedNodes), g: this.state.gamification };
-        return btoa(unescape(encodeURIComponent(JSON.stringify(data))));
-    }
-
-    // Simple Copy to Clipboard utility
-    copyExportToClipboard() {
-        const data = this.getExportData();
-        navigator.clipboard.writeText(data).then(() => {
-            alert(this.ui.copySuccess || "Copied to clipboard!");
-        });
+    downloadProgressFile() {
+        const data = this.getExportJson();
+        const blob = new Blob([data], {type: 'application/json;charset=utf-8'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        a.download = `arbor-progress-${timestamp}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     }
 
     importProgress(input) {
@@ -772,19 +716,23 @@ class Store extends EventTarget {
             if (data.p) newProgress = data.p;
 
             if (data.g || data.gamification) {
-                this.state.gamification = { ...this.state.gamification, ...(data.g || data.gamification) };
-                
-                // Ensure seeds migration on import too
-                if (this.state.gamification.fruits && !this.state.gamification.seeds) {
-                    this.state.gamification.seeds = this.state.gamification.fruits;
+                this.userStore.state.gamification = { ...this.userStore.state.gamification, ...(data.g || data.gamification) };
+                if (this.userStore.state.gamification.fruits && !this.userStore.state.gamification.seeds) {
+                    this.userStore.state.gamification.seeds = this.userStore.state.gamification.fruits;
                 }
+            }
+            
+            if (data.b || data.bookmarks) {
+                this.userStore.state.bookmarks = { ...this.userStore.state.bookmarks, ...(data.b || data.bookmarks) };
+                localStorage.setItem('arbor-bookmarks', JSON.stringify(this.userStore.state.bookmarks));
             }
 
             if (!Array.isArray(newProgress)) throw new Error("Invalid Format");
 
-            const merged = new Set([...this.state.completedNodes, ...newProgress]);
-            this.update({ completedNodes: merged });
-            this.persistProgress();
+            const merged = new Set([...this.userStore.state.completedNodes, ...newProgress]);
+            this.userStore.state.completedNodes = merged;
+            this.userStore.persist();
+            this.update({});
             return true;
         } catch (e) {
             console.error(e);
@@ -792,7 +740,7 @@ class Store extends EventTarget {
         }
     }
 
-    isCompleted(id) { return this.state.completedNodes.has(id); }
+    isCompleted(id) { return this.userStore.isCompleted(id); }
 
     getModulesStatus() {
         if (!this.state.data) return [];
@@ -803,13 +751,13 @@ class Store extends EventTarget {
                  const total = node.totalLeaves || 0;
                  if (total > 0 || node.type === 'branch') {
                      let completedCount = 0;
-                     if (this.state.completedNodes.has(node.id)) {
+                     if (this.userStore.state.completedNodes.has(node.id)) {
                          completedCount = total;
                      } else if (node.leafIds) {
-                         completedCount = node.leafIds.filter(id => this.state.completedNodes.has(id)).length;
+                         completedCount = node.leafIds.filter(id => this.userStore.state.completedNodes.has(id)).length;
                      }
                      
-                     const isComplete = this.state.completedNodes.has(node.id) || (total > 0 && completedCount >= total);
+                     const isComplete = this.userStore.state.completedNodes.has(node.id) || (total > 0 && completedCount >= total);
 
                      if (node.type !== 'root') {
                         modules.push({
