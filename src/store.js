@@ -1,7 +1,5 @@
 
 
-
-
 import { AVAILABLE_LANGUAGES } from './i18n.js';
 import { github } from './services/github.js';
 import { aiService } from './services/ai.js';
@@ -23,8 +21,9 @@ const DEFAULT_SOURCES = [
     }
 ];
 
-// Determine specific fruits for modules deterministically
-const FRUIT_TYPES = ['🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🍒', '🍑', '🍍', '🥥'];
+// BOTANICAL SEEDS: More universal concept for knowledge trees
+// Pinecone, Acorn, Wheat, Leaf, Coconut, Peanut, Chestnut, Bean, Mushroom, Seedling
+const SEED_TYPES = ['🌲', '🌰', '🌾', '🍁', '🥥', '🥜', '🌰', '🫘', '🍄', '🌱'];
 
 class Store extends EventTarget {
     constructor() {
@@ -32,27 +31,26 @@ class Store extends EventTarget {
         this.state = {
             theme: localStorage.getItem('arbor-theme') || 'light',
             lang: localStorage.getItem('arbor-lang') || 'EN',
-            i18nData: null, // Holds the loaded JSON language
+            i18nData: null, 
             sources: [],
             activeSource: null,
-            data: null, // Current Tree Root (Lazy Loaded)
+            data: null, 
             
-            // NEW: Search Cache (Instead of full index)
             searchCache: {}, 
             
             path: [], 
             completedNodes: new Set(),
             // Gamification State
             gamification: {
-                xp: 0, // Lifetime XP
+                xp: 0, 
                 dailyXP: 0,
                 streak: 0,
-                lastLoginDate: null, // YYYY-MM-DD
-                fruits: [] // Array of { id: moduleId, icon: '🍎', date: timestamp }
+                lastLoginDate: null, 
+                seeds: [] // Changed from fruits to seeds
             },
             // AI State
             ai: {
-                status: 'idle', // idle, loading, ready, error, thinking
+                status: 'idle', 
                 progress: '',
                 messages: [] 
             },
@@ -67,7 +65,6 @@ class Store extends EventTarget {
             githubUser: null
         };
         
-        // Initial setup sequence
         this.initialize().then(() => {
              this.loadProgress();
              this.checkStreak();
@@ -84,11 +81,9 @@ class Store extends EventTarget {
         document.documentElement.classList.toggle('dark', this.state.theme === 'dark');
     }
 
-    // New Async Initialization for Language
     async initialize() {
         await this.loadLanguage(this.state.lang);
         
-        // Welcome Screen Check
         const welcomeSeen = localStorage.getItem('arbor-welcome-seen');
         if (!welcomeSeen) {
             setTimeout(() => {
@@ -97,7 +92,6 @@ class Store extends EventTarget {
         }
     }
 
-    // Lazy load the JSON language file
     async loadLanguage(langCode) {
         try {
             const path = `./locales/${langCode.toLowerCase()}.json`;
@@ -139,10 +133,9 @@ class Store extends EventTarget {
     
     async setLanguage(lang) { 
         if(this.state.lang !== lang) {
-            // Update state immediately to trigger UI spinners if needed, but data comes after fetch
             this.update({ lang, searchCache: {} });
-            await this.loadLanguage(lang); // Fetch new JSON
-            this.loadData(this.state.activeSource); // Reload content tree to match language folder
+            await this.loadLanguage(lang); 
+            this.loadData(this.state.activeSource); 
         }
     }
     
@@ -212,14 +205,9 @@ class Store extends EventTarget {
         localStorage.setItem('arbor-active-source-id', source.id);
 
         try {
-            // OPTIMIZATION: Removed aggressive cache busting (Date.now())
-            // This allows the browser to cache the main tree skeleton.
-            // Only add timestamp if explicit reload is requested (future feature).
             const url = source.url; 
-            
-            // Add Timeout to prevent "Eternity" hanging
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
 
             const res = await fetch(url, { signal: controller.signal });
             clearTimeout(timeoutId);
@@ -227,7 +215,6 @@ class Store extends EventTarget {
             if (!res.ok) throw new Error(`Failed to fetch data from ${source.name} (Status ${res.status}).`);
             const json = await res.json();
             
-            // Ensure language data is ready before trying to display content
             if (!this.state.i18nData) await this.loadLanguage(this.state.lang);
 
             let langData = json.languages?.[this.state.lang] || Object.values(json.languages)[0];
@@ -238,7 +225,6 @@ class Store extends EventTarget {
                 localStorage.setItem('arbor-sources', JSON.stringify(updatedSources));
             }
             
-            // --- Apply i18n prefix to exam names in main tree ---
             const examPrefix = this.ui.examLabelPrefix || "Exam: ";
             if (examPrefix) {
                 const applyPrefix = (node) => {
@@ -269,12 +255,11 @@ class Store extends EventTarget {
         }
     }
 
-    // Helper: Strip accents and lowercase for robust comparison
     cleanString(str) {
         if (!str) return "";
         return str.toLowerCase()
-            .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove accents
-            .replace(/[^a-z0-9\s]/g, ""); // Remove non-alphanumeric but KEEP spaces for word checks
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
+            .replace(/[^a-z0-9\s]/g, ""); 
     }
 
     findNode(id, node = this.state.data) {
@@ -290,9 +275,7 @@ class Store extends EventTarget {
     }
     
     async navigateTo(nodeId, nodeData = null) {
-        // If we have nodeData from search, we can use its path directly
         if (!nodeData) {
-            // Fallback: Try to find in loaded tree
             const inTree = this.findNode(nodeId);
             if (inTree) nodeData = inTree;
             else {
@@ -304,13 +287,9 @@ class Store extends EventTarget {
         const pathStr = nodeData.path || nodeData.p;
         if (!pathStr) return;
 
-        // Split the path string into ancestor names. e.g., "Arbor EN / Science / Physics"
         const pathNames = pathStr.split(' / ');
-        
-        // Start from the root of the live tree.
         let currentNode = this.state.data;
         
-        // Iterate through path to expand each ancestor
         for (let i = 1; i < pathNames.length; i++) {
             const ancestorName = pathNames[i];
             
@@ -318,28 +297,19 @@ class Store extends EventTarget {
                 await this.loadNodeChildren(currentNode);
             }
 
-            // --- IMPROVED MATCHING LOGIC ---
-            // Try exact match first
             let nextNode = currentNode.children?.find(child => child.name === ancestorName);
 
-            // If not found, try robust/fuzzy matching (handles "Exam: " prefix vs raw name)
             if (!nextNode && currentNode.children) {
                 const cleanTarget = this.cleanString(ancestorName).replace(/\s+/g, '');
                 nextNode = currentNode.children.find(child => {
                      const cleanChild = this.cleanString(child.name).replace(/\s+/g, '');
-                     // 1. Normalized match (ignores accents/case)
                      if (cleanChild === cleanTarget) return true;
-                     // 2. Inclusion match (If path says "Final Exam" but Node says "Exam: Final Exam")
                      if (child.name.includes(ancestorName)) return true;
                      return false;
                 });
             }
 
-            if (!nextNode) {
-                console.error(`Navigation failed: Could not find child "${ancestorName}" in ${currentNode.name}`);
-                // Abort navigation if branch is broken, but allow user to stay where they are
-                return;
-            }
+            if (!nextNode) return;
 
             if (nextNode.type === 'branch' || nextNode.type === 'root') {
                 nextNode.expanded = true;
@@ -429,7 +399,6 @@ class Store extends EventTarget {
         try {
             const sourceUrl = this.state.activeSource.url;
             const baseDir = sourceUrl.substring(0, sourceUrl.lastIndexOf('/') + 1);
-            // OPTIMIZATION: Removed cache busting here too for children
             const url = `${baseDir}nodes/${node.apiPath}.json`;
             
             const res = await fetch(url);
@@ -440,7 +409,6 @@ class Store extends EventTarget {
                 
                 if (children.length === 0) {
                     node.children = [];
-                    // Show Empty Module Modal instead of just a message
                     this.setModal({ type: 'emptyModule', node: node });
                 } else {
                     children.forEach(child => child.parentId = node.id);
@@ -470,7 +438,6 @@ class Store extends EventTarget {
 
     goHome() {
         this.update({ viewMode: 'explore', selectedNode: null, previewNode: null, modal: null });
-        // Emit specific event to reset the graph camera/zoom
         this.dispatchEvent(new CustomEvent('reset-zoom'));
     }
     enterLesson() {
@@ -480,7 +447,6 @@ class Store extends EventTarget {
     closeContent() { this.update({ selectedNode: null }); }
     openEditor(node) { if (node) this.update({ modal: { type: 'editor', node: node } }); }
     
-    // --- OPTIMIZED SEARCH: SHARDING STRATEGY ---
     async search(query) {
         if (!query || query.length < 2) return [];
         const q = this.cleanString(query);
@@ -488,10 +454,8 @@ class Store extends EventTarget {
         const lang = this.state.lang;
         const cacheKey = `${lang}_${prefix}`;
 
-        // 1. Check Memory Cache
         if (!this.state.searchCache[cacheKey]) {
             try {
-                // 2. Fetch Shard (e.g. data/search/EN/a/ap.json)
                 const sourceUrl = this.state.activeSource.url;
                 const baseDir = sourceUrl.substring(0, sourceUrl.lastIndexOf('/') + 1);
                 const firstChar = prefix.charAt(0);
@@ -501,7 +465,6 @@ class Store extends EventTarget {
                 if (res.ok) {
                     const shard = await res.json();
                     
-                    // Normalize shard data structure
                     const normalized = shard.map(item => ({
                         id: item.id,
                         name: item.n || item.name,
@@ -523,20 +486,16 @@ class Store extends EventTarget {
         }
 
         const shard = this.state.searchCache[cacheKey] || [];
-        
-        // --- STRICT NAME SEARCH ONLY ---
         return shard.filter(n => {
             return this.cleanString(n.name).includes(q);
         });
     }
 
-    // --- SINGLE LETTER SEARCH (BRUTE FORCE FETCH) ---
     async searchBroad(char) {
         if (!char || char.length !== 1) return [];
         const c = this.cleanString(char);
         const lang = this.state.lang;
         
-        // Generate possible prefixes (char + [a-z0-9])
         const suffixes = 'abcdefghijklmnopqrstuvwxyz0123456789'.split('');
         const prefixes = suffixes.map(s => c + s);
         
@@ -545,9 +504,7 @@ class Store extends EventTarget {
         
         const promises = prefixes.map(async (prefix) => {
             const cacheKey = `${lang}_${prefix}`;
-            
             if (this.state.searchCache[cacheKey]) return this.state.searchCache[cacheKey];
-
             try {
                 const url = `${baseDir}search/${lang}/${c}/${prefix}.json`;
                 const res = await fetch(url);
@@ -571,19 +528,13 @@ class Store extends EventTarget {
         });
 
         const results = await Promise.all(promises);
-        
         const flat = results.flat();
         const seen = new Set();
         return flat.filter(item => {
             if(seen.has(item.id)) return false;
-            
-            // STRICT INITIAL LETTER CHECK
-            // Split name into words and check if any word STARTS with the char
             const words = this.cleanString(item.name).split(/\s+/);
             const matchesInitial = words.some(w => w.startsWith(c));
-            
             if (!matchesInitial) return false; 
-            
             seen.add(item.id);
             return true;
         });
@@ -652,7 +603,17 @@ class Store extends EventTarget {
                     this.state.completedNodes = new Set(parsed);
                 } else if (parsed.progress) {
                     this.state.completedNodes = new Set(parsed.progress);
-                    if (parsed.gamification) this.state.gamification = { ...this.state.gamification, ...parsed.gamification };
+                    if (parsed.gamification) {
+                        this.state.gamification = { ...this.state.gamification, ...parsed.gamification };
+                        
+                        // MIGRATION: Fruits -> Seeds
+                        if (parsed.gamification.fruits && !parsed.gamification.seeds) {
+                            this.state.gamification.seeds = parsed.gamification.fruits.map(f => ({
+                                ...f,
+                                icon: SEED_TYPES[0] // Default to first seed icon during migration
+                            }));
+                        }
+                    }
                 }
             }
         } catch(e) {}
@@ -663,7 +624,6 @@ class Store extends EventTarget {
         const { lastLoginDate, streak } = this.state.gamification;
 
         if (lastLoginDate === today) {
-             // Already logged in today, do nothing
         } else if (lastLoginDate) {
             const last = new Date(lastLoginDate);
             const now = new Date(today);
@@ -700,17 +660,17 @@ class Store extends EventTarget {
         }
     }
 
-    harvestFruit(moduleId) {
+    harvestSeed(moduleId) {
         const { gamification } = this.state;
-        if (gamification.fruits.find(f => f.id === moduleId)) return;
+        if (gamification.seeds.find(f => f.id === moduleId)) return;
 
         const charSum = moduleId.split('').reduce((a,b) => a + b.charCodeAt(0), 0);
-        const fruitIcon = FRUIT_TYPES[charSum % FRUIT_TYPES.length];
+        const seedIcon = SEED_TYPES[charSum % SEED_TYPES.length];
 
-        const newFruit = { id: moduleId, icon: fruitIcon, date: Date.now() };
-        this.updateGamification({ fruits: [...gamification.fruits, newFruit] });
+        const newSeed = { id: moduleId, icon: seedIcon, date: Date.now() };
+        this.updateGamification({ seeds: [...gamification.seeds, newSeed] });
         
-        this.update({ lastActionMessage: `${this.ui.fruitHarvested} ${fruitIcon}` });
+        this.update({ lastActionMessage: `${this.ui.seedCollected} ${seedIcon}` });
         setTimeout(() => this.update({ lastActionMessage: null }), 4000);
     }
 
@@ -739,28 +699,19 @@ class Store extends EventTarget {
     markBranchComplete(branchId) {
         if (!branchId) return;
         
-        // 1. Mark the branch folder itself
         this.state.completedNodes.add(branchId);
-
-        constbranchNode = this.findNode(branchId);
+        const branchNode = this.findNode(branchId);
         
         if (branchNode) {
-            // Helper to recursively mark loaded nodes
             const markLoadedRecursive = (node) => {
                 this.state.completedNodes.add(node.id);
                 if (node.children) {
                     node.children.forEach(markLoadedRecursive);
                 }
             };
-            
-            // 2. Recursively mark everything currently loaded in this branch
-            // This ensures siblings (branches/leaves) and their currently loaded children are marked.
             if (branchNode.children) {
                 branchNode.children.forEach(markLoadedRecursive);
             }
-
-            // 3. Mark all descendant leaves (Deep) using metadata
-            // This ensures even unloaded leaves deep in sibling branches are marked.
             if (branchNode.leafIds && Array.isArray(branchNode.leafIds)) {
                 branchNode.leafIds.forEach(id => this.state.completedNodes.add(id));
             }
@@ -779,7 +730,7 @@ class Store extends EventTarget {
                      this.state.completedNodes.add(m.id);
                      this.persistProgress(); 
                 }
-                this.harvestFruit(m.id);
+                this.harvestSeed(m.id);
             }
         });
     }
@@ -800,22 +751,20 @@ class Store extends EventTarget {
         return btoa(unescape(encodeURIComponent(JSON.stringify(data))));
     }
 
-    downloadProgressFile() {
-        const data = { version: 1, timestamp: Date.now(), progress: Array.from(this.state.completedNodes), gamification: this.state.gamification };
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `arbor_backup_${new Date().toISOString().slice(0,10)}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
+    // Simple Copy to Clipboard utility
+    copyExportToClipboard() {
+        const data = this.getExportData();
+        navigator.clipboard.writeText(data).then(() => {
+            alert(this.ui.copySuccess || "Copied to clipboard!");
+        });
     }
 
     importProgress(input) {
         try {
             let data;
-            if (input.trim().startsWith('{')) data = JSON.parse(input);
-            else data = JSON.parse(decodeURIComponent(escape(atob(input.trim()))));
+            const cleaned = input.trim();
+            if (cleaned.startsWith('{')) data = JSON.parse(cleaned);
+            else data = JSON.parse(decodeURIComponent(escape(atob(cleaned))));
 
             let newProgress = [];
             if (Array.isArray(data)) newProgress = data;
@@ -824,6 +773,11 @@ class Store extends EventTarget {
 
             if (data.g || data.gamification) {
                 this.state.gamification = { ...this.state.gamification, ...(data.g || data.gamification) };
+                
+                // Ensure seeds migration on import too
+                if (this.state.gamification.fruits && !this.state.gamification.seeds) {
+                    this.state.gamification.seeds = this.state.gamification.fruits;
+                }
             }
 
             if (!Array.isArray(newProgress)) throw new Error("Invalid Format");
@@ -840,21 +794,14 @@ class Store extends EventTarget {
 
     isCompleted(id) { return this.state.completedNodes.has(id); }
 
-    // Adjusted to work without the massive searchIndex
     getModulesStatus() {
-        // We traverse the currently loaded Tree Data instead of the Search Index
         if (!this.state.data) return [];
         
         const modules = [];
         const traverse = (node) => {
             if (node.type === 'branch' || node.type === 'root') {
-                 // Note: totalLeaves is pre-calculated by builder script in the tree data
                  const total = node.totalLeaves || 0;
                  if (total > 0 || node.type === 'branch') {
-                     // Need to calculate completed count based on known leaf IDs or generic count
-                     // This is an approximation if children aren't loaded, 
-                     // but the builder script puts 'leafIds' in the branch metadata now!
-                     
                      let completedCount = 0;
                      if (this.state.completedNodes.has(node.id)) {
                          completedCount = total;
@@ -874,7 +821,7 @@ class Store extends EventTarget {
                             completedLeaves: completedCount,
                             isComplete: isComplete,
                             path: node.path,
-                            isCertifiable: node.isCertifiable // Add this
+                            isCertifiable: node.isCertifiable
                         });
                      }
                  }

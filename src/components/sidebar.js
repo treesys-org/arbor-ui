@@ -22,10 +22,13 @@ class ArborSidebar extends HTMLElement {
     render() {
         // Debounce / Memoize Render
         const { theme, lang, viewMode, gamification, githubUser } = store.value;
+        
+        const seedsCount = gamification.seeds ? gamification.seeds.length : (gamification.fruits ? gamification.fruits.length : 0);
+        
         const currentKey = JSON.stringify({
             theme, lang, viewMode, 
             streak: gamification.streak, 
-            fruitsLen: gamification.fruits.length,
+            seedsCount: seedsCount,
             ghUser: githubUser?.login,
             mobileOpen: this.isMobileMenuOpen
         });
@@ -54,7 +57,6 @@ class ArborSidebar extends HTMLElement {
 
                 <!-- Menu Items -->
                 <nav class="flex flex-col">
-                    <!-- Removed Sage and Help from here as requested (redundant on mobile) -->
                     <button class="js-btn-lang menu-item"><span>${store.currentLangInfo.flag}</span> <span>${ui.languageTitle}</span></button>
                     <button class="js-btn-theme menu-item"><span>${store.value.theme === 'light' ? '🌙' : '☀️'}</span> <span>Toggle Theme</span></button>
                     <div class="h-px bg-slate-100 dark:bg-slate-700 my-1 mx-2"></div>
@@ -112,8 +114,8 @@ class ArborSidebar extends HTMLElement {
              <div class="flex items-center gap-2">
                 <!-- Basket Mobile -->
                 <button class="js-btn-progress-mobile flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 dark:bg-orange-900/20 border border-orange-100 dark:border-orange-800/30 rounded-full active:scale-95 transition-transform">
-                    <span class="text-sm">🧺</span>
-                    <span class="text-xs font-bold text-orange-700 dark:text-orange-400">${g.fruits.length}</span>
+                    <span class="text-sm">🎒</span>
+                    <span class="text-xs font-bold text-orange-700 dark:text-orange-400">${seedsCount}</span>
                 </button>
 
                 <!-- Sage Config Mobile -->

@@ -1,17 +1,5 @@
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 import { store } from '../store.js';
 import { parseArborFile, markdownToVisualHTML } from '../utils/editor-engine.js';
 import { pdfGenerator } from '../services/pdf-generator.js';
@@ -32,7 +20,8 @@ class ArborModals extends HTMLElement {
             showAllCerts: false, 
             certSearchQuery: '',
             isGeneratingPdf: false,
-            pdfProgress: 0
+            pdfProgress: 0,
+            showRestoreInput: false
         };
         this.searchTimer = null;
         this.lastRenderKey = null;
@@ -64,6 +53,7 @@ class ArborModals extends HTMLElement {
         this.state.certSearchQuery = '';
         this.state.isGeneratingPdf = false;
         this.state.pdfProgress = 0;
+        this.state.showRestoreInput = false;
         this.lastRenderKey = null;
         if (this.searchTimer) clearTimeout(this.searchTimer);
         store.setModal(null); 
@@ -244,8 +234,10 @@ class ArborModals extends HTMLElement {
         const showAll = this.state.showAllCerts;
         const visibleModules = showAll ? filtered : filtered.filter(m => m.isComplete);
         
-        // Button Text logic: "Mis logros" implies going BACK to earned only. "Ver todos" implies showing all.
         const toggleBtnText = showAll ? ui.showEarned : ui.showAll;
+        const toggleBtnClass = showAll
+            ? 'bg-yellow-500 hover:bg-yellow-600 text-white shadow-yellow-500/20' 
+            : 'bg-slate-800 dark:bg-slate-700 text-white hover:bg-slate-700 dark:hover:bg-slate-600';
 
         let listHtml = '';
         if (visibleModules.length === 0) {
@@ -306,7 +298,7 @@ class ArborModals extends HTMLElement {
                                 class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-2 pl-9 pr-4 text-sm font-bold text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-sky-500"
                                 value="${this.state.certSearchQuery}">
                         </div>
-                        <button id="btn-toggle-certs" class="px-4 py-2 rounded-xl bg-slate-800 dark:bg-slate-700 text-white font-bold text-xs whitespace-nowrap hover:bg-slate-700 dark:hover:bg-slate-600 transition-colors shadow-sm">
+                        <button id="btn-toggle-certs" class="px-4 py-2 rounded-xl ${toggleBtnClass} font-bold text-xs whitespace-nowrap transition-colors shadow-sm">
                             ${toggleBtnText}
                         </button>
                     </div>
@@ -412,7 +404,6 @@ class ArborModals extends HTMLElement {
                 }
             }
             
-            // Delegate logic to dedicated service
             await pdfGenerator.generate(nodesToPrint, (progress) => {
                 this.updateState({ pdfProgress: progress });
             });
@@ -739,35 +730,113 @@ class ArborModals extends HTMLElement {
             btn.onclick = () => this.close();
         }
     }
+    
     renderProfile(ui) { 
         const g = store.value.gamification;
-        return `<div class="p-8 text-center">
+        // Migration support for UI (seeds vs fruits)
+        const collectedItems = g.seeds || g.fruits || [];
+        
+        return `<div class="p-8 text-center h-full overflow-y-auto custom-scrollbar">
             <div class="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full mx-auto flex items-center justify-center text-4xl mb-4">👤</div>
             <h2 class="text-2xl font-black mb-1 dark:text-white">${ui.profileTitle}</h2>
-            <p class="text-slate-500 dark:text-slate-400 mb-6">${g.xp} ${ui.xpUnit} • Racha: ${g.streak} días</p>
+            <p class="text-slate-500 dark:text-slate-400 mb-6">${g.xp} ${ui.xpUnit} • ${ui.streak}: ${g.streak} ${ui.days}</p>
             
-            <div class="grid grid-cols-2 gap-4 mb-6">
+            <div class="grid grid-cols-2 gap-4 mb-8">
                 <div class="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-xl border border-orange-100 dark:border-orange-800/30">
-                    <div class="text-2xl mb-1">🍎</div>
-                    <div class="font-bold text-orange-800 dark:text-orange-400">${g.fruits.length} Frutos</div>
+                    <div class="text-2xl mb-1">🌰</div>
+                    <div class="font-bold text-orange-800 dark:text-orange-400">${collectedItems.length} ${ui.seedsTitle || 'Seeds'}</div>
                 </div>
                  <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800/30">
                     <div class="text-2xl mb-1">💧</div>
-                    <div class="font-bold text-blue-800 dark:text-blue-400">${g.streak} Días</div>
+                    <div class="font-bold text-blue-800 dark:text-blue-400">${g.streak} ${ui.days}</div>
                 </div>
             </div>
-            
-            <div class="text-left bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl mb-4 border border-slate-100 dark:border-slate-800">
-                <h3 class="font-bold text-xs uppercase text-slate-400 mb-2">Sync Code</h3>
-                <textarea class="w-full p-2 text-[10px] font-mono border border-slate-200 dark:border-slate-700 rounded h-20 bg-white dark:bg-slate-900 dark:text-slate-300 focus:ring-2 focus:ring-sky-500 outline-none" readonly onclick="this.select()">${store.getExportData()}</textarea>
-                <div class="flex gap-2 mt-2">
-                     <button class="flex-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 dark:text-white py-2 rounded text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors" onclick="store.downloadProgressFile()">Descargar Archivo</button>
-                     <button class="flex-1 bg-slate-800 dark:bg-slate-600 text-white py-2 rounded text-xs font-bold hover:bg-slate-700 dark:hover:bg-slate-500 transition-colors" onclick="const code=prompt('Pega el código:'); if(code) store.importProgress(code);">Importar</button>
+
+            <!-- BACKPACK SECTION (REDESIGNED) -->
+            <div class="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 text-left mb-6 relative overflow-hidden">
+                <div class="absolute -right-6 -top-6 text-9xl opacity-5 pointer-events-none select-none">🎒</div>
+                
+                <h3 class="font-black text-slate-700 dark:text-slate-200 text-lg mb-2 relative z-10 flex items-center gap-2">
+                    <span>🎒</span> ${ui.backpackTitle || 'BACKPACK'}
+                </h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mb-6 relative z-10 leading-relaxed">
+                    ${ui.backpackDesc || 'Your progress lives in this browser. Take it with you by creating a backup key.'}
+                </p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 relative z-10">
+                    <button id="btn-copy-progress" class="py-3 px-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold rounded-xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2">
+                        <span>📸</span> <span>${ui.backupBtn || 'Create Backup'}</span>
+                    </button>
+                    
+                    <button id="btn-show-restore" class="py-3 px-4 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-95 transition-all">
+                        <span>📥</span> <span>${ui.restoreBtn || 'Restore'}</span>
+                    </button>
                 </div>
+
+                <!-- Hidden Restore Input -->
+                <div id="restore-area" class="${this.state.showRestoreInput ? 'block' : 'hidden'} mt-4 animate-in slide-in-from-top-2 pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <div class="flex gap-2">
+                        <input id="inp-import-code" type="text" placeholder="${ui.pasteCodePlaceholder}" class="flex-1 min-w-0 p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm outline-none focus:ring-2 focus:ring-sky-500">
+                        <button id="btn-do-import" class="bg-sky-500 text-white font-bold px-4 rounded-xl hover:bg-sky-600 transition-colors">OK</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SEEDS GRID -->
+            <div class="text-left">
+                <h3 class="font-bold text-xs uppercase text-slate-400 mb-4 tracking-widest">${ui.gardenTitle || 'My Seed Collection'}</h3>
+                ${collectedItems.length === 0 
+                    ? `<div class="p-8 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl text-center text-slate-400 text-sm">${ui.gardenEmpty}</div>`
+                    : `<div class="grid grid-cols-5 sm:grid-cols-6 gap-2">
+                        ${collectedItems.map(s => `
+                            <div class="aspect-square bg-white dark:bg-slate-800 rounded-lg flex items-center justify-center text-2xl shadow-sm border border-slate-100 dark:border-slate-700" title="${s.id}">
+                                ${s.icon}
+                            </div>
+                        `).join('')}
+                       </div>`
+                }
             </div>
         </div>`; 
     } 
-    bindProfileEvents() {}
+
+    bindProfileEvents() {
+        // Copy Button
+        const btnCopy = this.querySelector('#btn-copy-progress');
+        if (btnCopy) {
+            btnCopy.onclick = () => {
+                store.copyExportToClipboard();
+                btnCopy.innerHTML = `<span>✅</span> <span>${store.ui.copySuccess || 'Copied!'}</span>`;
+                setTimeout(() => {
+                     btnCopy.innerHTML = `<span>📸</span> <span>${store.ui.backupBtn || 'Create Backup'}</span>`;
+                }, 2000);
+            };
+        }
+
+        // Show Restore Input
+        const btnShowRestore = this.querySelector('#btn-show-restore');
+        if (btnShowRestore) {
+            btnShowRestore.onclick = () => {
+                this.updateState({ showRestoreInput: !this.state.showRestoreInput });
+            };
+        }
+
+        // Do Import
+        const btnImport = this.querySelector('#btn-do-import');
+        if (btnImport) {
+            btnImport.onclick = () => {
+                const code = this.querySelector('#inp-import-code').value.trim();
+                if (code) {
+                    const success = store.importProgress(code);
+                    if (success) {
+                        alert(store.ui.importSuccess);
+                        this.close();
+                    } else {
+                        alert(store.ui.importError);
+                    }
+                }
+            };
+        }
+    }
     
     renderAbout(ui) { 
         return `

@@ -234,7 +234,8 @@ class ArborGraph extends HTMLElement {
         if (!this.svg || !store.value.data) return;
 
         const isMobile = this.width < 768;
-        const harvestedFruits = store.value.gamification.fruits;
+        // Use seeds instead of fruits
+        const harvestedSeeds = store.value.gamification.seeds;
         const isDark = store.value.theme === 'dark';
 
         // 1. Calculate Hierarchy
@@ -419,8 +420,9 @@ class ArborGraph extends HTMLElement {
 
         nodeUpdate.select(".node-body")
             .attr("fill", d => {
-                const isHarvested = harvestedFruits.find(f => f.id === d.data.id);
-                if (isHarvested) return '#FCD34D'; 
+                const isHarvested = harvestedSeeds.find(f => f.id === d.data.id);
+                // Seed Color (Earthy Gold/Brown)
+                if (isHarvested) return '#D97706'; 
                 if (d.data.type === 'root') return '#8D6E63';
                 if (store.isCompleted(d.data.id)) return '#22c55e'; 
                 if (d.data.type === 'exam') return '#ef4444'; 
@@ -428,16 +430,15 @@ class ArborGraph extends HTMLElement {
                 return '#F59E0B'; 
             })
             .attr("d", d => {
-                const isHarvested = harvestedFruits.find(f => f.id === d.data.id);
+                const isHarvested = harvestedSeeds.find(f => f.id === d.data.id);
                 let r = d.data.type === 'root' ? 60 : (isHarvested ? 50 : 45); 
-                // Note: removed reduction for mobile to improve visibility (r * 0.9)
 
                 if (d.data.type === 'leaf') return "M0,0 C-35,15 -45,45 0,85 C45,45 35,15 0,0"; 
                 if (d.data.type === 'exam') return `M0,${-r*1.2} L${r*1.2},0 L0,${r*1.2} L${-r*1.2},0 Z`;
                 return `M${-r},0 a${r},${r} 0 1,0 ${r*2},0 a${r},${r} 0 1,0 ${-r*2},0`;
             })
             .style("filter", d => {
-                const isHarvested = harvestedFruits.find(f => f.id === d.data.id);
+                const isHarvested = harvestedSeeds.find(f => f.id === d.data.id);
                 if (isHarvested || ((d.data.type === 'leaf' || d.data.type === 'exam') && store.isCompleted(d.data.id))) {
                     return "url(#leaf-glow)";
                 }
@@ -446,8 +447,8 @@ class ArborGraph extends HTMLElement {
 
         nodeUpdate.select(".node-icon")
             .text(d => {
-                const fruit = harvestedFruits.find(f => f.id === d.data.id);
-                if (fruit) return fruit.icon;
+                const seed = harvestedSeeds.find(f => f.id === d.data.id);
+                if (seed) return seed.icon;
                 if ((d.data.type === 'leaf' || d.data.type === 'exam') && store.isCompleted(d.data.id)) return '✓';
                 return d.data.icon || (d.data.type === 'exam' ? '⚔️' : '🌱');
             })

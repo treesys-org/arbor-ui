@@ -1,3 +1,4 @@
+
 {
   "appTitle": "ARBOR",
   "appSubtitle": "Open University",
@@ -27,9 +28,9 @@
       "icon": "✨"
     },
     {
-      "title": "Harvest Your Wisdom",
-      "text": "As you complete modules, you'll harvest unique <strong>Fruits</strong> for your personal collection. Your garden will grow with every lesson you master!",
-      "icon": "🍎"
+      "title": "Collect your Seeds",
+      "text": "As you complete modules, you'll collect unique <strong>Seeds</strong> for your personal backpack. Your garden will grow with every lesson you master!",
+      "icon": "🌰"
     },
     {
       "title": "Activate my Superintelligence (AI)",
@@ -186,14 +187,14 @@
   "prError": "Error creating proposal",
   "editorLoading": "Fetching content from GitHub...",
   "profileTitle": "Profile & Garden",
-  "profileDesc": "Manage your progress and view your harvested knowledge fruits.",
+  "profileDesc": "Manage your progress and view your collected seeds.",
   "exportTitle_Profile": "Export Progress",
   "importTitle": "Import Progress",
   "exportDesc_Profile": "Copy this code or download the file to save your progress.",
   "importDesc": "Paste your code here or upload a file to restore progress.",
   "copyCode": "Copy Code",
   "downloadFile": "Download File",
-  "pasteCodePlaceholder": "Paste your Arbor code here...",
+  "pasteCodePlaceholder": "Paste your key here...",
   "importBtn": "Load Progress",
   "importSuccess": "Progress loaded successfully!",
   "importError": "Invalid code or file.",
@@ -203,9 +204,10 @@
   "days": "days",
   "todayGoal": "Photosynthesis",
   "xpUnit": "lumens",
-  "gardenTitle": "My Harvest",
-  "gardenEmpty": "Complete modules to harvest fruits.",
-  "fruitHarvested": "Fruit Harvested!",
+  "gardenTitle": "My Seed Collection",
+  "gardenEmpty": "Complete modules to collect seeds.",
+  "seedCollected": "Seed Collected!",
+  "seedsTitle": "Seeds",
   "streakKept": "Streak Kept!",
   "goalReached": "Daily Goal Reached!",
   "sageWakeTitle": "Summon the Sage",
@@ -278,6 +280,7 @@
   "editorSuccessPublish": "✅ Saved and Published to Main.",
   "editorSuccessProposal": "🚀 Request sent for review.\n",
   "editorMetaWarning": "You are editing folder properties.\nUse the top panel to change Name, Icon, and Order.",
+  "editorLoading": "Fetching content from GitHub...",
   "editorCancelLoading": "Cancel",
   "sageSettings": "Settings",
   "sageClearChat": "Clear Chat",
@@ -290,5 +293,10 @@
   "sageSearchingModels": "Searching local models...",
   "pdfDisclaimerTitle": "CONTENT LIABILITY DISCLAIMER",
   "pdfDisclaimerText": "This document has been automatically rendered by <strong>Arbor UI</strong>, a decentralized knowledge browser.<br><strong>Source Repository:</strong> {url}<br><br>The content, text, images, and intellectual property contained herein belong <strong>exclusively</strong> to the authors and maintainers of the external repository linked above. <strong>Arbor UI</strong> (Treesys) acts solely as a visualization engine and bears <strong>no responsibility</strong> for the accuracy, legality, copyright status, or safety of the material presented in this document. Users are responsible for verifying the source of the information.",
-  "pdfFooter": "Generated via Arbor UI • Source: {name}"
+  "pdfFooter": "Generated via Arbor UI • Source: {name}",
+  "backpackTitle": "PROGRESS BACKPACK",
+  "backpackDesc": "Your progress lives in this browser. Take it with you by creating a copy.",
+  "backupBtn": "Create Copy",
+  "restoreBtn": "Restore Backup",
+  "copySuccess": "Copied!"
 }

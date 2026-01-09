@@ -1,4 +1,5 @@
 
+
 import { store } from '../store.js';
 
 class ArborProgressWidget extends HTMLElement {
@@ -47,7 +48,10 @@ class ArborProgressWidget extends HTMLElement {
         const ui = store.ui;
         const g = store.value.gamification;
         const dailyProgress = Math.min(100, Math.round((g.dailyXP / store.dailyXpGoal) * 100));
-        const fruitCount = g.fruits.length;
+        
+        // Seeds logic
+        const collectedItems = g.seeds || g.fruits || [];
+        const itemCount = collectedItems.length;
         
         // SVG Math for Circle
         const radius = 45;
@@ -57,10 +61,10 @@ class ArborProgressWidget extends HTMLElement {
         this.innerHTML = `
         <div class="fixed top-4 right-4 z-30 flex-col items-end hidden md:flex">
             
-            <!-- Trigger Button: Apple Basket -->
+            <!-- Trigger Button: Seed Bag -->
             <button id="btn-toggle" class="flex items-center gap-2 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200 dark:border-slate-700 px-4 py-2 rounded-full shadow-sm hover:border-orange-400 dark:hover:border-orange-600 transition-colors">
-                <span class="text-2xl">🧺</span>
-                <span class="font-bold text-slate-600 dark:text-slate-300 text-sm">${fruitCount}</span>
+                <span class="text-2xl">🎒</span>
+                <span class="font-bold text-slate-600 dark:text-slate-300 text-sm">${itemCount}</span>
             </button>
 
             <!-- Dropdown -->
