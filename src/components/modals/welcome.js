@@ -81,6 +81,17 @@ class ArborModalWelcome extends HTMLElement {
                              </div>
                         </div>
 
+                         <!-- Step 4: Offline Privacy (New) -->
+                        <div class="group p-5 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-600 transition-all">
+                             <div class="flex items-start gap-4">
+                                 <div class="w-12 h-12 rounded-xl bg-slate-200 dark:bg-slate-700/50 text-2xl flex items-center justify-center shadow-sm text-slate-600 dark:text-slate-300">🎒</div>
+                                 <div>
+                                     <h3 class="font-bold text-slate-800 dark:text-white mb-1 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors">${ui.welcomeSteps[4].title}</h3>
+                                     <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">${ui.welcomeSteps[4].text}</p>
+                                 </div>
+                             </div>
+                        </div>
+
                     </div>
                     
                     <div class="mt-auto pt-4">

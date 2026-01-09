@@ -6,14 +6,17 @@ import datetime
 import re
 import uuid
 import shutil
+import time
 
 # ==========================================
-# 🌳 ARBOR KNOWLEDGE BUILDER
+# 🌳 ARBOR KNOWLEDGE BUILDER (INCREMENTAL)
 # ==========================================
-# This script compiles the 'content/' directory into the static JSON API
-# used by the Arbor frontend.
-#
-# Usage: python builder_script.txt
+# This script compiles the 'content/' directory into the static JSON API.
+# 
+# NEW FEATURES:
+# - Incremental Builds: Skips processing files that haven't changed.
+# - Orphan Cleanup: Deletes JSON shards for removed content files.
+# - Cache: Uses .arbor_build_cache.json to track file states.
 # ==========================================
 
 # --- CONFIGURATION ---
@@ -24,13 +27,36 @@ NAMESPACE = "org.arbor.knowledge"
 ROOT_DIR = "./content" 
 DATA_ROOT_DIR = "./data"
 API_DIR = os.path.join(DATA_ROOT_DIR, "nodes")
-SEARCH_DIR = os.path.join(DATA_ROOT_DIR, "search") # New Search Shards Directory
+CONTENT_API_DIR = os.path.join(DATA_ROOT_DIR, "content") 
+SEARCH_DIR = os.path.join(DATA_ROOT_DIR, "search") 
 OUTPUT_FILE = os.path.join(DATA_ROOT_DIR, "data.json") 
+CACHE_FILE = ".arbor_build_cache.json"
 
 # Standardize on Markdown as the sole format for clarity.
 ALLOWED_EXTENSIONS = {'.md'}
 
+# Global trackers for incremental logic
+BUILD_CACHE = {}
+GENERATED_CONTENT_PATHS = set()
+STATS = {"cached": 0, "processed": 0, "deleted": 0}
+
 # --- UTILS ---
+
+def load_cache():
+    global BUILD_CACHE
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, 'r', encoding='utf-8') as f:
+                BUILD_CACHE = json.load(f)
+        except:
+            BUILD_CACHE = {}
+
+def save_cache():
+    try:
+        with open(CACHE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(BUILD_CACHE, f, indent=0)
+    except Exception as e:
+        print(f"⚠️ Warning: Could not save build cache: {e}")
 
 def parse_frontmatter(content):
     """Parses standard Jekyll/Hugo style frontmatter and normalizes keys."""
@@ -41,7 +67,7 @@ def parse_frontmatter(content):
         frontmatter_str, clean_content = match.groups()
         clean_content = clean_content.strip()
         
-        # Map localized keys to internal schema (Consistency with Arbor format)
+        # Map localized keys to internal schema
         key_map = {
             'titulo': 'name', 'title': 'name',
             'icono': 'icon', 'icon': 'icon',
@@ -56,33 +82,23 @@ def parse_frontmatter(content):
                 key, val = line.split(':', 1)
                 raw_key = key.strip().lower()
                 val = val.strip().strip('"\'')
-                
-                if raw_key in key_map:
-                    meta[key_map[raw_key]] = val
-                else:
-                    meta[raw_key] = val
+                if raw_key in key_map: meta[key_map[raw_key]] = val
+                else: meta[raw_key] = val
                     
     return meta, clean_content
 
 def parse_arbor_format(content):
-    """Parses the custom Arbor @tag syntax (used in .md files)."""
+    """Parses the custom Arbor @tag syntax."""
     meta = {}
     content_lines = []
-    
     lines = content.split('\n')
     parsing_metadata = True
 
     for line in lines:
         stripped = line.strip()
-        
-        # FIX: Allow blank lines in the metadata block without breaking it
-        if parsing_metadata and not stripped:
-            continue
+        if parsing_metadata and not stripped: continue
 
-        # Check for Metadata directives at start of file
         if parsing_metadata and stripped.startswith('@'):
-            
-            # SPECIAL CASE: Standalone @exam tag
             if stripped.lower() == '@exam':
                 meta['type'] = 'exam'
                 continue
@@ -92,7 +108,6 @@ def parse_arbor_format(content):
                 raw_key = key_part[1:].strip().lower()
                 val = val_part.strip()
                 
-                # Map localized keys to internal schema
                 key_map = {
                     'titulo': 'name', 'title': 'name',
                     'icono': 'icon', 'icon': 'icon',
@@ -101,8 +116,6 @@ def parse_arbor_format(content):
                     'discusion': 'discussionUrl', 'discussion': 'discussionUrl',
                     'tipo': 'type', 'type': 'type'
                 }
-
-                # These tags belong to the body content, not metadata
                 content_tags = ['image', 'img', 'video', 'audio', 'quiz', 'section', 'h1', 'h2', 'option', 'correct']
                 
                 if raw_key in content_tags:
@@ -111,103 +124,74 @@ def parse_arbor_format(content):
                 elif raw_key in key_map:
                      meta[key_map[raw_key]] = val
                 else:
-                     # Unknown metadata tag, treat as metadata anyway
                      meta[raw_key] = val
             else:
-                 # Line starts with @ but no colon and not @exam, likely content or broken tag
                  parsing_metadata = False
                  content_lines.append(line)
         else:
-            # If we hit a line that isn't empty and doesn't start with @, metadata block ends
-            if parsing_metadata:
-                 parsing_metadata = False
+            if parsing_metadata: parsing_metadata = False
             content_lines.append(line)
             
     return meta, '\n'.join(content_lines).strip()
 
 def get_or_create_persistent_id(folder_path):
-    """
-    Ensures every folder has a UUID so links don't break if folders are renamed.
-    Stores the UUID in meta.json.
-    """
+    """Ensures every folder has a UUID so links don't break if folders are renamed."""
     meta_path = os.path.join(folder_path, "meta.json")
     meta_data = {}
     
-    # Read existing meta.json
     if os.path.exists(meta_path):
         try:
-            # use utf-8-sig to handle BOM if user edited meta.json in notepad
             with open(meta_path, 'r', encoding='utf-8-sig') as f:
                 meta_data = json.load(f)
-        except Exception as e:
-            print(f"⚠️  Warning: Corrupt meta.json in {folder_path}: {e}")
-            meta_data = {}
+        except: meta_data = {}
 
-    # Generate UUID if missing
     raw_uuid = meta_data.get("uuid")
     if not raw_uuid:
         raw_uuid = str(uuid.uuid4())
         meta_data["uuid"] = raw_uuid
-        # Write back to file to persist it
         try:
             with open(meta_path, 'w', encoding='utf-8') as f:
                 json.dump(meta_data, f, indent=2, ensure_ascii=False)
         except Exception as e:
             print(f"❌ Error saving UUID to {folder_path}: {e}")
 
-    full_id = f"{NAMESPACE}::{raw_uuid}"
-    return meta_data, full_id
+    return meta_data, f"{NAMESPACE}::{raw_uuid}"
 
 def tokenize(text):
-    """Breaks text into keywords for indexing."""
     if not text: return []
-    # Normalize: lowercase, remove accents (simple approach)
     text = text.lower()
-    # Simple regex to get words
     words = re.findall(r'\w+', text)
-    # Filter small words
     return [w for w in words if len(w) > 2]
 
 def add_to_search_shards(node, shards_dict):
-    """Adds a node to the appropriate buckets based on its keywords."""
-    # We index based on Name and Description
     text_to_index = f"{node.get('name', '')} {node.get('description', '')}"
     words = tokenize(text_to_index)
-    
-    # Use a set to avoid adding the same node multiple times to the same shard
     target_shards = set()
     
     for word in words:
-        # Use first 2 chars as shard key (e.g., 'bi' for biology)
         if len(word) >= 2:
             prefix = word[:2]
             target_shards.add(prefix)
             
     for prefix in target_shards:
-        if prefix not in shards_dict:
-            shards_dict[prefix] = []
-        
-        # Optimize: Store a smaller object in the search index
+        if prefix not in shards_dict: shards_dict[prefix] = []
         search_entry = {
             "id": node.get("id"),
-            "n": node.get("name"),       # n = name (shorter key)
-            "t": node.get("type"),       # t = type
-            "i": node.get("icon"),       # i = icon
-            "d": node.get("description"),# d = description
-            "p": node.get("path"),       # p = path
-            "l": node.get("lang"),       # l = lang
-            "c": node.get("isCertifiable", False) # c = certifiable
+            "n": node.get("name"),
+            "t": node.get("type"),
+            "i": node.get("icon"),
+            "d": node.get("description"),
+            "p": node.get("path"),
+            "l": node.get("lang"),
+            "c": node.get("isCertifiable", False)
         }
         shards_dict[prefix].append(search_entry)
 
 def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None, breadcrumb_path="", relative_slug_path=""):
-    """
-    Recursively walks the directory structure to build the node tree.
-    """
+    """Recursively walks the directory structure to build the node tree."""
     if node_collector is None: node_collector = []
 
     name = os.path.basename(path)
-    # Create a clean URL-safe slug from filename
     name_slug = re.sub(r'[^a-zA-Z0-9]+', '-', os.path.splitext(name)[0]).lower().strip('-')
 
     current_slug_path = name_slug
@@ -219,7 +203,6 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
     # --- FOLDER (BRANCH) ---
     if os.path.isdir(path):
         meta, node_id = get_or_create_persistent_id(path)
-        
         display_name = meta.get("name", name.replace('_', ' '))
         
         node = {
@@ -239,13 +222,9 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
             "isCertifiable": False
         }
         
-        if 'uuid' in node: del node['uuid']
-        if 'children' in node: del node['children'] 
-
         current_breadcrumb = f"{breadcrumb_path} / {display_name}" if breadcrumb_path else display_name
         node['path'] = current_breadcrumb
 
-        # Process Children
         child_items = sorted([item for item in os.listdir(path) if not item.startswith('.') and item != 'meta.json']) if os.path.exists(path) else []
         
         if child_items:
@@ -257,26 +236,22 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
                 child_node = build_tree_recursive(item_path, lang_folder, node_id, node_collector, current_breadcrumb, current_slug_path)
                 if child_node:
                     children_for_api_file.append(child_node)
-                    
                     if child_node.get('type') in ['leaf', 'exam']:
                         node["totalLeaves"] += 1
                         node["leafIds"].append(child_node['id'])
                     else:
                         node["totalLeaves"] += child_node.get('totalLeaves', 0)
-                        if 'leafIds' in child_node:
-                             node["leafIds"].extend(child_node['leafIds'])
+                        if 'leafIds' in child_node: node["leafIds"].extend(child_node['leafIds'])
             
             children_for_api_file.sort(key=lambda x: (int(x.get('order', 999)), x.get('name', '')))
-            
-            if any(child.get('type') == 'exam' for child in children_for_api_file):
-                node['isCertifiable'] = True
+            if any(child.get('type') == 'exam' for child in children_for_api_file): node['isCertifiable'] = True
 
+            # We assume Structure JSONs are cheap to write, so we write them every time to ensure consistency
             api_relative_path = os.path.join(lang_folder.lower(), *current_slug_path.split('/')) + ".json"
             api_filepath = os.path.join(API_DIR, api_relative_path)
             
             if api_filepath:
                 os.makedirs(os.path.dirname(api_filepath), exist_ok=True)
-                # MINIFICATION CHANGE: Using separators to remove whitespace for production
                 with open(api_filepath, 'w', encoding='utf-8') as f:
                     json.dump(children_for_api_file, f, ensure_ascii=False, separators=(',', ':'))
 
@@ -286,6 +261,25 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
         if ext in ALLOWED_EXTENSIONS:
             node_id = f"{parent_id}__{name_slug}"
             
+            # Paths
+            content_rel_path = f"{lang_folder.lower()}/{current_slug_path}.json"
+            content_full_path = os.path.join(CONTENT_API_DIR, content_rel_path)
+            
+            # Track this path so we don't delete it later
+            GENERATED_CONTENT_PATHS.add(os.path.abspath(content_full_path))
+
+            # INCREMENTAL CHECK
+            mtime = os.path.getmtime(path)
+            cached_data = BUILD_CACHE.get(path)
+            
+            needs_processing = True
+            
+            # If cache matches and output file exists, skip reading source
+            if cached_data and cached_data.get('mtime') == mtime and os.path.exists(content_full_path):
+                needs_processing = False
+                meta = cached_data.get('meta', {})
+                STATS["cached"] += 1
+            
             node = {
                 "id": node_id,
                 "parentId": parent_id,
@@ -293,71 +287,95 @@ def build_tree_recursive(path, lang_folder, parent_id=None, node_collector=None,
                 "namespace": NAMESPACE,
                 "name": os.path.splitext(name)[0].replace('_', ' '),
                 "icon": "📄",
-                "sourcePath": clean_source_path
+                "sourcePath": clean_source_path,
+                "contentPath": content_rel_path
             }
+
+            if needs_processing:
+                try:
+                    with open(path, 'r', encoding='utf-8-sig') as f:
+                        raw_content = f.read()
+                    
+                    if ext == '.md' and raw_content.startswith('---'):
+                         meta, content = parse_frontmatter(raw_content)
+                    else:
+                         meta, content = parse_arbor_format(raw_content)
+                    
+                    # Write Content Shard
+                    os.makedirs(os.path.dirname(content_full_path), exist_ok=True)
+                    with open(content_full_path, 'w', encoding='utf-8') as f:
+                         json.dump({"content": content}, f, ensure_ascii=False)
+                    
+                    # Update Cache
+                    BUILD_CACHE[path] = {'mtime': mtime, 'meta': meta}
+                    STATS["processed"] += 1
+
+                except Exception as e:
+                    print(f"❌ Error reading {path}: {e}")
+                    node["description"] = f"Error: {e}"
+                    meta = {}
             
-            try:
-                with open(path, 'r', encoding='utf-8-sig') as f:
-                    raw_content = f.read()
-                
-                if ext == '.md' and raw_content.startswith('---'):
-                     meta, content = parse_frontmatter(raw_content)
-                else:
-                     meta, content = parse_arbor_format(raw_content)
-                
-                node["content"] = content
-                node.update(meta)
-                node['path'] = f"{breadcrumb_path} / {node['name']}"
+            # Apply metadata (either from fresh parse or cache)
+            node.update(meta)
+            node['path'] = f"{breadcrumb_path} / {node['name']}"
 
-                if node.get('type') == 'exam' and node.get('icon') == '📄':
-                    node['icon'] = '⚔️'
-
-            except Exception as e:
-                print(f"❌ Error reading {path}: {e}")
-                node["content"] = f"Error reading file: {e}"
+            if node.get('type') == 'exam' and node.get('icon') == '📄':
+                node['icon'] = '⚔️'
+                
         else:
             return None
 
-    # Add to Search Collector (For sharding later)
+    # Search indexing relies on metadata, which is populated in 'node' regardless of cache hit/miss
     search_node = {
-        "id": node.get("id"), 
-        "name": node.get("name"), 
-        "type": node.get("type"),
-        "icon": node.get("icon"), 
-        "description": node.get("description"), 
-        "lang": lang_folder.upper(),
-        "path": node.get("path"), 
+        "id": node.get("id"), "name": node.get("name"), "type": node.get("type"),
+        "icon": node.get("icon"), "description": node.get("description"), 
+        "lang": lang_folder.upper(), "path": node.get("path"), 
         "isCertifiable": node.get("isCertifiable", False)
     }
     node_collector.append(search_node)
     
-    if 'children' in node:
-        del node['children']
-
+    if 'children' in node: del node['children']
     return node
 
-def main():
-    print(f"\n🌳 Arbor Knowledge Builder (Optimized Sharding)")
-    print(f"==========================================")
+def clean_orphans():
+    """Deletes JSON content files that no longer have a source Markdown file."""
+    if not os.path.exists(CONTENT_API_DIR): return
     
+    for root, dirs, files in os.walk(CONTENT_API_DIR):
+        for file in files:
+            full_path = os.path.abspath(os.path.join(root, file))
+            if full_path not in GENERATED_CONTENT_PATHS:
+                try:
+                    os.remove(full_path)
+                    STATS["deleted"] += 1
+                except: pass
+        
+        # Cleanup empty dirs
+        if not os.listdir(root) and root != os.path.abspath(CONTENT_API_DIR):
+            try: os.rmdir(root)
+            except: pass
+
+def main():
+    start_time = time.time()
+    print(f"\n🌳 Arbor Knowledge Builder (Incremental Rsync-Mode)")
+    print(f"==================================================")
+    
+    load_cache()
+
     if not os.path.exists(ROOT_DIR):
         print(f"❌ Error: Content directory '{ROOT_DIR}' not found.")
         return
 
-    # Clean and Recreate Data Dirs
-    if not os.path.exists(DATA_ROOT_DIR):
-        os.makedirs(DATA_ROOT_DIR, exist_ok=True)
+    # Don't wipe CONTENT_API_DIR to allow incremental updates.
+    # Wiping API_DIR (structure) and SEARCH_DIR is fine as they are fast.
+    if os.path.exists(SEARCH_DIR): shutil.rmtree(SEARCH_DIR)
+    if os.path.exists(API_DIR): shutil.rmtree(API_DIR)
     
-    # Clean Search Shards to avoid stale data
-    if os.path.exists(SEARCH_DIR):
-        shutil.rmtree(SEARCH_DIR)
+    os.makedirs(DATA_ROOT_DIR, exist_ok=True)
     os.makedirs(SEARCH_DIR, exist_ok=True)
-
     os.makedirs(API_DIR, exist_ok=True)
+    os.makedirs(CONTENT_API_DIR, exist_ok=True)
 
-    # Dictionary to hold shards: {'en/bi': [nodes...], 'es/ma': [nodes...]}
-    search_shards = {}
-    
     full_data = {
         "generatedAt": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "universeId": UNIVERSE_ID,
@@ -368,27 +386,20 @@ def main():
     language_folders = sorted([d for d in os.listdir(ROOT_DIR) if os.path.isdir(os.path.join(ROOT_DIR, d)) and not d.startswith('.')])
     
     for lang_folder in language_folders:
-        print(f"🔨 Processing Language: {lang_folder.upper()}...")
+        print(f"🔨 Processing: {lang_folder.upper()}")
         lang_path = os.path.join(ROOT_DIR, lang_folder)
         
         root_id = f"{UNIVERSE_ID}-{lang_folder.lower()}-root"
         root_name = f"Arbor {lang_folder.upper()}"
         
         root_node = { 
-            "id": root_id, 
-            "name": root_name, 
-            "parentId": None, 
-            "icon": "🌳", 
-            "expanded": True, 
-            "status": "available", 
-            "type": "root", 
-            "description": f"{lang_folder.upper()} Curriculum", 
+            "id": root_id, "name": root_name, "parentId": None, 
+            "icon": "🌳", "expanded": True, "status": "available", 
+            "type": "root", "description": f"{lang_folder.upper()} Curriculum", 
             "path": root_name 
         }
         
-        # Collect all searchable nodes for this language to shard them
         lang_search_nodes = []
-        
         root_children_nodes = []
         top_level_items = sorted([item for item in os.listdir(lang_path) if not item.startswith('.') and item != 'meta.json'])
 
@@ -401,50 +412,41 @@ def main():
                 root_children_nodes.append(top_node)
                 lang_search_nodes.extend(branch_search_nodes)
 
-        # Create Shards for this Language
+        # Generate Search Shards (Always rebuild search to ensure consistency)
         lang_shards = {}
         for node in lang_search_nodes:
             add_to_search_shards(node, lang_shards)
         
-        # Write Shards to Disk: data/search/EN/a/ap.json
         lang_search_dir = os.path.join(SEARCH_DIR, lang_folder.upper())
         os.makedirs(lang_search_dir, exist_ok=True)
         
-        shard_count = 0
         for prefix, items in lang_shards.items():
-            # Only save valid prefixes (alphanumeric)
             safe_prefix = re.sub(r'[^a-z0-9]', '', prefix)
             if safe_prefix:
-                # Organize by first letter to avoid folder clutter
-                # e.g. data/search/EN/a/ap.json
-                first_char = safe_prefix[0]
-                shard_subdir = os.path.join(lang_search_dir, first_char)
+                shard_subdir = os.path.join(lang_search_dir, safe_prefix[0])
                 os.makedirs(shard_subdir, exist_ok=True)
-
-                # MINIFICATION CHANGE: Using separators to remove whitespace for production
                 with open(os.path.join(shard_subdir, f"{safe_prefix}.json"), 'w', encoding='utf-8') as f:
                     json.dump(items, f, ensure_ascii=False, separators=(',', ':'))
-                shard_count += 1
-                
-        print(f"   > Created {shard_count} search shards for {lang_folder.upper()}")
 
-        # Sort root children
         root_children_nodes.sort(key=lambda x: (int(x.get('order', 999)), x.get('name', '')))
         root_node['children'] = root_children_nodes
         full_data["languages"][lang_folder.upper()] = root_node
 
-    # Save Main Data File (The Skeleton)
-    # MINIFICATION CHANGE: Using separators to remove whitespace for production
+    # Write Main Data
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f: 
         json.dump(full_data, f, ensure_ascii=False, separators=(',', ':'))
     
-    # NOTE: We no longer generate a massive 'search-index.json'
+    # Cleanup & Save Cache
+    clean_orphans()
+    save_cache()
 
-    print(f"==========================================")
-    print(f"✅ Build Complete!")
-    print(f"   - Main Data: {OUTPUT_FILE}")
-    print(f"   - Search Shards: {SEARCH_DIR}/[LANG]/[char]/[prefix].json")
-    print(f"==========================================\n")
+    elapsed = time.time() - start_time
+    print(f"==================================================")
+    print(f"✅ Build Complete in {elapsed:.2f}s")
+    print(f"   - Cached:    {STATS['cached']} files (Skipped)")
+    print(f"   - Processed: {STATS['processed']} files (Updated)")
+    print(f"   - Deleted:   {STATS['deleted']} orphans")
+    print(f"==================================================\n")
 
 if __name__ == "__main__":
     main()

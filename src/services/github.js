@@ -10,6 +10,7 @@ class GitHubService {
         this.currentUser = null;
         this.repoCache = null;
         this.codeOwnersRules = [];
+        this.treeCache = null;
     }
 
     async initialize(token) {
@@ -17,11 +18,14 @@ class GitHubService {
         try {
             // Octokit is exported by the bundle in index.html
             this.octokit = new Octokit({ auth: token });
-            const { data } = await this.octokit.request("GET /user");
-            this.currentUser = data;
+
+            const userPromise = this.octokit.request("GET /user");
+            const codeOwnersPromise = this.loadCodeOwners();
             
-            // Pre-load governance if possible
-            await this.loadCodeOwners();
+            const [userResponse] = await Promise.all([userPromise, codeOwnersPromise]);
+            
+            const { data } = userResponse;
+            this.currentUser = data;
             
             return data;
         } catch (e) {
@@ -35,6 +39,7 @@ class GitHubService {
         this.currentUser = null;
         this.repoCache = null;
         this.codeOwnersRules = [];
+        this.treeCache = null;
     }
 
     getRepositoryInfo() {
@@ -153,7 +158,11 @@ class GitHubService {
     }
 
     // Recursive Tree for Studio View
-    async getRecursiveTree(path = 'content') {
+    async getRecursiveTree(path = 'content', forceRefresh = false) {
+        if (this.treeCache && !forceRefresh) {
+            return this.treeCache.filter(node => node.path.startsWith(path));
+        }
+        
         if (!this.octokit) return [];
         const repo = this.getRepositoryInfo();
         if (!repo) return [];
@@ -172,6 +181,8 @@ class GitHubService {
             const { data: treeData } = await this.octokit.git.getTree({
                 owner: repo.owner, repo: repo.repo, tree_sha: ref.object.sha, recursive: 'true'
             });
+            
+            this.treeCache = treeData.tree;
 
             // Filter to show only content inside the specific path
             return treeData.tree.filter(node => node.path.startsWith(path));

@@ -340,6 +340,12 @@ class Store extends EventTarget {
         const currentIndex = leaves.findIndex(n => n.id === this.state.selectedNode.id);
         if (currentIndex !== -1 && currentIndex < leaves.length - 1) {
             const nextNode = leaves[currentIndex + 1];
+            
+            // LAZY CONTENT LOAD FOR NEXT NODE
+            if (!nextNode.content && nextNode.contentPath) {
+                await this.loadNodeContent(nextNode);
+            }
+            
             await this.navigateTo(nextNode.id, nextNode);
             this.update({ selectedNode: nextNode, previewNode: null });
         } else {
@@ -439,13 +445,47 @@ class Store extends EventTarget {
             this.dispatchEvent(new CustomEvent('graph-update'));
         }
     }
+    
+    // --- LAZY CONTENT LOADING ---
+    async loadNodeContent(node) {
+        if (node.content) return;
+        if (!node.contentPath) return; 
+        
+        this.update({ loading: true }); 
+        
+        try {
+            const sourceUrl = this.state.activeSource.url;
+            const baseDir = sourceUrl.substring(0, sourceUrl.lastIndexOf('/') + 1);
+            const url = `${baseDir}content/${node.contentPath}`;
+            
+            const res = await fetch(url);
+            if(res.ok) {
+                const json = await res.json();
+                node.content = json.content;
+            } else {
+                throw new Error(`Content missing for ${node.name}`);
+            }
+        } catch(e) {
+            console.error("Content fetch failed", e);
+            node.content = "Error loading content. Please check internet connection.";
+        } finally {
+            this.update({ loading: false });
+        }
+    }
+
+    async enterLesson() {
+        const node = this.state.previewNode;
+        if (node) {
+             if (!node.content && node.contentPath) {
+                 await this.loadNodeContent(node);
+             }
+             this.update({ selectedNode: node, previewNode: null });
+        }
+    }
 
     goHome() {
         this.update({ viewMode: 'explore', selectedNode: null, previewNode: null, modal: null });
         this.dispatchEvent(new CustomEvent('reset-zoom'));
-    }
-    enterLesson() {
-        if (this.state.previewNode) this.update({ selectedNode: this.state.previewNode, previewNode: null });
     }
     closePreview() { this.update({ previewNode: null }); }
     closeContent() { this.update({ selectedNode: null }); }
@@ -581,7 +621,12 @@ class Store extends EventTarget {
         this.update({ ai: { ...this.state.ai, status: 'thinking', messages: currentMsgs } });
 
         try {
-            const contextNode = this.state.selectedNode || this.state.previewNode;
+            // Lazy load content if Sage needs it for context
+            let contextNode = this.state.selectedNode || this.state.previewNode;
+            if (contextNode && !contextNode.content && contextNode.contentPath) {
+                 await this.loadNodeContent(contextNode);
+            }
+
             const responseObj = await aiService.chat(currentMsgs, contextNode);
             let finalText = responseObj.text;
             if (responseObj.sources && responseObj.sources.length > 0) {

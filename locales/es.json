@@ -1,4 +1,3 @@
-
 {
   "appTitle": "ARBOR",
   "appSubtitle": "Open University",
@@ -37,6 +36,11 @@
       "text": "Por defecto, te guío con la información de la lección. Puedes conectarme a una <strong>IA en la Nube</strong> o una <strong>IA Local</strong> para tener un tutor personalizado.",
       "icon": "🧠",
       "isAiPitch": true
+    },
+    {
+      "title": "Tus Datos son Privados (Offline)",
+      "text": "<strong>Importante:</strong> Tu progreso vive 100% en este navegador. Para guardarlo o moverlo a otro dispositivo, ve a tu Perfil y <strong>Exporta</strong> tu archivo de mochila.",
+      "icon": "🎒"
     }
   ],
   "aiPitchAction": "Mejorar mi Cerebro",

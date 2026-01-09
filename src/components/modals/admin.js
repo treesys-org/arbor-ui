@@ -1,4 +1,5 @@
 
+
 import { store } from '../../store.js';
 import { github } from '../../services/github.js';
 import { AdminRenderer } from '../../utils/renderer.js';
@@ -14,7 +15,8 @@ class ArborAdminPanel extends HTMLElement {
             treeNodes: [], 
             treeFilter: '',
             expandedPaths: new Set(['content', 'content/EN', 'content/ES']),
-            dragSource: null
+            dragSource: null,
+            loadingMessage: null
         };
         this.lastRenderKey = null;
     }
@@ -30,20 +32,23 @@ class ArborAdminPanel extends HTMLElement {
     }
 
     async initData() {
+        this.updateState({ loadingMessage: 'Authenticating with GitHub...' });
         const isAdmin = await github.isAdmin();
+        
+        this.updateState({ loadingMessage: 'Checking repository health...' });
         const isHealthy = await github.checkHealth();
-        this.state = { ...this.state, isAdmin, isRepoHealthy: isHealthy };
+        
+        this.updateState({ isAdmin, isRepoHealthy: isHealthy, loadingMessage: null });
         
         if (isHealthy) {
             this.loadTreeData();
             if (isAdmin) this.loadAdminData();
         }
-        this.render();
     }
 
-    async loadTreeData() {
+    async loadTreeData(force = false) {
         try {
-            const flatNodes = await github.getRecursiveTree();
+            const flatNodes = await github.getRecursiveTree('content', force);
             const tree = this.buildTree(flatNodes);
             this.updateState({ treeNodes: tree });
         } catch (e) {
@@ -328,6 +333,19 @@ class ArborAdminPanel extends HTMLElement {
                 <button id="btn-close-panel" class="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 transition-colors" title="${ui.close}">✕</button>
             </div>
         </div>`;
+        
+        if (this.state.loadingMessage) {
+            this.innerHTML = `
+            <div class="flex flex-col h-full overflow-hidden">
+                ${header}
+                <div class="flex-1 flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900">
+                    <div class="w-8 h-8 border-4 border-slate-200 border-t-slate-500 rounded-full animate-spin mb-4"></div>
+                    <p class="text-slate-500 dark:text-slate-400 font-bold animate-pulse">${this.state.loadingMessage}</p>
+                </div>
+            </div>`;
+            this.bindDashboardEvents();
+            return;
+        }
 
         const tabs = `
         <div class="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 shrink-0">
@@ -376,7 +394,23 @@ class ArborAdminPanel extends HTMLElement {
                               filter: this.state.treeFilter.toLowerCase(),
                               expandedPaths: this.state.expandedPaths,
                               canEdit: (p) => github.canEdit(p),
-                              ui: ui
+                              ui: ui,
+                              // NEW: Look up the custom icon from the current loaded graph data
+                              getCustomIcon: (path) => {
+                                   const root = store.value.data;
+                                   if (!root) return null;
+                                   
+                                   // Simple BFS to find the node by sourcePath
+                                   // Since Admin tree view usually matches the active language loaded in store,
+                                   // this should work for the active language folders.
+                                   const queue = [root];
+                                   while(queue.length > 0) {
+                                       const n = queue.shift();
+                                       if (n.sourcePath === path) return n.icon;
+                                       if (n.children) queue.push(...n.children);
+                                   }
+                                   return null;
+                              }
                           })}
                     </div>
                  </div>`;
@@ -584,7 +618,7 @@ class ArborAdminPanel extends HTMLElement {
         }
         
         const btnRefresh = this.querySelector('#btn-refresh-tree');
-        if(btnRefresh) btnRefresh.onclick = () => this.loadTreeData();
+        if(btnRefresh) btnRefresh.onclick = () => this.loadTreeData(true);
         
         const btnCreateFile = this.querySelector('#btn-create-file');
         if(btnCreateFile) btnCreateFile.onclick = () => {

@@ -125,7 +125,7 @@ export const ContentRenderer = {
 
 export const AdminRenderer = {
     renderRecursiveTree(nodes, depth, context) {
-        const { filter, expandedPaths, canEdit, ui } = context;
+        const { filter, expandedPaths, canEdit, ui, getCustomIcon } = context;
         
         const folders = nodes.filter(n => n.type === 'tree').sort((a,b) => a.path.localeCompare(b.path));
         const files = nodes.filter(n => n.type === 'blob').sort((a,b) => a.path.localeCompare(b.path));
@@ -150,6 +150,7 @@ export const AdminRenderer = {
              const isExpanded = expandedPaths.has(node.path) || (filter && hasMatchingChildren);
              const canWrite = canEdit(node.path);
              const padding = depth * 12 + 10;
+             const customIcon = getCustomIcon ? getCustomIcon(node.path) : null;
 
              html += `
              <div>
@@ -162,6 +163,7 @@ export const AdminRenderer = {
                      data-path="${node.path}">
                     <div class="flex items-center gap-2 overflow-hidden">
                         <span class="text-slate-400 text-xs">${isExpanded ? '📂' : '📁'}</span>
+                        ${customIcon ? `<span class="text-xs">${customIcon}</span>` : ''}
                         <span class="font-bold text-slate-700 dark:text-slate-300 truncate select-none">${name}</span>
                         ${!canWrite ? '<span class="text-[10px] ml-auto text-slate-400">🔒</span>' : ''}
                     </div>

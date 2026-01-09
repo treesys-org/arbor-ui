@@ -1,4 +1,3 @@
-
 {
   "appTitle": "ARBOR",
   "appSubtitle": "Open University",
@@ -37,6 +36,11 @@
       "text": "By default, I guide you using the lesson text. You can upgrade my brain by connecting a <strong>Cloud AI</strong> (like Gemini) or a <strong>Local AI</strong> (Ollama/WebLLM) for privacy.",
       "icon": "🧠",
       "isAiPitch": true
+    },
+    {
+      "title": "Your Data is Private (Offline)",
+      "text": "<strong>Important:</strong> Your progress lives 100% in this browser. To save it or move it to another device, go to your Profile and <strong>Export</strong> your backpack file.",
+      "icon": "🎒"
     }
   ],
   "aiPitchAction": "Upgrade my Brain",
