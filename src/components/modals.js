@@ -16,7 +16,7 @@ import './modals/certificate-view.js';
 import './modals/empty-module.js';
 
 // Admin Panel is essentially a modal
-import './admin-panel.js';
+import './modals/admin.js';
 
 class ArborModals extends HTMLElement {
     constructor() {

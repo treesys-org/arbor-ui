@@ -1,7 +1,7 @@
 
-import { store } from '../store.js';
-import { github } from '../services/github.js';
-import { AdminRenderer } from '../utils/renderer.js';
+import { store } from '../../store.js';
+import { github } from '../../services/github.js';
+import { AdminRenderer } from '../../utils/renderer.js';
 
 class ArborAdminPanel extends HTMLElement {
     constructor() {

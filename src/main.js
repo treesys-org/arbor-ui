@@ -5,8 +5,8 @@ import './components/graph.js';
 import './components/content.js';
 import './components/modals.js';
 import './components/progress-widget.js';
-import './components/editor-modal.js';
-import './components/sage-modal.js';
+import './components/modals/editor.js';
+import './components/modals/sage.js';
 
 // Initialize App
 document.addEventListener('DOMContentLoaded', () => {

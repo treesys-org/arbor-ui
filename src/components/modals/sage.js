@@ -1,11 +1,6 @@
 
-
-
-
-
-
-import { store } from '../store.js';
-import { aiService } from '../services/ai.js';
+import { store } from '../../store.js';
+import { aiService } from '../../services/ai.js';
 
 class ArborSage extends HTMLElement {
     constructor() {
@@ -574,8 +569,6 @@ class ArborSage extends HTMLElement {
              store.clearSageChat();
         };
 
-        // Removed backdrop click closing logic
-        
         const area = this.querySelector('#sage-chat-area');
         if(area) area.scrollTop = area.scrollHeight;
 
