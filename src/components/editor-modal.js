@@ -3,6 +3,7 @@
 
 
 
+
 import { store } from '../store.js';
 import { github } from '../services/github.js';
 import { BLOCKS, parseArborFile, visualHTMLToMarkdown, markdownToVisualHTML, reconstructArborFile } from '../utils/editor-engine.js';
@@ -272,7 +273,7 @@ class ArborEditor extends HTMLElement {
                 <!-- Visual Editor Area (Paged Document Style) -->
                 <div class="flex-1 relative bg-slate-200 dark:bg-slate-950 overflow-y-auto custom-scrollbar p-0 flex justify-center">
                      <div id="visual-editor" 
-                          class="w-full max-w-4xl bg-white dark:bg-slate-900 shadow-xl min-h-full my-4 md:my-8 p-8 md:p-16 pb-[50vh] prose prose-slate dark:prose-invert max-w-none focus:outline-none rounded-none md:rounded-lg" 
+                          class="w-full max-w-4xl bg-white dark:bg-slate-900 shadow-xl min-h-[200vh] my-4 md:my-8 p-8 md:p-16 pb-[80vh] prose prose-slate dark:prose-invert max-w-none focus:outline-none rounded-none md:rounded-lg" 
                           contenteditable="${!isMeta}" 
                           spellcheck="false">
                           ${bodyContent}

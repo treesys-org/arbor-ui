@@ -10,6 +10,8 @@
 
 
 
+
+
 import { store } from '../store.js';
 import { parseArborFile, markdownToVisualHTML } from '../utils/editor-engine.js';
 import { pdfGenerator } from '../services/pdf-generator.js';
@@ -131,7 +133,8 @@ class ArborModals extends HTMLElement {
             modalType: modal.type || modal,
             modalNodeId: modal.node ? modal.node.id : null,
             state: this.state,
-            lang: store.value.lang
+            lang: store.value.lang,
+            ghUser: !!store.value.githubUser // Important: Forces re-render on login state change
         });
 
         if (currentKey === this.lastRenderKey) return;
@@ -180,7 +183,7 @@ class ArborModals extends HTMLElement {
         // Standard Modal Wrapper
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
-            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl ${sizeClass} w-full relative overflow-hidden flex flex-col max-h-[95vh] border border-slate-200 dark:border-slate-800 cursor-auto">
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl ${sizeClass} w-full relative overflow-hidden flex flex-col max-h-[95vh] border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
                 ${type !== 'contributor' ? `<button class="btn-close absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 z-20 transition-colors">✕</button>` : ''}
                 ${content}
             </div>
@@ -739,27 +742,27 @@ class ArborModals extends HTMLElement {
     renderProfile(ui) { 
         const g = store.value.gamification;
         return `<div class="p-8 text-center">
-            <div class="w-20 h-20 bg-slate-100 rounded-full mx-auto flex items-center justify-center text-4xl mb-4">👤</div>
-            <h2 class="text-2xl font-black mb-1">${ui.profileTitle}</h2>
-            <p class="text-slate-500 mb-6">${g.xp} ${ui.xpUnit} • Racha: ${g.streak} días</p>
+            <div class="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full mx-auto flex items-center justify-center text-4xl mb-4">👤</div>
+            <h2 class="text-2xl font-black mb-1 dark:text-white">${ui.profileTitle}</h2>
+            <p class="text-slate-500 dark:text-slate-400 mb-6">${g.xp} ${ui.xpUnit} • Racha: ${g.streak} días</p>
             
             <div class="grid grid-cols-2 gap-4 mb-6">
-                <div class="bg-orange-50 p-4 rounded-xl border border-orange-100">
+                <div class="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-xl border border-orange-100 dark:border-orange-800/30">
                     <div class="text-2xl mb-1">🍎</div>
-                    <div class="font-bold text-orange-800">${g.fruits.length} Frutos</div>
+                    <div class="font-bold text-orange-800 dark:text-orange-400">${g.fruits.length} Frutos</div>
                 </div>
-                 <div class="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                 <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800/30">
                     <div class="text-2xl mb-1">💧</div>
-                    <div class="font-bold text-blue-800">${g.streak} Días</div>
+                    <div class="font-bold text-blue-800 dark:text-blue-400">${g.streak} Días</div>
                 </div>
             </div>
             
-            <div class="text-left bg-slate-50 p-4 rounded-xl mb-4">
+            <div class="text-left bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl mb-4 border border-slate-100 dark:border-slate-800">
                 <h3 class="font-bold text-xs uppercase text-slate-400 mb-2">Sync Code</h3>
-                <textarea class="w-full p-2 text-[10px] font-mono border rounded h-20" readonly onclick="this.select()">${store.getExportData()}</textarea>
+                <textarea class="w-full p-2 text-[10px] font-mono border border-slate-200 dark:border-slate-700 rounded h-20 bg-white dark:bg-slate-900 dark:text-slate-300 focus:ring-2 focus:ring-sky-500 outline-none" readonly onclick="this.select()">${store.getExportData()}</textarea>
                 <div class="flex gap-2 mt-2">
-                     <button class="flex-1 bg-white border border-slate-200 py-1 rounded text-xs font-bold" onclick="store.downloadProgressFile()">Descargar Archivo</button>
-                     <button class="flex-1 bg-slate-800 text-white py-1 rounded text-xs font-bold" onclick="const code=prompt('Pega el código:'); if(code) store.importProgress(code);">Importar</button>
+                     <button class="flex-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 dark:text-white py-2 rounded text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors" onclick="store.downloadProgressFile()">Descargar Archivo</button>
+                     <button class="flex-1 bg-slate-800 dark:bg-slate-600 text-white py-2 rounded text-xs font-bold hover:bg-slate-700 dark:hover:bg-slate-500 transition-colors" onclick="const code=prompt('Pega el código:'); if(code) store.importProgress(code);">Importar</button>
                 </div>
             </div>
         </div>`; 
@@ -845,7 +848,7 @@ class ArborModals extends HTMLElement {
                     ${ui.certDate}
                 </div>
                 <div>
-                    <div class="border-b border-slate-300 dark:border-slate-700 pb-1 mb-1 w-32 mx-auto font-black text-slate-800 dark:text-slate-300">Arbor University</div>
+                    <div class="border-b border-slate-300 dark:border-slate-700 pb-1 mb-1 w-32 mx-auto font-black text-slate-800 dark:text-slate-300">Arbor Open University</div>
                     ${ui.certSign}
                 </div>
              </div>
