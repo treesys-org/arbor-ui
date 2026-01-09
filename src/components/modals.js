@@ -25,6 +25,9 @@ class ArborModals extends HTMLElement {
     }
 
     connectedCallback() {
+        // Initial check in case store state was set before this component loaded
+        this.checkRender();
+        
         store.addEventListener('state-change', () => {
             this.checkRender();
         });

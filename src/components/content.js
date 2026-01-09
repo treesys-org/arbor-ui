@@ -172,10 +172,31 @@ class ArborContent extends HTMLElement {
     }
 
     skipSection() {
+        // "Read Later" logic: 
+        // 1. Remove the visual tick from the current section (Syllabus)
+        this.visitedSections.delete(this.activeSectionIndex);
+
+        // 2. Ensure the node is NOT marked complete globally
+        if (this.currentNode && store.isCompleted(this.currentNode.id)) {
+            store.markComplete(this.currentNode.id, false);
+        }
+
+        // 3. Update bookmark to reflect incomplete state
+        if (this.currentNode) {
+            store.saveBookmark(
+                this.currentNode.id,
+                this.currentNode.content,
+                this.activeSectionIndex,
+                this.visitedSections
+            );
+        }
+
         const toc = this.getToc();
+        // If not the last section, go to next
         if (this.activeSectionIndex < toc.length - 1) {
             this.scrollToSection(this.activeSectionIndex + 1);
         } else {
+            // Close if it's the last one
             this.handleClose();
         }
     }

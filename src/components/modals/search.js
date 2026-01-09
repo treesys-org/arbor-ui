@@ -68,7 +68,18 @@ class ArborModalSearch extends HTMLElement {
              return `<div class="text-center text-slate-400 py-8 flex flex-col items-center gap-2"><span class="text-2xl opacity-50">🍃</span><span>${ui.noResults}</span></div>`;
          }
          
-         return this.state.results.map(res => {
+         // Priority Logic: Modules (branch) > Exams > Lessons (leaf)
+         const priority = { 'branch': 0, 'root': 0, 'exam': 1, 'leaf': 2 };
+
+         const sortedResults = [...this.state.results].sort((a, b) => {
+             const pA = priority[a.type] !== undefined ? priority[a.type] : 99;
+             const pB = priority[b.type] !== undefined ? priority[b.type] : 99;
+             
+             if (pA !== pB) return pA - pB;
+             return a.name.localeCompare(b.name);
+         });
+         
+         return sortedResults.map(res => {
             let tag = ui.tagModule || 'MODULE';
             let tagClass = 'border-blue-500 text-blue-400 bg-blue-500/10';
             
