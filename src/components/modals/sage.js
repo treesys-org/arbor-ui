@@ -13,7 +13,7 @@ class ArborSage extends HTMLElement {
         this.ollamaModels = [];
         this.pullStatus = '';
         this.webllmStatus = '';
-        this.hasTriedLoadingModels = false; // Prevents infinite loops
+        this.hasTriedLoadingModels = false; 
         this.lastRenderKey = null;
     }
     
@@ -32,21 +32,16 @@ class ArborSage extends HTMLElement {
         const isSageReq = modal && (modal === 'sage' || modal.type === 'sage');
 
         if (isSageReq) {
-            // Case 1: Opening for the first time
             if (!this.isVisible) {
                 this.isVisible = true;
                 this.mode = modal.mode || (aiService.isSmartMode() ? 'chat' : 'menu');
                 this.settingsTab = this.determineInitialTab();
             } 
-            // Case 2: Already open, but checking if mode switch requested
             else if (modal.mode && modal.mode !== this.mode) {
                 this.mode = modal.mode;
             }
-            
-            // ALWAYS Render if open (This fixes the issue of not seeing the response)
             this.render();
         } else {
-            // Case 3: Store says close, but we are open
             if (this.isVisible) {
                 this.close();
             }
@@ -77,7 +72,6 @@ class ArborSage extends HTMLElement {
         } else if (this.settingsTab === 'webllm') {
             const model = this.querySelector('#inp-webllm-model').value;
             aiService.setConfig({ provider: 'webllm', webllmModel: model });
-            // Only finish config if engine is loaded, otherwise keep on setting screen or let load
             if (aiService.webllmEngine) {
                  this.finishConfig();
             } else {
@@ -141,7 +135,6 @@ class ArborSage extends HTMLElement {
 
         this.pullStatus = success ? 'Done!' : 'Error.';
         await this.loadOllamaModels();
-        // Update input to the downloaded model
         if(success) {
             aiService.setConfig({ provider: 'ollama', ollamaModel: name });
             this.render();
@@ -184,18 +177,10 @@ class ArborSage extends HTMLElement {
              pullStatus: this.pullStatus,
              webllmStatus: this.webllmStatus,
              aiStatus: ai.status,
-             msgCount: ai.messages.length,
-             lastMsgLen: ai.messages.length ? ai.messages[ai.messages.length-1].content.length : 0
+             msgCount: ai.messages.length
         });
 
         if (stateKey === this.lastRenderKey) return;
-
-        // Save input state before re-rendering
-        const activeId = document.activeElement?.id;
-        const selectionStart = document.activeElement?.selectionStart;
-        const selectionEnd = document.activeElement?.selectionEnd;
-        const currentVal = document.activeElement?.value;
-
         this.lastRenderKey = stateKey;
 
         const isSmart = aiService.isSmartMode();
@@ -206,20 +191,6 @@ class ArborSage extends HTMLElement {
             this.renderMenu();
         } else {
             this.renderChat(isSmart);
-        }
-
-        // Restore input state
-        if (activeId) {
-             const el = this.querySelector('#' + activeId);
-             if (el) {
-                 el.focus();
-                 // Only restore if it's the main input to prevent loss
-                 if (el.setSelectionRange && selectionStart !== undefined) {
-                     // Restore value first if it's the main input to prevent loss
-                     if (currentVal !== undefined && activeId === 'sage-input') el.value = currentVal;
-                     el.setSelectionRange(selectionStart, selectionEnd || selectionStart);
-                 }
-             }
         }
     }
 
@@ -281,12 +252,9 @@ class ArborSage extends HTMLElement {
         const isOllama = tab === 'ollama';
         const isWebLLM = tab === 'webllm';
 
-        // Render Models List (Only for Ollama)
         let modelsListHtml = '';
         if (isOllama) {
-            // FIX: Prevent infinite loop by checking hasTriedLoadingModels
             if (this.ollamaModels.length === 0 && !this.hasTriedLoadingModels && this.pullStatus === '') {
-                 // Trigger load if empty and haven't tried yet
                  setTimeout(() => this.loadOllamaModels(), 0);
                  modelsListHtml = `<div class="text-center p-4 text-slate-400 text-xs animate-pulse">${ui.sageSearchingModels}</div>`;
             } else if (this.ollamaModels.length === 0) {
@@ -299,7 +267,6 @@ class ArborSage extends HTMLElement {
             } else {
                  modelsListHtml = this.ollamaModels.map(m => {
                      const isSelected = aiService.config.ollamaModel === m.name;
-                     // Safe size calculation
                      const sizeGB = m.size ? Math.round(m.size / 1024 / 1024 / 1024 * 10) / 10 : 0;
                      return `
                      <div class="flex items-center justify-between p-2 rounded-lg border ${isSelected ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20' : 'border-slate-100 dark:border-slate-700'}">
@@ -312,7 +279,6 @@ class ArborSage extends HTMLElement {
             }
         }
 
-        // Updated WebLLM Models (Prioritizing small/compatible ones)
         const webLlmOptions = [
             { id: "SmolLM2-135M-Instruct-q0f16-MLC", name: "SmolLM2 135M (Fast - 100MB)" },
             { id: "SmolLM2-360M-Instruct-q0f16-MLC", name: "SmolLM2 360M (Balanced)" },
@@ -348,7 +314,6 @@ class ArborSage extends HTMLElement {
                 
                 <div class="p-6 space-y-6 overflow-y-auto custom-scrollbar">
                     
-                    <!-- GEMINI TAB -->
                     ${isGemini ? `
                     <div class="bg-purple-50 dark:bg-purple-900/10 p-4 rounded-xl border border-purple-100 dark:border-purple-800/30 animate-in fade-in">
                         <p class="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase mb-2">${ui.sageApiKeyLabel}</p>
@@ -359,16 +324,12 @@ class ArborSage extends HTMLElement {
                     </div>
                     ` : ''}
 
-                    <!-- OLLAMA TAB -->
                     ${isOllama ? `
                     <div class="bg-orange-50 dark:bg-orange-900/10 p-4 rounded-xl border border-orange-100 dark:border-orange-800/30 animate-in fade-in">
                         <p class="text-xs font-bold text-orange-600 dark:text-orange-400 uppercase mb-2">${ui.sageOllamaLabel}</p>
-                        
-                        <!-- Model Selection -->
                         <input id="inp-ollama-model" type="text" placeholder="llama3" class="w-full text-sm p-3 border-2 border-orange-200 dark:border-orange-800 rounded-xl bg-white dark:bg-slate-900 focus:ring-4 focus:ring-orange-200 outline-none transition-all font-mono text-slate-800 dark:text-white mb-2" value="${aiService.config.ollamaModel}">
                         <p class="text-[10px] text-slate-500 mb-4">${ui.sageOllamaHint}</p>
                         
-                        <!-- Model Manager -->
                         <div class="border-t border-orange-200 dark:border-orange-800 pt-4">
                             <p class="text-xs font-bold text-slate-500 uppercase mb-2">${ui.sageDownloadModel}</p>
                             <div class="flex gap-2 mb-2">
@@ -385,7 +346,6 @@ class ArborSage extends HTMLElement {
                     </div>
                     ` : ''}
 
-                    <!-- WEBLLM TAB -->
                     ${isWebLLM ? `
                     <div class="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-800/30 animate-in fade-in">
                          <div class="flex items-center gap-2 mb-2">
@@ -430,67 +390,93 @@ class ArborSage extends HTMLElement {
         this.querySelector('#tab-gemini').onclick = () => { this.settingsTab = 'gemini'; this.render(); };
         this.querySelector('#tab-ollama').onclick = () => { this.settingsTab = 'ollama'; this.render(); };
         this.querySelector('#tab-webllm').onclick = () => { this.settingsTab = 'webllm'; this.render(); };
-        
         this.querySelector('#btn-save-config').onclick = () => this.saveConfig();
         const btnClear = this.querySelector('#btn-clear-config');
         if(btnClear) btnClear.onclick = () => this.clearConfig();
 
         if (isOllama) {
             this.querySelector('#btn-pull').onclick = () => this.pullModel();
-            
-            // Retry button binding
             const btnRetry = this.querySelector('#btn-retry-models');
             if(btnRetry) btnRetry.onclick = () => this.loadOllamaModels();
-            
             this.querySelectorAll('.btn-delete-model').forEach(b => b.onclick = (e) => this.deleteModel(e.currentTarget.dataset.name));
             this.querySelectorAll('.btn-select-model').forEach(b => {
                  b.onclick = (e) => {
                      this.querySelector('#inp-ollama-model').value = e.currentTarget.dataset.name;
-                     this.saveConfig(); // Auto save when clicking list
+                     this.saveConfig();
                  };
             });
         }
         
         if (isWebLLM) {
             this.querySelector('#btn-load-webllm').onclick = () => this.loadWebLLM();
-            // Allow changing model dropdown to update state immediately if wanted, 
-            // but usually we wait for Load button.
         }
     }
 
     renderChat(isSmart) {
         const ui = store.ui;
-        this.className = "fixed inset-x-0 bottom-0 z-[100] flex flex-col items-end md:bottom-6 md:right-6 md:w-auto pointer-events-none";
-
+        
+        // --- KEY CHANGE: Preserve Structure to prevent Flicker ---
+        // If chat area exists, we only update the inner contents list, not the whole wrapper.
+        const chatArea = this.querySelector('#sage-chat-area');
+        
+        // Calculate static parts
         const aiState = store.value.ai;
         const displayMessages = aiState.messages.length > 0 ? aiState.messages : [{ role: 'assistant', content: "🦉 Hello. Ask me anything." }];
         const displayStatus = aiState.status;
-        
         const isOllama = aiService.config.provider === 'ollama';
         const isWebLLM = aiService.config.provider === 'webllm';
-        const isGemini = aiService.config.provider === 'gemini';
-        
         const isThinking = displayStatus === 'thinking';
-        
-        let headerGradient = 'from-purple-600 to-indigo-600'; // Gemini Default
-        let providerName = 'Gemini Cloud';
         let sendBtnColor = 'bg-purple-600';
+        if (isOllama) sendBtnColor = 'bg-orange-600';
+        else if (isWebLLM) sendBtnColor = 'bg-blue-600';
+
+        // Helper to generate just the messages HTML
+        const getMessagesHTML = () => {
+             return displayMessages.map(m => `
+                <div class="flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 fade-in duration-300">
+                    <div class="max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed shadow-sm relative group text-left
+                        ${m.role === 'user' 
+                            ? (sendBtnColor + ' text-white rounded-br-none') 
+                            : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-bl-none'
+                        }">
+                        ${this.formatMessage(m.content)}
+                    </div>
+                </div>
+             `).join('') + (isThinking ? `
+                <div class="flex justify-start">
+                    <div class="bg-white dark:bg-slate-800 p-3 rounded-2xl rounded-bl-none border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-1.5 w-16 justify-center">
+                        <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
+                        <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay:0.1s"></div>
+                        <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay:0.2s"></div>
+                    </div>
+                </div>` : '');
+        };
+
+        // If structure exists, just update chat list
+        if (chatArea) {
+            chatArea.innerHTML = getMessagesHTML();
+            chatArea.scrollTop = chatArea.scrollHeight;
+            return;
+        }
+
+        // ... Otherwise Full Render (Initial Open) ...
+        this.className = "fixed inset-x-0 bottom-0 z-[100] flex flex-col items-end md:bottom-6 md:right-6 md:w-auto pointer-events-none";
+        
+        let headerGradient = 'from-purple-600 to-indigo-600';
+        let providerName = 'Gemini Cloud';
         
         if (isOllama) {
             headerGradient = 'from-orange-500 to-red-500';
             providerName = 'Local CPU (Ollama)';
-            sendBtnColor = 'bg-orange-600';
         } else if (isWebLLM) {
             headerGradient = 'from-blue-500 to-cyan-500';
             providerName = 'Browser GPU (WebLLM)';
-            sendBtnColor = 'bg-blue-600';
         }
 
         this.innerHTML = `
             <div id="sage-backdrop" class="md:hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm pointer-events-auto transition-opacity"></div>
             <div class="pointer-events-auto transition-all duration-300 origin-bottom md:origin-bottom-right shadow-2xl md:rounded-2xl w-full md:w-[380px] h-[80dvh] md:h-[600px] bg-white dark:bg-slate-900 flex flex-col border border-slate-200 dark:border-slate-800 animate-in slide-in-from-bottom-10 fade-in rounded-t-2xl">
                 
-                <!-- Header -->
                 <div class="p-4 bg-gradient-to-r ${headerGradient} text-white flex justify-between items-center shadow-md z-10 shrink-0 rounded-t-2xl">
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-xl backdrop-blur-sm shadow-inner">🦉</div>
@@ -509,53 +495,21 @@ class ArborSage extends HTMLElement {
                     </div>
                 </div>
                 
-                <!-- Messages -->
                 <div id="sage-chat-area" class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 dark:bg-slate-950/30 custom-scrollbar scroll-smooth">
-                     ${displayMessages.map(m => `
-                        <div class="flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 fade-in duration-300">
-                            <div class="max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed shadow-sm relative group text-left
-                                ${m.role === 'user' 
-                                    ? (sendBtnColor + ' text-white rounded-br-none') 
-                                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-bl-none'
-                                }">
-                                ${this.formatMessage(m.content)}
-                            </div>
-                        </div>
-                     `).join('')}
-                     
-                     ${isThinking ? `
-                        <div class="flex justify-start">
-                            <div class="bg-white dark:bg-slate-800 p-3 rounded-2xl rounded-bl-none border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-1.5 w-16 justify-center">
-                                <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
-                                <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay:0.1s"></div>
-                                <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay:0.2s"></div>
-                            </div>
-                        </div>
-                     ` : ''}
+                     ${getMessagesHTML()}
                 </div>
 
-                <!-- Quick Actions -->
-                ${!isThinking ? `
                 <div class="px-3 py-2 flex gap-2 overflow-x-auto custom-scrollbar bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0">
                     <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 rounded-lg text-xs font-bold hover:bg-purple-100 transition-colors border border-purple-100 dark:border-purple-800" data-action="summarize">📝 Summarize</button>
                     <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-100 dark:border-blue-800" data-action="explain">🎓 Explain</button>
                     <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-lg text-xs font-bold hover:bg-green-100 transition-colors border border-green-100 dark:border-green-800" data-action="quiz">❓ Quiz</button>
                 </div>
-                ` : ''}
 
-                <!-- Input -->
                 <form id="sage-form" class="p-3 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex gap-2 shrink-0 pb-[calc(0.75rem+env(safe-area-inset-bottom,20px))] md:pb-3">
-                    <input id="sage-input" type="text" ${isThinking ? 'disabled' : ''} class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 ${isOllama ? 'focus:ring-orange-500' : (isWebLLM ? 'focus:ring-blue-500' : 'focus:ring-purple-500')} dark:text-white placeholder:text-slate-400 disabled:opacity-50" placeholder="${ui.sageInputPlaceholder}" autocomplete="off">
-                    
-                    ${isThinking ? `
-                    <button type="button" id="btn-stop" class="w-11 h-11 bg-red-500 text-white rounded-xl hover:opacity-90 transition-all flex items-center justify-center shadow-lg active:scale-95 animate-pulse">
-                        <span class="w-4 h-4 bg-white rounded-sm"></span>
-                    </button>
-                    ` : `
+                    <input id="sage-input" type="text" class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 ${isOllama ? 'focus:ring-orange-500' : (isWebLLM ? 'focus:ring-blue-500' : 'focus:ring-purple-500')} dark:text-white placeholder:text-slate-400 disabled:opacity-50" placeholder="${ui.sageInputPlaceholder}" autocomplete="off">
                     <button type="submit" class="w-11 h-11 ${sendBtnColor} text-white rounded-xl hover:opacity-90 transition-all flex items-center justify-center shadow-lg active:scale-95">
                         <svg class="w-5 h-5 translate-x-0.5 -translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>
                     </button>
-                    `}
                 </form>
             </div>
         `;
@@ -565,12 +519,7 @@ class ArborSage extends HTMLElement {
             this.mode = 'settings';
             this.render();
         };
-        this.querySelector('#btn-clear').onclick = () => {
-             store.clearSageChat();
-        };
-
-        const area = this.querySelector('#sage-chat-area');
-        if(area) area.scrollTop = area.scrollHeight;
+        this.querySelector('#btn-clear').onclick = () => store.clearSageChat();
 
         const form = this.querySelector('#sage-form');
         form.onsubmit = (e) => {
@@ -582,12 +531,12 @@ class ArborSage extends HTMLElement {
              }
         };
 
-        const btnStop = this.querySelector('#btn-stop');
-        if(btnStop) btnStop.onclick = () => store.abortSage();
-
         this.querySelectorAll('.btn-qa').forEach(btn => {
             btn.onclick = () => this.runQuickAction(btn.dataset.action);
         });
+
+        const area = this.querySelector('#sage-chat-area');
+        if(area) area.scrollTop = area.scrollHeight;
     }
 
     formatMessage(text) {

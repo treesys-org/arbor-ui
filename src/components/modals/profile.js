@@ -1,12 +1,8 @@
-
 import { store } from '../../store.js';
 
+// Emojis for user avatars, restricted to people-like figures.
 const EMOJI_DATA = {
-    "General": ["👤", "🧑‍🏫", "🎓", "🧠", "💡", "✨", "🔥", "🚀", "⭐", "🎯"],
-    "Nature": ["🌳", "🌲", "🌿", "🌱", "🍁", "🌸", "🌻", "🌍", "☀️", "🌙"],
-    "Animals": ["🦉", "🦊", "🦋", "🐢", "🐘", "🦕", "🐝", "🦀", "🐠", "🐳"],
-    "Science": ["🧬", "🔬", "⚗️", "⚛️", "🔭", "💊", "🦠", "🧪", "🧫", "🩺"],
-    "Objects": ["📚", "📝", "💻", "🧭", "🔑", "💎", "⚙️", "🔔", "⏳", "🎨"]
+    "Avatars": ["👤", "👩", "👨", "🧑", "👧", "👦", "👵", "👴", "👮", "🕵️", "👷", "👸", "🧙", "🧝", "🧛", "🧟", "🧜", "🧚", "👼", "🧞"]
 };
 
 class ArborModalProfile extends HTMLElement {
@@ -14,17 +10,22 @@ class ArborModalProfile extends HTMLElement {
         super();
         this.state = {
             showEmojiPicker: false,
-            showRestoreInput: false
+            showRestoreInput: false,
+            // Initialize temp state from store to allow immediate UI feedback
+            tempAvatar: store.value.gamification.avatar || '👤',
+            tempUsername: store.value.gamification.username || ''
         };
     }
 
     connectedCallback() {
+        // Initial Full Render
         this.render();
-        // Close picker when clicking outside
+        
+        // Listeners for closing picker when clicking outside
         this.pickerListener = (e) => {
              if (this.state.showEmojiPicker && !e.target.closest('#emoji-picker') && !e.target.closest('#btn-avatar-picker')) {
                  this.state.showEmojiPicker = false;
-                 this.render();
+                 this.updateView();
              }
         };
         document.addEventListener('click', this.pickerListener);
@@ -38,12 +39,30 @@ class ArborModalProfile extends HTMLElement {
         store.setModal(null);
     }
 
+    // Only updates dynamic parts of the UI to prevent full re-render flickering
+    updateView() {
+        const picker = this.querySelector('#emoji-picker');
+        if (picker) {
+             if (this.state.showEmojiPicker) picker.classList.remove('hidden');
+             else picker.classList.add('hidden');
+        }
+
+        const restoreArea = this.querySelector('#restore-area');
+        if (restoreArea) {
+             if (this.state.showRestoreInput) restoreArea.classList.remove('hidden');
+             else restoreArea.classList.add('hidden');
+        }
+
+        const avatarDisplay = this.querySelector('#avatar-display');
+        if (avatarDisplay) avatarDisplay.textContent = this.state.tempAvatar;
+    }
+
     render() {
         const ui = store.ui;
         const g = store.value.gamification;
         const collectedItems = g.seeds || g.fruits || [];
         
-        // Modal Wrapper
+        // We render the HTML structure once. Dynamic updates happen in updateView.
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
             <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full relative overflow-hidden flex flex-col max-h-[95vh] border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
@@ -51,26 +70,29 @@ class ArborModalProfile extends HTMLElement {
                 
                 <div class="p-8 text-center h-full overflow-y-auto custom-scrollbar relative">
                     <div class="relative inline-block">
-                        <button id="btn-avatar-picker" class="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full mx-auto flex items-center justify-center text-4xl mb-2 relative group transition-transform hover:scale-105">
-                            <span id="avatar-display">${g.avatar || '👤'}</span>
-                            <div class="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center text-white text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity">
-                                EDIT
+                        <button id="btn-avatar-picker" class="w-24 h-24 bg-slate-100 dark:bg-slate-800 rounded-full mx-auto flex items-center justify-center text-5xl mb-4 relative group transition-transform hover:scale-105 shadow-inner border border-slate-200 dark:border-slate-700">
+                            <span id="avatar-display">${this.state.tempAvatar}</span>
+                            <div class="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center text-white text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-[2px]">
+                                ✏️
                             </div>
                         </button>
-                        <div id="emoji-picker" class="${this.state.showEmojiPicker ? 'block' : 'hidden'} absolute top-full mt-2 left-1/2 -translate-x-1/2 w-72 bg-white dark:bg-slate-800 shadow-2xl rounded-xl border border-slate-200 dark:border-slate-700 z-50 p-2 h-64 overflow-y-auto custom-scrollbar">
+                        <!-- Picker -->
+                        <div id="emoji-picker" class="hidden absolute top-full mt-2 left-1/2 -translate-x-1/2 w-72 bg-white dark:bg-slate-800 shadow-2xl rounded-xl border border-slate-200 dark:border-slate-700 z-50 p-3 h-64 overflow-y-auto custom-scrollbar animate-in zoom-in-95 duration-200">
                             ${Object.entries(EMOJI_DATA).map(([cat, emojis]) => `
-                                <div class="text-[10px] font-bold text-slate-400 mt-2 mb-1 px-1 uppercase">${cat}</div>
-                                <div class="grid grid-cols-6 gap-1">
-                                    ${emojis.map(e => `<button class="emoji-btn hover:bg-slate-100 dark:hover:bg-slate-700 rounded p-1 text-lg">${e}</button>`).join('')}
+                                <div class="text-[10px] font-bold text-slate-400 mt-2 mb-1 px-1 uppercase tracking-wider text-left">${cat}</div>
+                                <div class="grid grid-cols-5 gap-1">
+                                    ${emojis.map(e => `<button class="emoji-btn hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg p-2 text-xl transition-colors">${e}</button>`).join('')}
                                 </div>
                             `).join('')}
                         </div>
                     </div>
                     
-                    <input id="inp-username" value="${g.username || ''}" placeholder="${ui.usernamePlaceholder}" class="text-2xl font-black mb-1 dark:text-white bg-transparent text-center w-full max-w-xs mx-auto outline-none focus:ring-2 focus:ring-sky-500 rounded-lg p-1 transition-all">
-                    <p class="text-slate-500 dark:text-slate-400 mb-6">${g.xp} ${ui.xpUnit} • ${ui.streak}: ${g.streak} ${ui.days}</p>
+                    <input id="inp-username" value="${this.state.tempUsername}" placeholder="${ui.usernamePlaceholder}" class="text-2xl font-black mb-1 dark:text-white bg-transparent text-center w-full max-w-xs mx-auto outline-none focus:ring-2 focus:ring-sky-500 rounded-lg p-1 transition-all border-b border-transparent focus:border-sky-500 focus:bg-slate-50 dark:focus:bg-slate-800/50">
+                    <p class="text-slate-500 dark:text-slate-400 mb-6 font-medium">${g.xp} <span class="text-xs uppercase">${ui.xpUnit}</span> • ${ui.streak}: ${g.streak} ${ui.days}</p>
 
-                    <button id="btn-save-profile" class="mb-8 w-full max-w-xs mx-auto py-3 bg-sky-600 text-white font-bold rounded-xl shadow-lg hover:bg-sky-500 active:scale-95 transition-transform">${ui.saveProfile}</button>
+                    <button id="btn-save-profile" class="mb-8 w-full max-w-xs mx-auto py-3 bg-sky-600 text-white font-bold rounded-xl shadow-lg hover:bg-sky-500 active:scale-95 transition-transform flex items-center justify-center gap-2">
+                        <span>💾</span> ${ui.saveProfile}
+                    </button>
                     
                     <div class="grid grid-cols-2 gap-4 mb-8">
                         <div class="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-xl border border-orange-100 dark:border-orange-800/30">
@@ -91,7 +113,7 @@ class ArborModalProfile extends HTMLElement {
                             <span>🎒</span> ${ui.backpackTitle || 'BACKPACK'}
                         </h3>
                         <p class="text-sm text-slate-500 dark:text-slate-400 mb-6 relative z-10 leading-relaxed">
-                            ${ui.backpackDesc || 'Your progress lives in this browser. Download a file to back it up or move it to another device.'}
+                            ${ui.backpackDesc || 'Your progress lives in this browser.'}
                         </p>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3 relative z-10">
@@ -105,11 +127,11 @@ class ArborModalProfile extends HTMLElement {
                         </div>
 
                         <!-- Hidden Restore Input -->
-                        <div id="restore-area" class="${this.state.showRestoreInput ? 'block' : 'hidden'} mt-4 animate-in slide-in-from-top-2 pt-4 border-t border-slate-200 dark:border-slate-700">
+                        <div id="restore-area" class="hidden mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
                             <input type="file" id="file-importer" class="hidden" accept=".json,application/json">
                             <button id="btn-select-file" class="w-full flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 hover:border-sky-500 hover:text-sky-400 transition-colors">
                                 <span>📂</span>
-                                <span>${ui.selectFilePrompt || 'Click to select backup file'}</span>
+                                <span>${ui.selectFilePrompt || 'Select file...'}</span>
                             </button>
                         </div>
                     </div>
@@ -118,10 +140,10 @@ class ArborModalProfile extends HTMLElement {
                     <div class="text-left">
                         <h3 class="font-bold text-xs uppercase text-slate-400 mb-4 tracking-widest">${ui.gardenTitle || 'My Seed Collection'}</h3>
                         ${collectedItems.length === 0 
-                            ? `<div class="p-8 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl text-center text-slate-400 text-sm">${ui.gardenEmpty}</div>`
-                            : `<div class="grid grid-cols-5 sm:grid-cols-6 gap-2">
+                            ? `<div class="p-8 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl text-center text-slate-400 text-sm italic">${ui.gardenEmpty}</div>`
+                            : `<div class="grid grid-cols-5 sm:grid-cols-6 gap-3">
                                 ${collectedItems.map(s => `
-                                    <div class="aspect-square bg-white dark:bg-slate-800 rounded-lg flex items-center justify-center text-2xl shadow-sm border border-slate-100 dark:border-slate-700" title="${s.id}">
+                                    <div class="aspect-square bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center text-2xl shadow-sm border border-slate-100 dark:border-slate-700 hover:scale-110 transition-transform cursor-help" title="${s.id}">
                                         ${s.icon}
                                     </div>
                                 `).join('')}
@@ -134,47 +156,54 @@ class ArborModalProfile extends HTMLElement {
         
         this.bindEvents();
     }
-
+    
     bindEvents() {
         this.querySelector('.btn-close').onclick = () => this.close();
         
+        // Avatar Picker Toggle
         this.querySelector('#btn-avatar-picker').onclick = (e) => {
             e.stopPropagation();
             this.state.showEmojiPicker = !this.state.showEmojiPicker;
-            this.render();
+            this.updateView();
         };
 
+        // Emoji Selection
         this.querySelectorAll('.emoji-btn').forEach(btn => {
             btn.onclick = (e) => {
                 e.stopPropagation();
-                const avatarDisplay = this.querySelector('#avatar-display');
-                if (avatarDisplay) avatarDisplay.textContent = e.currentTarget.textContent;
+                this.state.tempAvatar = e.currentTarget.textContent;
                 this.state.showEmojiPicker = false;
-                this.render();
+                this.updateView();
             };
         });
+        
+        // Username Input binding
+        const inpUsername = this.querySelector('#inp-username');
+        if (inpUsername) {
+            inpUsername.oninput = (e) => {
+                this.state.tempUsername = e.target.value;
+            };
+        }
 
+        // Save
         const btnSave = this.querySelector('#btn-save-profile');
         if (btnSave) {
             btnSave.onclick = () => {
-                const username = this.querySelector('#inp-username').value.trim();
-                const avatar = this.querySelector('#avatar-display').textContent;
+                const username = this.state.tempUsername.trim();
+                const avatar = this.state.tempAvatar;
                 store.updateUserProfile(username, avatar);
             };
         }
 
+        // ... Export/Import bindings (standard) ...
         const btnExport = this.querySelector('#btn-export-progress');
-        if (btnExport) {
-            btnExport.onclick = () => {
-                store.downloadProgressFile();
-            };
-        }
+        if (btnExport) btnExport.onclick = () => store.downloadProgressFile();
 
         const btnShowRestore = this.querySelector('#btn-show-restore');
         if (btnShowRestore) {
             btnShowRestore.onclick = () => {
                 this.state.showRestoreInput = !this.state.showRestoreInput;
-                this.render();
+                this.updateView();
             };
         }
 
@@ -185,18 +214,13 @@ class ArborModalProfile extends HTMLElement {
             fileInput.onchange = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-
                 const reader = new FileReader();
                 reader.onload = (event) => {
-                    const fileContent = event.target.result;
-                    if (fileContent) {
-                        const success = store.importProgress(fileContent);
-                        if (success) {
-                            alert(store.ui.importSuccess);
-                            this.close();
-                        } else {
-                            alert(store.ui.importError);
-                        }
+                    if (store.importProgress(event.target.result)) {
+                        alert(store.ui.importSuccess);
+                        this.close();
+                    } else {
+                        alert(store.ui.importError);
                     }
                 };
                 reader.readAsText(file);

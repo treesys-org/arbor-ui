@@ -74,6 +74,22 @@ class ArborModalCertificates extends HTMLElement {
             </div>`;
         }
 
+        // --- KEY CHANGE: Preserve Structure to prevent Flicker ---
+        const container = this.querySelector('#certs-list-container');
+        const toggleBtn = this.querySelector('#btn-toggle-certs');
+
+        if (container && toggleBtn) {
+            container.innerHTML = listHtml;
+            // Update button text/class
+            toggleBtn.textContent = toggleBtnText;
+            toggleBtn.className = `px-4 py-2 rounded-xl ${toggleBtnClass} font-bold text-xs whitespace-nowrap transition-colors shadow-sm`;
+            // Rebind dynamic buttons
+            this.querySelectorAll('.btn-view-cert').forEach(b => {
+                b.onclick = (e) => store.setModal({ type: 'certificate', moduleId: e.currentTarget.dataset.id });
+            });
+            return;
+        }
+
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
             <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-3xl w-full relative overflow-hidden flex flex-col max-h-[85vh] border border-slate-200 dark:border-slate-800 cursor-auto">
@@ -99,7 +115,7 @@ class ArborModalCertificates extends HTMLElement {
                     </div>
                 </div>
                 
-                <div class="p-6 flex-1 overflow-y-auto">
+                <div id="certs-list-container" class="p-6 flex-1 overflow-y-auto">
                     ${listHtml}
                 </div>
             </div>
