@@ -277,21 +277,27 @@ class ArborGraph extends HTMLElement {
             if (d.y > maxY) maxY = d.y;
         });
 
-        // --- COUPLED EXTENT LOGIC (FIXED: Safe Padding + Anti-Teleport) ---
-        // Instead of strict snapping, we calculate a safe extent that includes
-        // the new tree bounds AND the current viewport position.
-        // This prevents the user from being teleported if they are looking "empty space"
-        // that became empty due to a node collapse.
+        // --- COUPLED EXTENT LOGIC (FIXED: Adaptive Padding) ---
+        // Desktop: 30% padding (0.3).
+        // Mobile: Tight fit (almost 0% + fixed buffer) to prevent getting lost.
         
-        const paddingX = Math.max(500, this.width * 0.5);
-        const paddingY = Math.max(500, this.height * 0.5);
+        const widthPaddingRatio = isMobile ? 0.05 : 0.3;
+        const heightPaddingRatio = isMobile ? 0.05 : 0.3; 
+
+        // Use a minimum pixel buffer (especially important for mobile to cover node radius)
+        const minBuffer = 50; 
+
+        const paddingX = Math.max(minBuffer, this.width * widthPaddingRatio);
+        const paddingY = Math.max(minBuffer, this.height * heightPaddingRatio);
         
         let extentMinX = minX - paddingX;
         let extentMaxX = maxX + paddingX;
         let extentMinY = minY - paddingY;
         let extentMaxY = maxY + paddingY;
 
+        // Anti-Teleport Logic:
         // Get Current Viewport in World Coordinates to prevent snapping
+        // if the tree shrinks while the user is looking at a specific spot.
         if (this.svg) {
             const t = d3.zoomTransform(this.svg.node());
             // Visible World Bounds
