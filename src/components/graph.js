@@ -277,23 +277,45 @@ class ArborGraph extends HTMLElement {
             if (d.y > maxY) maxY = d.y;
         });
 
-        // --- COUPLED EXTENT LOGIC (FIXED: Safe Padding) ---
-        // We use a generous padding of ~1 screen width/height (or 80-100%).
-        // This prevents the user from scrolling "infinitely" away (getting lost),
-        // but avoids the "teleportation" snap that happens if the padding is too tight (0.2).
-        // 500px is the minimum safe buffer.
-        const paddingX = Math.max(500, this.width * 1.0);
-        const paddingY = Math.max(500, this.height * 1.0);
+        // --- COUPLED EXTENT LOGIC (FIXED: Safe Padding + Anti-Teleport) ---
+        // Instead of strict snapping, we calculate a safe extent that includes
+        // the new tree bounds AND the current viewport position.
+        // This prevents the user from being teleported if they are looking "empty space"
+        // that became empty due to a node collapse.
         
-        // We use a safe fallback if minX/maxX are weird (e.g. single node)
-        if (!isFinite(minX)) minX = 0;
-        if (!isFinite(maxX)) maxX = this.width;
-        if (!isFinite(minY)) minY = 0;
-        if (!isFinite(maxY)) maxY = this.height;
+        const paddingX = Math.max(500, this.width * 0.5);
+        const paddingY = Math.max(500, this.height * 0.5);
+        
+        let extentMinX = minX - paddingX;
+        let extentMaxX = maxX + paddingX;
+        let extentMinY = minY - paddingY;
+        let extentMaxY = maxY + paddingY;
+
+        // Get Current Viewport in World Coordinates to prevent snapping
+        if (this.svg) {
+            const t = d3.zoomTransform(this.svg.node());
+            // Visible World Bounds
+            const vx0 = -t.x / t.k;
+            const vy0 = -t.y / t.k;
+            const vx1 = (this.width - t.x) / t.k;
+            const vy1 = (this.height - t.y) / t.k;
+
+            // Expand extent to include current view if necessary
+            if (vx0 < extentMinX) extentMinX = vx0;
+            if (vy0 < extentMinY) extentMinY = vy0;
+            if (vx1 > extentMaxX) extentMaxX = vx1;
+            if (vy1 > extentMaxY) extentMaxY = vy1;
+        }
+
+        // Safety fallback for empty trees
+        if (!isFinite(extentMinX)) extentMinX = -5000;
+        if (!isFinite(extentMaxX)) extentMaxX = 5000;
+        if (!isFinite(extentMinY)) extentMinY = -5000;
+        if (!isFinite(extentMaxY)) extentMaxY = 5000;
 
         this.zoom.translateExtent([
-            [minX - paddingX, minY - paddingY], 
-            [maxX + paddingX, maxY + paddingY]
+            [extentMinX, extentMinY], 
+            [extentMaxX, extentMaxY]
         ]);
 
         const nodes = root.descendants();
