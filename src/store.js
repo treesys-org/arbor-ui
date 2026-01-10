@@ -381,11 +381,15 @@ class Store extends EventTarget {
             if (node.type === 'leaf' || node.type === 'exam') {
                 this.update({ previewNode: node, selectedNode: null });
             } else {
+                // IMPORTANT: Clear preview immediately when interacting with a branch
+                // This prevents the Modal system from prioritizing a stale preview over the "Empty Module" modal
+                this.update({ selectedNode: null, previewNode: null });
+
                 if (!node.expanded) {
                     if (node.hasUnloadedChildren) await this.loadNodeChildren(node);
                     
-                    // Trigger Modal if the node is empty (covers both fresh load and cached state)
-                    if (node.children && node.children.length === 0) {
+                    // Trigger Modal if the node is empty (Robust check for undefined children)
+                    if (!node.children || node.children.length === 0) {
                         this.setModal({ type: 'emptyModule', node: node });
                     }
 
@@ -393,7 +397,6 @@ class Store extends EventTarget {
                 } else {
                     this.collapseRecursively(node);
                 }
-                this.update({ selectedNode: null, previewNode: null });
             }
             this.dispatchEvent(new CustomEvent('graph-update')); 
 
