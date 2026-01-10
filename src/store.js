@@ -1,4 +1,5 @@
 
+
 import { AVAILABLE_LANGUAGES } from './i18n.js';
 import { github } from './services/github.js';
 import { aiService } from './services/ai.js';
@@ -155,9 +156,22 @@ class Store extends EventTarget {
     
     async setLanguage(lang) { 
         if(this.state.lang !== lang) {
-            this.update({ lang, searchCache: {} });
-            await this.loadLanguage(lang); 
-            this.loadData(this.state.activeSource); 
+            // IMMEDIATE VISUAL FEEDBACK: Start loading spinner now
+            this.update({ loading: true });
+            
+            try {
+                // 1. Fetch new strings
+                await this.loadLanguage(lang); 
+                
+                // 2. Update state to new lang code
+                this.update({ lang, searchCache: {} });
+                
+                // 3. Reload Graph Data (This will eventually set loading: false when done)
+                await this.loadData(this.state.activeSource); 
+            } catch (e) {
+                console.error("Set language failed", e);
+                this.update({ loading: false, error: "Failed to switch language." });
+            }
         }
     }
     
