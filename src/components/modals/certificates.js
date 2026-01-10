@@ -1,4 +1,5 @@
 
+
 import { store } from '../../store.js';
 
 class ArborModalCertificates extends HTMLElement {
@@ -20,8 +21,9 @@ class ArborModalCertificates extends HTMLElement {
 
     render() {
         const ui = store.ui;
-        // Filter by Exam Type (isCertifiable)
-        const allCertifiable = store.getModulesStatus().filter(m => m.isCertifiable);
+        
+        // Use new method to get all certificates, even unloaded ones
+        const allCertifiable = store.getAvailableCertificates();
         
         const query = this.state.searchQuery.toLowerCase();
         let filtered = allCertifiable.filter(m => m.name.toLowerCase().includes(query));
@@ -29,7 +31,7 @@ class ArborModalCertificates extends HTMLElement {
         const showAll = this.state.showAll;
         const visibleModules = showAll ? filtered : filtered.filter(m => m.isComplete);
         
-        const toggleBtnText = showAll ? ui.showEarned : ui.showAll;
+        const toggleBtnText = showAll ? (ui.showEarned || "My Achievements") : (ui.showAll || "Show All");
         const toggleBtnClass = showAll
             ? 'bg-yellow-500 hover:bg-yellow-600 text-white shadow-yellow-500/20' 
             : 'bg-slate-800 dark:bg-slate-700 text-white hover:bg-slate-700 dark:hover:bg-slate-600';
@@ -39,7 +41,7 @@ class ArborModalCertificates extends HTMLElement {
             listHtml = `
             <div class="flex flex-col items-center justify-center h-64 text-center">
                 <div class="text-6xl mb-4 opacity-30 grayscale">🎓</div>
-                <h2 class="text-xl font-bold mb-2 text-slate-800 dark:text-white">${ui.noResults}</h2>
+                <h2 class="text-xl font-bold mb-2 text-slate-800 dark:text-white">${ui.noResults || "No results"}</h2>
             </div>`;
         } else {
             listHtml = `
@@ -56,15 +58,15 @@ class ArborModalCertificates extends HTMLElement {
                          
                          <div class="flex-1 relative z-10 min-w-0">
                              <h3 class="font-bold ${isLocked ? 'text-slate-500 dark:text-slate-500' : 'text-slate-800 dark:text-white'} leading-tight mb-1 truncate">${m.name}</h3>
-                             <p class="text-[10px] uppercase font-bold ${isLocked ? 'text-slate-400' : 'text-yellow-600 dark:text-yellow-400'} mb-2">${isLocked ? ui.lockedCert : ui.lessonFinished}</p>
+                             <p class="text-[10px] uppercase font-bold ${isLocked ? 'text-slate-400' : 'text-yellow-600 dark:text-yellow-400'} mb-2">${isLocked ? (ui.lockedCert || "Locked") : (ui.lessonFinished || "Completed")}</p>
                              
                              ${isLocked ? `
                              <button class="text-xs font-bold text-slate-400 bg-slate-200 dark:bg-slate-800 px-3 py-1.5 rounded-lg cursor-not-allowed opacity-70">
-                                ${ui.viewCert}
+                                ${ui.viewCert || "View"}
                              </button>
                              ` : `
                              <button class="btn-view-cert text-xs font-bold text-white bg-slate-900 dark:bg-slate-700 hover:bg-blue-600 px-3 py-1.5 rounded-lg transition-colors" data-id="${m.id}">
-                                ${ui.viewCert}
+                                ${ui.viewCert || "View"}
                              </button>
                              `}
                          </div>
@@ -97,7 +99,7 @@ class ArborModalCertificates extends HTMLElement {
                     <div class="flex justify-between items-center">
                         <div class="flex items-center gap-3">
                              <span class="text-3xl">🏆</span>
-                             <h2 class="text-xl font-black text-slate-800 dark:text-white">${ui.navCertificates}</h2>
+                             <h2 class="text-xl font-black text-slate-800 dark:text-white">${ui.navCertificates || "Certificates"}</h2>
                         </div>
                         <button class="btn-close-certs w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 transition-colors">✕</button>
                     </div>
@@ -105,7 +107,7 @@ class ArborModalCertificates extends HTMLElement {
                     <div class="flex gap-3">
                         <div class="relative flex-1">
                             <span class="absolute left-3 top-2.5 text-slate-400 text-sm">🔍</span>
-                            <input id="inp-cert-search" type="text" placeholder="${ui.searchCert}" 
+                            <input id="inp-cert-search" type="text" placeholder="${ui.searchCert || "Search..."}" 
                                 class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-2 pl-9 pr-4 text-sm font-bold text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-sky-500"
                                 value="${this.state.searchQuery}">
                         </div>

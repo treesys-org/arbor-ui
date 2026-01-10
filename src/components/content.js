@@ -334,7 +334,10 @@ class ArborContent extends HTMLElement {
             : toc;
 
         const activeBlocks = this.getActiveBlocks(allBlocks, toc);
-        const progress = Math.round(((this.activeSectionIndex + 1) / toc.length) * 100);
+        
+        // Progress based on actual visited sections (ticks)
+        const progress = toc.length > 0 ? Math.round((this.visitedSections.size / toc.length) * 100) : 0;
+        
         const canEdit = store.value.githubUser && this.currentNode.sourcePath;
 
         const isExam = this.currentNode.type === 'exam';
@@ -365,60 +368,81 @@ class ArborContent extends HTMLElement {
                  <span>←</span>
                </button>`;
 
+        // Helper components for the header
+        const closeBtnHtml = (suffix) => `
+           <button id="btn-close-content-${suffix}" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-red-50 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 transition-colors flex-shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+           </button>`;
+
+        const actionButtonsHtml = `
+           <button id="btn-ask-sage" class="px-3 py-1.5 rounded-lg bg-purple-50 dark:bg-purple-900/30 hover:bg-purple-100 dark:hover:bg-purple-900/50 text-purple-600 dark:text-purple-300 font-bold text-xs flex items-center gap-2 border border-purple-100 dark:border-purple-800 transition-colors whitespace-nowrap">
+              🦉 <span class="hidden sm:inline">${ui.navSage}</span>
+           </button>
+           
+           <button id="btn-propose-change" class="flex w-9 h-9 items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors flex-shrink-0" title="${ui.proposeChange}">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" /></svg>
+           </button>
+
+           <button id="btn-export-pdf" class="flex w-9 h-9 items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors flex-shrink-0" title="${ui.exportTitle}">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M12 9.75l-3 3m0 0l3 3m-3-3h7.5M3 16.5v2.25" /></svg>
+           </button>
+
+           <div class="block w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
+           ${canEdit ? `
+           <button id="btn-edit-content" class="flex px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-xs items-center gap-2 whitespace-nowrap">
+              ✏️ <span class="hidden sm:inline">${ui.editButton}</span>
+           </button>
+           <div class="block w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+           ` : ''}
+        `;
+
         this.className = ""; 
         this.innerHTML = `
         ${!this.isExpanded ? `<div id="backdrop-overlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[55] animate-in fade-in duration-200"></div>` : ''}
 
         <aside class="${containerClasses.join(' ')} transform translate-x-0">
-            <div class="sticky top-0 flex-none px-4 md:px-6 py-4 md:py-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm transition-colors z-20 ${!this.isExpanded ? 'md:rounded-tl-3xl' : ''}">
-                <div class="flex items-center gap-3 md:gap-4 overflow-hidden">
-                    ${toc.length > 1 && !isExam ? `
-                        <button id="btn-toggle-toc" class="flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-colors
-                            ${this.isTocVisible
-                                ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'
-                                : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
-                            <span class="text-sm hidden md:inline">${ui.lessonTopics}</span>
-                        </button>
-                    ` : ''}
-                    <div class="w-px h-8 bg-slate-200 dark:bg-slate-700 hidden md:block"></div>
-                    <div class="flex items-center gap-3 min-w-0">
-                        <span class="text-xl">${this.currentNode.icon || '📄'}</span>
-                        <div class="flex flex-col min-w-0">
-                            <h1 class="text-base md:text-xl font-black text-slate-800 dark:text-slate-100 leading-tight tracking-tight truncate">
-                                ${this.currentNode.name}
-                                ${isExam ? '<span class="ml-2 text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full border border-red-200 align-middle">EXAM</span>' : ''}
-                            </h1>
-                            ${this.currentNode.path ? `<p class="text-[10px] md:text-xs font-medium text-slate-400 dark:text-slate-500 truncate mt-1">${this.currentNode.path.split(' / ').slice(0, -1).join(' / ')}</p>` : ''}
+            <div class="sticky top-0 flex-none px-4 md:px-6 py-4 md:py-5 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm transition-colors z-20 ${!this.isExpanded ? 'md:rounded-tl-3xl' : ''}">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4">
+                    
+                    <!-- Top Section: Title & Mobile Close -->
+                    <div class="flex items-start justify-between w-full md:w-auto min-w-0 md:flex-1">
+                        <div class="flex items-center gap-3 md:gap-4 overflow-hidden pr-2">
+                            ${toc.length > 1 && !isExam ? `
+                                <button id="btn-toggle-toc" class="flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-lg font-bold transition-colors
+                                    ${this.isTocVisible
+                                        ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'
+                                        : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
+                                    <span class="text-sm hidden md:inline">${ui.lessonTopics}</span>
+                                </button>
+                            ` : ''}
+                            <div class="w-px h-8 bg-slate-200 dark:bg-slate-700 hidden md:block"></div>
+                            <div class="flex items-center gap-3 min-w-0">
+                                <span class="text-xl flex-shrink-0">${this.currentNode.icon || '📄'}</span>
+                                <div class="flex flex-col min-w-0">
+                                    <h1 class="text-base md:text-xl font-black text-slate-800 dark:text-slate-100 leading-tight tracking-tight break-words md:truncate line-clamp-2 md:line-clamp-1">
+                                        ${this.currentNode.name}
+                                        ${isExam ? '<span class="ml-2 text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full border border-red-200 align-middle">EXAM</span>' : ''}
+                                    </h1>
+                                    ${this.currentNode.path ? `<p class="text-[10px] md:text-xs font-medium text-slate-400 dark:text-slate-500 truncate mt-1">${this.currentNode.path.split(' / ').slice(0, -1).join(' / ')}</p>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Mobile Close -->
+                        <div class="md:hidden -mr-2 -mt-1">
+                            ${closeBtnHtml('mobile')}
                         </div>
                     </div>
-                </div>
 
-                <div class="flex items-center gap-2 flex-shrink-0">
-                   <button id="btn-ask-sage" class="px-3 py-1.5 rounded-lg bg-purple-50 dark:bg-purple-900/30 hover:bg-purple-100 dark:hover:bg-purple-900/50 text-purple-600 dark:text-purple-300 font-bold text-xs flex items-center gap-2 border border-purple-100 dark:border-purple-800 transition-colors">
-                      🦉 <span class="hidden sm:inline">${ui.navSage}</span>
-                   </button>
-                   
-                   <button id="btn-propose-change" class="flex w-9 h-9 items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors" title="${ui.proposeChange}">
-                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" /></svg>
-                   </button>
-
-                   <button id="btn-export-pdf" class="flex w-9 h-9 items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors" title="${ui.exportTitle}">
-                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M12 9.75l-3 3m0 0l3 3m-3-3h7.5M3 16.5v2.25" /></svg>
-                   </button>
-
-                   <div class="block w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
-
-                   ${canEdit ? `
-                   <button id="btn-edit-content" class="flex px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-xs items-center gap-2">
-                      ✏️ <span class="hidden sm:inline">${ui.editButton}</span>
-                   </button>
-                   <div class="block w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
-                   ` : ''}
-
-                   <button id="btn-close-content" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-red-50 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 transition-colors">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                   </button>
+                    <!-- Bottom Section: Actions & Desktop Close -->
+                    <div class="flex items-center gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0 no-scrollbar w-full md:w-auto justify-start md:justify-end">
+                        ${actionButtonsHtml}
+                        <div class="hidden md:block ml-2">
+                            ${closeBtnHtml('desktop')}
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -531,7 +555,10 @@ class ArborContent extends HTMLElement {
             if(el) el.onclick = fn;
         };
 
-        safeBind('#btn-close-content', () => this.handleClose());
+        // Close handlers for both mobile and desktop instances
+        safeBind('#btn-close-content-mobile', () => this.handleClose());
+        safeBind('#btn-close-content-desktop', () => this.handleClose());
+        
         safeBind('#btn-edit-content', () => store.openEditor(this.currentNode));
         safeBind('#btn-ask-sage', () => { store.setModal({ type: 'sage', mode: 'chat' }); });
         safeBind('#btn-export-pdf', () => { store.setModal({ type: 'export-pdf', node: this.currentNode }); });

@@ -430,6 +430,11 @@ def main():
 
         root_children_nodes.sort(key=lambda x: (int(x.get('order', 999)), x.get('name', '')))
         root_node['children'] = root_children_nodes
+        
+        # Populate Certificates list for global access (avoids lazy loading issues in UI)
+        cert_nodes = [n for n in lang_search_nodes if n.get('isCertifiable')]
+        root_node['certificates'] = cert_nodes
+        
         full_data["languages"][lang_folder.upper()] = root_node
 
     # Write Main Data

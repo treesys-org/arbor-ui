@@ -99,7 +99,24 @@ class Store extends EventTarget {
         }
     }
 
-    get ui() { return this.state.i18nData || {}; }
+    get ui() { 
+        // Robust fallback: If data isn't loaded, return a Proxy.
+        // The Proxy intercepts requests for properties (like ui.appTitle).
+        if (!this.state.i18nData) {
+            return new Proxy({}, {
+                get: (target, prop) => {
+                    // CRITICAL: Arrays like welcomeSteps must return an array/object 
+                    // to prevent "Cannot read property of undefined" crashes in .map()
+                    if (prop === 'welcomeSteps') {
+                        return Array(5).fill({ title: '...', text: '...', icon: '...' });
+                    }
+                    // For text strings, return the key name so developers/users know what is loading/missing
+                    return String(prop);
+                }
+            });
+        }
+        return this.state.i18nData; 
+    }
     
     // Merge main state with sub-store states for backward compatibility
     get value() { 
@@ -798,6 +815,20 @@ class Store extends EventTarget {
     }
 
     isCompleted(id) { return this.userStore.isCompleted(id); }
+
+    getAvailableCertificates() {
+        // If data.json contains a pre-calculated list of certificates (from builder), use it.
+        // This solves the issue of certificates not showing up if modules are lazy-loaded.
+        if (this.state.data && this.state.data.certificates) {
+            return this.state.data.certificates.map(c => {
+                const isComplete = this.userStore.state.completedNodes.has(c.id);
+                return { ...c, isComplete };
+            });
+        }
+        
+        // Fallback to legacy traversal (only finds what is loaded in RAM)
+        return this.getModulesStatus().filter(m => m.isCertifiable);
+    }
 
     getModulesStatus() {
         if (!this.state.data) return [];
