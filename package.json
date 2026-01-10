@@ -21,6 +21,7 @@
     "@google/genai": "latest",
     "@mlc-ai/web-llm": "latest",
     "path": "^0.12.7",
+    "d3": "^7.9.0",
     "@angular/build": "^21.0.0",
     "@angular/cli": "^21.0.0",
     "@angular/compiler-cli": "^21.0.0",

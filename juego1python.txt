@@ -1,0 +1,278 @@
+import json
+import requests
+import re
+import sys
+import time
+import os
+import random
+from datetime import datetime, timedelta
+
+# =========================================================
+#  ARBOR: VAMPIRE PROTOCOL (STRICT MODE)
+# =========================================================
+# ARCHITECTURE V2.5: "The Unforgiving Gatekeeper"
+# =========================================================
+
+# --- CONFIGURATION ---
+OLLAMA_URL = "http://localhost:11434/api/chat"
+MODELO = "llama3.1:latest" 
+
+REPO_BASE = "https://raw.githubusercontent.com/treesys-org/arbor-knowledge/main/data"
+TARGET_MODULE_PATH = "es/01-computacion/02-sistemas-y-arquitectura/01-sistemas-operativos/01-linux/01-fundamentos-para-principiantes"
+GRIMOIRE_FILE = "grimoire.json"
+
+# ---------------------------------------------------------
+
+def clean_text_aggressively(raw_html):
+    """
+    Turns HTML/Markdown into a flat stream of consciousness.
+    Removes headers, links, and noise to help the LLM focus.
+    """
+    if not raw_html: return ""
+    # Remove HTML tags
+    text = re.sub(r'<[^>]+>', ' ', raw_html)
+    # Remove URL artifacts
+    text = re.sub(r'http\S+', '', text)
+    # Remove metadata lines starting with @
+    text = re.sub(r'@\w+:.*', '', text)
+    # Collapse multiple spaces/newlines into single space
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+def get_json(url):
+    try:
+        r = requests.get(url)
+        if r.status_code == 200: return r.json()
+        return None
+    except: return None
+
+# --- MEMORY SYSTEM (THE GRIMOIRE) ---
+def load_grimoire():
+    if os.path.exists(GRIMOIRE_FILE):
+        try:
+            with open(GRIMOIRE_FILE, 'r') as f: return json.load(f)
+        except: return {}
+    return {}
+
+def save_grimoire(data):
+    with open(GRIMOIRE_FILE, 'w') as f: json.dump(data, f, indent=2)
+
+def update_mastery(lesson_path, won):
+    grim = load_grimoire()
+    now = datetime.now().isoformat()
+    if lesson_path not in grim:
+        grim[lesson_path] = { "level": 0, "next_review": now, "history": [] }
+    
+    entry = grim[lesson_path]
+    entry["history"].append("W" if won else "L")
+    
+    if won:
+        entry["level"] += 1
+        days = 0.5 if entry["level"] == 1 else (entry["level"] * 2)
+        entry["next_review"] = (datetime.now() + timedelta(days=days)).isoformat()
+    else:
+        entry["level"] = 0 # Reset on fail
+        entry["next_review"] = now 
+        
+    save_grimoire(grim)
+    return entry["level"]
+
+def pick_encounter(all_levels):
+    grim = load_grimoire()
+    now = datetime.now().isoformat()
+    
+    # 1. Reviews
+    due = [l for l in all_levels if l['contentPath'] in grim and grim[l['contentPath']]['next_review'] <= now]
+    if due: return random.choice(due), "REVIEW"
+
+    # 2. New Content
+    new = [l for l in all_levels if l['contentPath'] not in grim]
+    if new: return new[0], "NEW"
+    
+    return random.choice(all_levels), "GRIND"
+
+# ---------------------------------------------------------
+
+def download_lesson_content(content_path):
+    url = f"{REPO_BASE}/content/{content_path}"
+    data = get_json(url)
+    if data and 'content' in data:
+        return clean_text_aggressively(data['content'])
+    return ""
+
+def call_ollama(messages, json_mode=False):
+    payload = {
+        "model": MODELO,
+        "messages": messages,
+        "stream": False,
+        "options": {
+            "num_ctx": 4096,
+            "temperature": 0.1 if json_mode else 0.8 # Ultra low temp for logic to prevent hallucination
+        }
+    }
+    if json_mode: payload["format"] = "json"
+
+    try:
+        r = requests.post(OLLAMA_URL, json=payload)
+        r.raise_for_status()
+        return r.json()['message']['content']
+    except Exception as e:
+        print(f"\n[AI Brain Error]: {e}")
+        return None
+
+def architect_phase(level_title, level_text):
+    """
+    THE ARCHITECT:
+    Extracts a COMPOUND TRUTH.
+    
+    # DEV NOTE: DO NOT ADD CONTEXT ABOUT THE SPECIFIC TOPIC (e.g. "LINUX") TO THE PROMPTS BELOW.
+    # THE GAME MUST REMAIN AGNOSTIC TO THE REPO CONTENT SO IT WORKS WITH ANY ARBOR KNOWLEDGE TREE.
+    # The AI must infer the topic solely from the input text provided.
+    """
+    print(f"🔮 Architect is distilling knowledge from: '{level_title}'...")
+    
+    # Chain of Thought Prompting
+    prompt = f"""
+    SYSTEM: You are a Cryptic Dungeon Master.
+    INPUT TEXT (ANCIENT SCROLL):
+    "{level_text[:5000]}"
+    
+    TASK:
+    1. Analyze the text to find the most complex technical mechanic described.
+    2. Extract the "Atomic Truth" (The logic of how it works, not just a name).
+    3. Create a dark fantasy riddle where a door is sealed.
+    
+    CRITICAL:
+    - The riddle must require APPLICATION of knowledge, not definition.
+    - Do NOT mention modern tech terms in the riddle (use metaphors: gears, scribes, magic).
+    
+    OUTPUT FORMAT (JSON):
+    {{
+        "thought_process": "Analysis of the hard concept...",
+        "room_description": "A dark, oppressive room...",
+        "guardian_riddle": "The metaphorical question...",
+        "atomic_truth": "The exact technical logic required (e.g. 'Read permission allows viewing but not editing')."
+    }}
+    """
+    
+    resp = call_ollama([{"role": "user", "content": prompt}], json_mode=True)
+    try:
+        data = json.loads(resp)
+        if 'atomic_truth' not in data: data['atomic_truth'] = "knowledge"
+        return data
+    except:
+        return {
+            "room_description": "A misty void.",
+            "guardian_riddle": "Speak the name of this lesson.",
+            "atomic_truth": level_title
+        }
+
+def referee_phase(room_data, player_input):
+    """
+    THE REFEREE:
+    STRICT MODE ENABLED.
+    It rejects any attempt to ask for help or vague answers.
+    """
+    system_prompt = f"""
+    ROLE: Ancient, Unforgiving Gatekeeper. You despise ignorance.
+    
+    THE PUZZLE: "{room_data['guardian_riddle']}"
+    THE SECRET TRUTH: "{room_data['atomic_truth']}"
+    PLAYER INPUT: "{player_input}"
+    
+    TASK: Judge if the player truly understands the Secret Truth.
+    
+    STRICT RULES FOR FAILURE (AUTOMATIC FAIL):
+    1. If player asks for help ("help", "explain", "what is it?", "hint").
+    2. If player admits ignorance ("I don't know", "unsure").
+    3. If player is vague ("it is safe", "it works well").
+    4. If player just repeats words from the riddle.
+    
+    RULE FOR SUCCESS:
+    - Player must describe the MECHANIC or LOGIC correctly.
+    
+    OUTPUT JSON:
+    {{
+        "status": "SOLVED" or "FAIL",
+        "narrative": "If FAIL, mock them for their lack of study. If SOLVED, the gate opens grudgingly."
+    }}
+    """
+    
+    resp = call_ollama([{"role": "user", "content": system_prompt}], json_mode=True)
+    try: return json.loads(resp)
+    except: return {"status": "FAIL", "narrative": "The magic sizzles... nothing happens."}
+
+def main():
+    print("\n🦇 ARBOR: THE VAMPIRE PROTOCOL (Strict Mode)")
+    print("------------------------------------------------")
+    
+    levels = get_curriculum_map(TARGET_MODULE_PATH) 
+    if not levels: 
+        print("❌ Could not map the castle. Check connection.")
+        return
+
+    while True:
+        # 1. Select Level
+        level_meta, enc_type = pick_encounter(levels)
+        
+        # 2. Download & Clean
+        clean_content = download_lesson_content(level_meta['contentPath'])
+        if not clean_content: continue
+
+        # 3. Architect
+        print("\n" + "="*60)
+        if enc_type == "REVIEW": print("👻 (REVIEW) A MEMORY RESURFACES...")
+        else: print(f"🏰 NEW CHAMBER: {level_meta['title']}")
+        
+        room = architect_phase(level_meta['title'], clean_content)
+        
+        print(f"\n👁️  SCENE: {room['room_description']}")
+        print(f"🔒 SEAL: {room['guardian_riddle']}")
+        print("="*60)
+
+        # 4. Gameplay Loop
+        attempts = 0
+        while True:
+            action = input("\n🩸 ACTION > ")
+            if action.lower() in ['exit', 'quit']: sys.exit()
+            if action.lower() in ['skip', 'flee']: 
+                print("💨 You flee into the night.")
+                break
+
+            # Referee checks answer against the "Atomic Truth"
+            outcome = referee_phase(room, action)
+            print(f"🔮 {outcome['narrative']}")
+            
+            if outcome.get('status') == 'SOLVED':
+                print("\n✨ SEAL BROKEN. KNOWLEDGE ABSORBED.")
+                update_mastery(level_meta['contentPath'], True)
+                break
+            
+            attempts += 1
+            if attempts >= 2:
+                # Still cryptic hint, never direct answer
+                print(f"\n💡 The void whispers fragments of logic: ...{room['atomic_truth'][:20]}...")
+                if attempts >= 3:
+                    print("💀 The room consumes you. Study more. (Fail)")
+                    update_mastery(level_meta['contentPath'], False)
+                    break
+                    
+        time.sleep(1.5)
+
+# Helper to keep script standalone
+def get_curriculum_map(module_node_path):
+    structure_url = f"{REPO_BASE}/nodes/{module_node_path}.json"
+    structure = get_json(structure_url)
+    levels = []
+    def traverse(nodes):
+        for node in nodes:
+            if node.get('type') == 'branch' and 'apiPath' in node:
+                child_data = get_json(f"{REPO_BASE}/nodes/{node['apiPath']}.json")
+                if child_data: traverse(child_data)
+            elif node.get('type') == 'leaf':
+                levels.append({ "title": node['name'], "contentPath": node['contentPath'] })
+    if structure: traverse(structure)
+    return levels
+
+if __name__ == "__main__":
+    main()

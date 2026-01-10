@@ -1,14 +1,15 @@
 
+
 import { GoogleGenAI } from "@google/genai";
 import { CreateMLCEngine } from "@mlc-ai/web-llm";
 import { store } from "../store.js";
 
-// AI Service (Hybrid: Local RAG + Cloud Gemini/Local Ollama/WebLLM)
+// AI Service (Hybrid: Local RAG + Cloud Gemini/Local Ollama/WebLLM/Chrome Built-in)
 class HybridAIService {
     constructor() {
         this.onProgress = null;
         this.config = {
-            provider: localStorage.getItem('arbor_ai_provider') || 'none', // 'gemini' | 'ollama' | 'webllm' | 'none'
+            provider: localStorage.getItem('arbor_ai_provider') || 'none', // 'gemini' | 'ollama' | 'webllm' | 'chrome' | 'none'
             apiKey: localStorage.getItem('arbor_gemini_key') || null,
             ollamaModel: localStorage.getItem('arbor_ollama_model') || 'llama3',
             webllmModel: localStorage.getItem('arbor_webllm_model') || 'Llama-3.2-1B-Instruct-q4f16_1-MLC'
@@ -277,6 +278,36 @@ class HybridAIService {
 
         // 3. EXECUTE BASED ON PROVIDER
         
+        // --- CHROME BUILT-IN (GEMINI NANO) ---
+        if (this.config.provider === 'chrome') {
+             try {
+                 if (!window.ai || !window.ai.languageModel) {
+                     return { text: "🦉 Tu navegador no soporta Chrome Built-in AI (window.ai). Usa Chrome Canary o activa los flags." };
+                 }
+                 
+                 const capabilities = await window.ai.languageModel.capabilities();
+                 if (capabilities.available === 'no') {
+                     return { text: "🦉 El modelo integrado no está disponible. Verifica tu configuración de Chrome." };
+                 }
+
+                 // Create session with system prompt
+                 const session = await window.ai.languageModel.create({
+                     systemPrompt: systemContext
+                 });
+
+                 const response = await session.prompt(lastMsg);
+                 
+                 // Cleanup
+                 if (session.destroy) session.destroy();
+
+                 return { text: response + "\n\n*(Gemini Nano - Chrome Built-in)*" };
+
+             } catch (e) {
+                 console.error("Chrome AI Error", e);
+                 return { text: "🦉 Error Chrome AI: " + e.message };
+             }
+        }
+
         // --- GEMINI (CLOUD) ---
         if (this.config.provider === 'gemini' && this.client) {
             try {

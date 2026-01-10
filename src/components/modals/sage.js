@@ -1,4 +1,5 @@
 
+
 import { store } from '../../store.js';
 import { aiService } from '../../services/ai.js';
 
@@ -13,6 +14,7 @@ class ArborSage extends HTMLElement {
         this.ollamaModels = [];
         this.pullStatus = '';
         this.webllmStatus = '';
+        this.chromeStatus = 'Checking...';
         this.hasTriedLoadingModels = false; 
         this.lastRenderKey = null;
     }
@@ -20,6 +22,7 @@ class ArborSage extends HTMLElement {
     determineInitialTab() {
         if (aiService.config.provider === 'ollama') return 'ollama';
         if (aiService.config.provider === 'webllm') return 'webllm';
+        if (aiService.config.provider === 'chrome') return 'chrome';
         return 'gemini';
     }
 
@@ -77,6 +80,13 @@ class ArborSage extends HTMLElement {
             } else {
                 alert("Load the model into memory first.");
             }
+        } else if (this.settingsTab === 'chrome') {
+            if (this.chromeStatus.includes("available")) {
+                aiService.setConfig({ provider: 'chrome' });
+                this.finishConfig();
+            } else {
+                alert("Chrome Built-in AI is not ready. Please enable flags.");
+            }
         }
     }
     
@@ -96,6 +106,23 @@ class ArborSage extends HTMLElement {
         this.hasTriedLoadingModels = true;
         this.ollamaModels = await aiService.listOllamaModels();
         this.render();
+    }
+    
+    async checkChromeStatus() {
+        if (!window.ai || !window.ai.languageModel) {
+            this.chromeStatus = "Not detected (Use Chrome Canary)";
+        } else {
+            try {
+                const caps = await window.ai.languageModel.capabilities();
+                if (caps.available === 'no') this.chromeStatus = "Not available (Check flags)";
+                else if (caps.available === 'after-download') this.chromeStatus = "Available (Needs download)";
+                else this.chromeStatus = "Fully available ✅";
+            } catch(e) {
+                this.chromeStatus = "Error checking capabilities";
+            }
+        }
+        const statusEl = this.querySelector('#chrome-status-text');
+        if(statusEl) statusEl.textContent = this.chromeStatus;
     }
     
     async loadWebLLM() {
@@ -251,6 +278,7 @@ class ArborSage extends HTMLElement {
         const isGemini = tab === 'gemini';
         const isOllama = tab === 'ollama';
         const isWebLLM = tab === 'webllm';
+        const isChrome = tab === 'chrome';
 
         let modelsListHtml = '';
         if (isOllama) {
@@ -300,15 +328,18 @@ class ArborSage extends HTMLElement {
                     <button class="btn-close w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors">✕</button>
                 </div>
                 
-                <div class="flex border-b border-slate-100 dark:border-slate-800 shrink-0">
-                    <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${isGemini ? 'border-purple-500 text-purple-600 dark:text-purple-400' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-gemini">
+                <div class="flex border-b border-slate-100 dark:border-slate-800 shrink-0 overflow-x-auto no-scrollbar">
+                    <button class="flex-1 whitespace-nowrap px-4 py-3 text-sm font-bold border-b-2 transition-colors ${isGemini ? 'border-purple-500 text-purple-600 dark:text-purple-400' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-gemini">
                         ☁️ ${ui.sageModeCloud}
                     </button>
-                    <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${isOllama ? 'border-orange-500 text-orange-600 dark:text-orange-400' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-ollama">
+                    <button class="flex-1 whitespace-nowrap px-4 py-3 text-sm font-bold border-b-2 transition-colors ${isOllama ? 'border-orange-500 text-orange-600 dark:text-orange-400' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-ollama">
                         💻 ${ui.sageModeLocal}
                     </button>
-                    <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${isWebLLM ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-webllm">
+                    <button class="flex-1 whitespace-nowrap px-4 py-3 text-sm font-bold border-b-2 transition-colors ${isWebLLM ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-webllm">
                         🌐 WebGPU
+                    </button>
+                    <button class="flex-1 whitespace-nowrap px-4 py-3 text-sm font-bold border-b-2 transition-colors ${isChrome ? 'border-green-500 text-green-600 dark:text-green-400' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-chrome">
+                        ✨ Chrome
                     </button>
                 </div>
                 
@@ -371,9 +402,32 @@ class ArborSage extends HTMLElement {
                          </button>
                     </div>
                     ` : ''}
+                    
+                    ${isChrome ? `
+                    <div class="bg-green-50 dark:bg-green-900/10 p-4 rounded-xl border border-green-100 dark:border-green-800/30 animate-in fade-in">
+                         <div class="flex items-center gap-2 mb-2">
+                            <p class="text-xs font-bold text-green-600 dark:text-green-400 uppercase">${ui.sageChromeStatus}</p>
+                         </div>
+                         
+                         <div class="bg-white dark:bg-slate-900 p-3 rounded-lg border border-green-200 dark:border-green-800/50 mb-4">
+                            <p id="chrome-status-text" class="text-xs font-mono text-slate-700 dark:text-slate-300 break-words">
+                                ${this.chromeStatus}
+                            </p>
+                         </div>
+                         
+                         <p class="text-[11px] text-slate-500 leading-tight mb-4">
+                            ${ui.sageChromeFlags || "Requires Chrome Dev/Canary. Enable: chrome://flags/#optimization-guide-on-device-model"}
+                         </p>
+                         
+                         <div class="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-900 p-2 rounded">
+                            <strong class="block mb-1">Zero Cost / Zero Setup</strong>
+                            Uses the Gemini Nano model embedded directly in Chrome. No downloads, no API keys.
+                         </div>
+                    </div>
+                    ` : ''}
 
                     <div class="space-y-3 pt-2">
-                        <button id="btn-save-config" class="w-full py-4 ${isGemini ? 'bg-purple-600 hover:bg-purple-500' : (isOllama ? 'bg-orange-600 hover:bg-orange-500' : 'bg-blue-600 hover:bg-blue-500')} text-white font-bold rounded-xl shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2">
+                        <button id="btn-save-config" class="w-full py-4 ${isGemini ? 'bg-purple-600 hover:bg-purple-500' : (isOllama ? 'bg-orange-600 hover:bg-orange-500' : (isChrome ? 'bg-green-600 hover:bg-green-500' : 'bg-blue-600 hover:bg-blue-500'))} text-white font-bold rounded-xl shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2">
                             <span>💾</span> ${ui.sageSaveKey}
                         </button>
                         
@@ -390,6 +444,8 @@ class ArborSage extends HTMLElement {
         this.querySelector('#tab-gemini').onclick = () => { this.settingsTab = 'gemini'; this.render(); };
         this.querySelector('#tab-ollama').onclick = () => { this.settingsTab = 'ollama'; this.render(); };
         this.querySelector('#tab-webllm').onclick = () => { this.settingsTab = 'webllm'; this.render(); };
+        this.querySelector('#tab-chrome').onclick = () => { this.settingsTab = 'chrome'; this.render(); };
+        
         this.querySelector('#btn-save-config').onclick = () => this.saveConfig();
         const btnClear = this.querySelector('#btn-clear-config');
         if(btnClear) btnClear.onclick = () => this.clearConfig();
@@ -410,6 +466,11 @@ class ArborSage extends HTMLElement {
         if (isWebLLM) {
             this.querySelector('#btn-load-webllm').onclick = () => this.loadWebLLM();
         }
+        
+        if (isChrome) {
+            // Trigger status check
+            setTimeout(() => this.checkChromeStatus(), 0);
+        }
     }
 
     renderChat(isSmart) {
@@ -425,10 +486,12 @@ class ArborSage extends HTMLElement {
         const displayStatus = aiState.status;
         const isOllama = aiService.config.provider === 'ollama';
         const isWebLLM = aiService.config.provider === 'webllm';
+        const isChrome = aiService.config.provider === 'chrome';
         const isThinking = displayStatus === 'thinking';
         let sendBtnColor = 'bg-purple-600';
         if (isOllama) sendBtnColor = 'bg-orange-600';
         else if (isWebLLM) sendBtnColor = 'bg-blue-600';
+        else if (isChrome) sendBtnColor = 'bg-green-600';
 
         // Helper to generate just the messages HTML
         const getMessagesHTML = () => {
@@ -471,6 +534,9 @@ class ArborSage extends HTMLElement {
         } else if (isWebLLM) {
             headerGradient = 'from-blue-500 to-cyan-500';
             providerName = ui.sageProviderBrowser;
+        } else if (isChrome) {
+            headerGradient = 'from-green-500 to-emerald-500';
+            providerName = ui.sageModeChrome || 'Chrome Built-in';
         }
 
         this.innerHTML = `
@@ -506,7 +572,7 @@ class ArborSage extends HTMLElement {
                 </div>
 
                 <form id="sage-form" class="p-3 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex gap-2 shrink-0 pb-[calc(0.75rem+env(safe-area-inset-bottom,20px))] md:pb-3">
-                    <input id="sage-input" type="text" class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 ${isOllama ? 'focus:ring-orange-500' : (isWebLLM ? 'focus:ring-blue-500' : 'focus:ring-purple-500')} dark:text-white placeholder:text-slate-400 disabled:opacity-50" placeholder="${ui.sageInputPlaceholder}" autocomplete="off">
+                    <input id="sage-input" type="text" class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 ${isOllama ? 'focus:ring-orange-500' : (isWebLLM ? 'focus:ring-blue-500' : (isChrome ? 'focus:ring-green-500' : 'focus:ring-purple-500'))} dark:text-white placeholder:text-slate-400 disabled:opacity-50" placeholder="${ui.sageInputPlaceholder}" autocomplete="off">
                     <button type="submit" class="w-11 h-11 ${sendBtnColor} text-white rounded-xl hover:opacity-90 transition-all flex items-center justify-center shadow-lg active:scale-95">
                         <svg class="w-5 h-5 translate-x-0.5 -translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>
                     </button>
