@@ -166,8 +166,8 @@ class Store extends EventTarget {
                 // 2. Update state to new lang code
                 this.update({ lang, searchCache: {} });
                 
-                // 3. Reload Graph Data (This will eventually set loading: false when done)
-                await this.loadData(this.state.activeSource); 
+                // 3. Reload Graph Data using CACHE if available (false = do not force refresh)
+                await this.loadData(this.state.activeSource, false); 
             } catch (e) {
                 console.error("Set language failed", e);
                 this.update({ loading: false, error: "Failed to switch language." });
@@ -232,28 +232,55 @@ class Store extends EventTarget {
     async loadAndSmartMerge(sourceId) {
         const source = this.state.sources.find(s => s.id === sourceId);
         if (!source) return;
-        this.loadData(source);
+        // When user explicitly clicks "Load", we force refresh (true)
+        this.loadData(source, true);
     }
 
-    async loadData(source) {
+    async loadData(source, forceRefresh = true) {
         if (!source) return;
+        
         this.update({ loading: true, error: null, activeSource: source });
         localStorage.setItem('arbor-active-source-id', source.id);
 
         try {
-            const url = source.url; 
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-            const res = await fetch(url, { signal: controller.signal });
-            clearTimeout(timeoutId);
-
-            if (!res.ok) throw new Error(`Failed to fetch data from ${source.name} (Status ${res.status}).`);
-            const json = await res.json();
+            let json;
             
+            // SMART CACHE: If we have data and we are not forcing refresh and IDs match
+            // We use the cached raw data.
+            // Note: rawGraphData stores the whole JSON (all languages)
+            if (!forceRefresh && this.state.rawGraphData && this.state.activeSource?.id === source.id) {
+                json = this.state.rawGraphData;
+                console.log("Using cached graph data for rapid switching.");
+            } else {
+                const url = source.url; 
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+                const res = await fetch(url, { signal: controller.signal });
+                clearTimeout(timeoutId);
+
+                if (!res.ok) throw new Error(`Failed to fetch data from ${source.name} (Status ${res.status}).`);
+                json = await res.json();
+            }
+            
+            // Ensure UI strings are loaded
             if (!this.state.i18nData) await this.loadLanguage(this.state.lang);
 
-            let langData = json.languages?.[this.state.lang] || Object.values(json.languages)[0];
+            // Select Language Branch
+            // Prioritize selected language, fallback to first available if missing
+            let langData = json.languages?.[this.state.lang];
+            
+            if (!langData) {
+                // Fallback logic
+                const availableLangs = Object.keys(json.languages || {});
+                if (availableLangs.length > 0) {
+                    langData = json.languages[availableLangs[0]];
+                }
+            }
+
+            if (!langData) {
+                throw new Error("No content found in this tree.");
+            }
             
             if (json.universeName && json.universeName !== source.name) {
                 const updatedSources = this.state.sources.map(s => s.id === source.id ? {...s, name: json.universeName} : s);
