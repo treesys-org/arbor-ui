@@ -47,8 +47,8 @@ class ArborModalEmptyModule extends HTMLElement {
                 <!-- Balloon / Bubble Card -->
                 <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl p-8 text-center relative overflow-visible border border-slate-200 dark:border-slate-800 transform transition-all hover:scale-[1.02]">
                     
-                    <!-- Decorative Balloon Tail (Visual only) -->
-                    <div class="absolute -bottom-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-white dark:bg-slate-900 rotate-45 transform border-r border-b border-slate-200 dark:border-slate-800"></div>
+                    <!-- Decorative Balloon Tail (Pointing down to the node) -->
+                    <div class="absolute -bottom-3 left-1/2 -translate-x-1/2 w-8 h-8 bg-white dark:bg-slate-900 rotate-45 transform border-r border-b border-slate-200 dark:border-slate-800"></div>
 
                     <div class="text-6xl mb-4 animate-bounce" style="animation-duration: 2s;">🍂</div>
                     
@@ -60,8 +60,8 @@ class ArborModalEmptyModule extends HTMLElement {
                         ${ui.emptyModuleDesc}
                     </p>
                     
-                    <div class="space-y-3">
-                        <a href="${repoUrl}" target="_blank" class="flex items-center justify-center gap-2 w-full py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold rounded-xl shadow-lg hover:opacity-90 active:scale-95 transition-all text-sm group">
+                    <div class="space-y-3 relative z-10">
+                        <a href="${repoUrl}" target="_blank" rel="noopener noreferrer" class="flex items-center justify-center gap-2 w-full py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold rounded-xl shadow-lg hover:opacity-90 active:scale-95 transition-all text-sm group">
                             <svg class="w-5 h-5 transition-transform group-hover:rotate-12" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.164 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.322-3.369-1.322-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.597 1.028 2.688 0 3.848-2.339 4.685-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.418 22 12c0-5.523-4.477-10-10-10z" /></svg>
                             ${ui.contributeLink}
                         </a>
