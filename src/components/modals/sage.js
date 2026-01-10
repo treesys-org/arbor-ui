@@ -109,16 +109,17 @@ class ArborSage extends HTMLElement {
     }
     
     async checkChromeStatus() {
+        const ui = store.ui;
         if (!window.ai || !window.ai.languageModel) {
-            this.chromeStatus = "Not detected (Use Chrome Canary)";
+            this.chromeStatus = ui.sageChromeNotDetected || "Not detected (Use Chrome Canary)";
         } else {
             try {
                 const caps = await window.ai.languageModel.capabilities();
-                if (caps.available === 'no') this.chromeStatus = "Not available (Check flags)";
-                else if (caps.available === 'after-download') this.chromeStatus = "Available (Needs download)";
-                else this.chromeStatus = "Fully available ✅";
+                if (caps.available === 'no') this.chromeStatus = ui.sageChromeNotAvailable || "Not available (Check flags)";
+                else if (caps.available === 'after-download') this.chromeStatus = ui.sageChromeAvailableDownload || "Available (Needs download)";
+                else this.chromeStatus = ui.sageChromeAvailable || "Fully available ✅";
             } catch(e) {
-                this.chromeStatus = "Error checking capabilities";
+                this.chromeStatus = ui.sageChromeError || "Error checking capabilities";
             }
         }
         const statusEl = this.querySelector('#chrome-status-text');
@@ -126,6 +127,7 @@ class ArborSage extends HTMLElement {
     }
     
     async loadWebLLM() {
+        const ui = store.ui;
         const model = this.querySelector('#inp-webllm-model').value;
         aiService.setConfig({ provider: 'webllm', webllmModel: model });
         
@@ -139,19 +141,20 @@ class ArborSage extends HTMLElement {
         });
         
         if(success) {
-            this.webllmStatus = "Model loaded and ready.";
+            this.webllmStatus = ui.sageStatusReady || "Model loaded and ready.";
             this.finishConfig();
         } else {
-            this.webllmStatus = "Error loading model. Check console.";
+            this.webllmStatus = ui.sageStatusError || "Error loading model. Check console.";
             this.render();
         }
     }
 
     async pullModel() {
+        const ui = store.ui;
         const name = this.querySelector('#inp-pull-model').value.trim();
         if(!name) return;
 
-        this.pullStatus = store.ui.sageDownloading || 'Downloading...';
+        this.pullStatus = store.ui.sageStatusDownload || 'Downloading...';
         this.render();
 
         const success = await aiService.pullOllamaModel(name, (status) => {
@@ -160,7 +163,7 @@ class ArborSage extends HTMLElement {
             if(statusEl) statusEl.textContent = status;
         });
 
-        this.pullStatus = success ? 'Done!' : 'Error.';
+        this.pullStatus = success ? (ui.sageOllamaDone || 'Done!') : (ui.sageOllamaError || 'Error.');
         await this.loadOllamaModels();
         if(success) {
             aiService.setConfig({ provider: 'ollama', ollamaModel: name });
@@ -177,11 +180,12 @@ class ArborSage extends HTMLElement {
     
     async runQuickAction(action) {
         if (!aiService.isSmartMode()) return;
+        const ui = store.ui;
         
         let prompt = '';
-        if (action === 'summarize') prompt = "Summarize this lesson in 3 bullet points.";
-        if (action === 'explain') prompt = "Explain the main concept simply.";
-        if (action === 'quiz') prompt = "Give me a test question about this.";
+        if (action === 'summarize') prompt = ui.sagePromptSummarize || "Summarize this lesson in 3 bullet points.";
+        if (action === 'explain') prompt = ui.sagePromptExplain || "Explain the main concept simply.";
+        if (action === 'quiz') prompt = ui.sagePromptQuiz || "Give me a test question about this.";
         if (prompt) store.chatWithSage(prompt);
     }
 
@@ -204,7 +208,8 @@ class ArborSage extends HTMLElement {
              pullStatus: this.pullStatus,
              webllmStatus: this.webllmStatus,
              aiStatus: ai.status,
-             msgCount: ai.messages.length
+             msgCount: ai.messages.length,
+             chromeStatus: this.chromeStatus
         });
 
         if (stateKey === this.lastRenderKey) return;
@@ -393,7 +398,7 @@ class ArborSage extends HTMLElement {
                          <div class="bg-white dark:bg-slate-900 p-3 rounded-lg border border-blue-200 dark:border-blue-800/50 mb-4">
                             <p class="text-[10px] font-bold text-slate-400 uppercase mb-1">${ui.sageModelStatus}</p>
                             <p id="webllm-status-text" class="text-xs font-mono text-slate-700 dark:text-slate-300 break-words">
-                                ${this.webllmStatus || (aiService.webllmEngine ? "Loaded." : "Not loaded.")}
+                                ${this.webllmStatus || (aiService.webllmEngine ? (ui.sageStatusLoaded || "Loaded.") : (ui.sageStatusNotLoaded || "Not loaded."))}
                             </p>
                          </div>
                          
@@ -420,8 +425,8 @@ class ArborSage extends HTMLElement {
                          </p>
                          
                          <div class="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-900 p-2 rounded">
-                            <strong class="block mb-1">Zero Cost / Zero Setup</strong>
-                            Uses the Gemini Nano model embedded directly in Chrome. No downloads, no API keys.
+                            <strong class="block mb-1">${ui.sageChromeInfoTitle || "Zero Cost / Zero Setup"}</strong>
+                            ${ui.sageChromeInfoDesc || "Uses the Gemini Nano model embedded directly in Chrome. No downloads, no API keys."}
                          </div>
                     </div>
                     ` : ''}
@@ -482,7 +487,7 @@ class ArborSage extends HTMLElement {
         
         // Calculate static parts
         const aiState = store.value.ai;
-        const displayMessages = aiState.messages.length > 0 ? aiState.messages : [{ role: 'assistant', content: "🦉 Hello. Ask me anything." }];
+        const displayMessages = aiState.messages.length > 0 ? aiState.messages : [{ role: 'assistant', content: ui.sageHello }];
         const displayStatus = aiState.status;
         const isOllama = aiService.config.provider === 'ollama';
         const isWebLLM = aiService.config.provider === 'webllm';
@@ -547,7 +552,7 @@ class ArborSage extends HTMLElement {
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-xl backdrop-blur-sm shadow-inner">🦉</div>
                         <div>
-                            <h3 class="font-black text-sm leading-none">Arbor Sage</h3>
+                            <h3 class="font-black text-sm leading-none">${ui.sageTitle}</h3>
                             <div class="flex items-center gap-1 mt-0.5">
                                 <span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
                                 <p class="text-[10px] opacity-80 font-medium">${providerName}</p>

@@ -699,10 +699,7 @@ class Store extends EventTarget {
 
         try {
             await aiService.initialize();
-            const msgs = [{ role: 'assistant', content: "🦉 Hoot hoot! I am awake. Ask me anything." }];
-            if (this.state.lang === 'ES') {
-                msgs[0].content = "🦉 ¡Huu huu! Estoy despierto. Pregúntame lo que quieras.";
-            }
+            const msgs = [{ role: 'assistant', content: this.ui.sageHello }];
             this.update({ ai: { ...this.state.ai, status: 'ready', messages: msgs } });
         } catch (e) {
             console.error(e);
@@ -716,7 +713,7 @@ class Store extends EventTarget {
     }
 
     clearSageChat() {
-        const initial = [{ role: 'assistant', content: this.state.lang === 'ES' ? "🦉 ¡Huu huu! Estoy despierto. Pregúntame lo que quieras." : "🦉 Hoot hoot! I am awake. Ask me anything." }];
+        const initial = [{ role: 'assistant', content: this.ui.sageHello }];
         this.update({ ai: { ...this.state.ai, messages: initial, status: 'ready' } });
     }
 
