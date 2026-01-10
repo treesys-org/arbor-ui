@@ -13,19 +13,65 @@ class ArborModalEmptyModule extends HTMLElement {
     render() {
         const ui = store.ui;
         const node = store.value.modal.node;
+        
+        // Calculate GitHub Repo URL
+        let repoUrl = 'https://github.com/treesys-org/arbor-knowledge';
+        const sourceUrl = store.value.activeSource?.url;
+        
+        if (sourceUrl) {
+            if (sourceUrl.includes('raw.githubusercontent.com')) {
+                const parts = sourceUrl.split('/');
+                // Format: https://raw.githubusercontent.com/OWNER/REPO/main/...
+                if (parts.length >= 5) {
+                    repoUrl = `https://github.com/${parts[3]}/${parts[4]}`;
+                }
+            } else if (sourceUrl.includes('github.io')) {
+                // Heuristic: https://OWNER.github.io/REPO/...
+                try {
+                    const urlObj = new URL(sourceUrl);
+                    const owner = urlObj.hostname.split('.')[0];
+                    const repo = urlObj.pathname.split('/')[1];
+                    if (owner && repo) {
+                        repoUrl = `https://github.com/${owner}/${repo}`;
+                    }
+                } catch(e) {}
+            }
+        }
 
         this.innerHTML = `
-        <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
-            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full relative overflow-hidden flex flex-col max-h-[95vh] border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
-                <button class="btn-close absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 z-20 transition-colors">✕</button>
+        <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
+            <div class="relative max-w-sm w-full">
+                <!-- Close Button -->
+                <button class="btn-close absolute -top-12 right-0 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors backdrop-blur-md">✕</button>
 
-                <div class="p-8 text-center">
-                    <div class="text-4xl mb-4">🍂</div>
-                    <h3 class="font-bold text-xl mb-2">${ui.emptyModuleTitle}</h3>
-                    <p class="text-slate-500 mb-6">${ui.emptyModuleDesc}</p>
-                    ${store.value.githubUser 
-                        ? `<button class="btn-create-lesson bg-green-600 text-white px-4 py-2 rounded font-bold">Crear Primera Lección</button>` 
-                        : `<p class="text-xs text-slate-400">Inicia sesión en modo editor para contribuir.</p>`}
+                <!-- Balloon / Bubble Card -->
+                <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl p-8 text-center relative overflow-visible border border-slate-200 dark:border-slate-800 transform transition-all hover:scale-[1.02]">
+                    
+                    <!-- Decorative Balloon Tail (Visual only) -->
+                    <div class="absolute -bottom-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-white dark:bg-slate-900 rotate-45 transform border-r border-b border-slate-200 dark:border-slate-800"></div>
+
+                    <div class="text-6xl mb-4 animate-bounce" style="animation-duration: 2s;">🍂</div>
+                    
+                    <h3 class="font-black text-xl mb-2 text-slate-800 dark:text-white leading-tight">
+                        ${ui.emptyModuleTitle}
+                    </h3>
+                    
+                    <p class="text-slate-500 dark:text-slate-400 mb-6 text-sm font-medium leading-relaxed">
+                        ${ui.emptyModuleDesc}
+                    </p>
+                    
+                    <div class="space-y-3">
+                        <a href="${repoUrl}" target="_blank" class="flex items-center justify-center gap-2 w-full py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold rounded-xl shadow-lg hover:opacity-90 active:scale-95 transition-all text-sm group">
+                            <svg class="w-5 h-5 transition-transform group-hover:rotate-12" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.164 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.322-3.369-1.322-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.597 1.028 2.688 0 3.848-2.339 4.685-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.418 22 12c0-5.523-4.477-10-10-10z" /></svg>
+                            ${ui.contributeLink}
+                        </a>
+
+                        ${store.value.githubUser 
+                            ? `<button class="btn-create-lesson w-full py-3 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 font-bold rounded-xl border border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors text-sm">
+                                + ${ui.adminNewFile} (Editor)
+                               </button>` 
+                            : ''}
+                    </div>
                 </div>
             </div>
         </div>`;
