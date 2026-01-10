@@ -24,10 +24,20 @@ class ArborGraph extends HTMLElement {
              
              <!-- Overlays Container -->
              <div id="overlays" class="absolute inset-0 pointer-events-none"></div>
+
+             <!-- Zoom Controls -->
+             <div id="zoom-controls" class="absolute bottom-6 right-6 flex flex-col gap-2 z-20 pointer-events-auto transition-opacity duration-300 md:bottom-8 md:right-8">
+                <button id="btn-zoom-in" class="w-10 h-10 bg-white/90 dark:bg-slate-800/90 backdrop-blur rounded-full shadow-lg flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700 font-bold text-xl active:scale-95" title="Zoom In">+</button>
+                <button id="btn-zoom-out" class="w-10 h-10 bg-white/90 dark:bg-slate-800/90 backdrop-blur rounded-full shadow-lg flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700 font-bold text-xl active:scale-95" title="Zoom Out">-</button>
+                <button id="btn-zoom-reset" class="w-10 h-10 bg-white/90 dark:bg-slate-800/90 backdrop-blur rounded-full shadow-lg flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700 p-2 active:scale-95" title="Reset View">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-full h-full"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" /></svg>
+                </button>
+             </div>
         </div>`;
 
         requestAnimationFrame(() => {
              this.initGraph();
+             this.bindControls();
              this.renderOverlays();
         });
 
@@ -65,6 +75,27 @@ class ArborGraph extends HTMLElement {
                 }
             }
         });
+    }
+
+    bindControls() {
+        const btnIn = this.querySelector('#btn-zoom-in');
+        const btnOut = this.querySelector('#btn-zoom-out');
+        const btnReset = this.querySelector('#btn-zoom-reset');
+
+        if (btnIn) btnIn.onclick = (e) => {
+            e.stopPropagation();
+            if(this.svg && this.zoom) this.svg.transition().duration(300).call(this.zoom.scaleBy, 1.3);
+        };
+        
+        if (btnOut) btnOut.onclick = (e) => {
+            e.stopPropagation();
+            if(this.svg && this.zoom) this.svg.transition().duration(300).call(this.zoom.scaleBy, 1/1.3);
+        };
+
+        if (btnReset) btnReset.onclick = (e) => {
+            e.stopPropagation();
+            this.resetZoom();
+        };
     }
     
     renderOverlays() {
@@ -456,7 +487,7 @@ class ArborGraph extends HTMLElement {
         
         nodeMerged.select(".label-group")
             .attr("transform", d => {
-                return `translate(0, ${isMobile ? 55 : (d.data.type === 'leaf' || d.data.type === 'exam' ? 65 : 55)})`;
+                return `translate(0, ${isMobile ? 55 : (d.data.type === 'leaf' || d.data.type === 'exam') ? 65 : 55})`;
             });
 
         // --- DARK MODE LABEL UPDATES ---

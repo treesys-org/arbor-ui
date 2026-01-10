@@ -1,4 +1,5 @@
 
+
 import { store } from '../store.js';
 import { parseContent } from '../utils/parser.js';
 import { github } from '../services/github.js';
@@ -355,6 +356,16 @@ class ArborContent extends HTMLElement {
             containerClasses.push("md:w-full", "md:max-w-full");
         }
 
+        // Mobile Footer Logic
+        const isFirstSection = this.activeSectionIndex === 0;
+        const leftMobileBtn = isFirstSection
+            ? `<button id="btn-exit-mobile" class="w-1/4 justify-center px-4 py-3 rounded-xl font-bold flex items-center gap-2 transition-all bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400 active:scale-95" title="${ui.close}">
+                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+               </button>`
+            : `<button id="btn-prev-mobile" class="w-1/4 justify-center px-4 py-3 rounded-xl font-bold flex items-center gap-2 transition-all bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 active:scale-95">
+                 <span>←</span>
+               </button>`;
+
         this.className = ""; 
         this.innerHTML = `
         ${!this.isExpanded ? `<div id="backdrop-overlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[55] animate-in fade-in duration-200"></div>` : ''}
@@ -495,9 +506,7 @@ class ArborContent extends HTMLElement {
             ${toc.length > 0 && !isExam ? `
             <div class="md:hidden flex-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800 px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,20px))] z-20">
                 <div class="flex items-center justify-between gap-3 max-w-3xl mx-auto">
-                    <button id="btn-prev-mobile" class="w-1/4 justify-center px-4 py-3 rounded-xl font-bold flex items-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 active:scale-95" ${this.activeSectionIndex === 0 ? 'disabled' : ''}>
-                        <span>←</span>
-                    </button>
+                    ${leftMobileBtn}
                     <div class="text-center">
                         <span class="text-sm font-bold text-slate-500 dark:text-slate-400">${this.activeSectionIndex + 1} / ${toc.length}</span>
                     </div>
@@ -531,7 +540,14 @@ class ArborContent extends HTMLElement {
         safeBind('#btn-toggle-toc', () => this.toggleToc());
         safeBind('#toc-mobile-backdrop', () => this.toggleToc());
         safeBind('#btn-prev', () => this.scrollToSection(this.activeSectionIndex - 1));
-        safeBind('#btn-prev-mobile', () => this.scrollToSection(this.activeSectionIndex - 1));
+        
+        // Bind Mobile Exit or Prev
+        if (isFirstSection) {
+            safeBind('#btn-exit-mobile', () => this.handleClose());
+        } else {
+            safeBind('#btn-prev-mobile', () => this.scrollToSection(this.activeSectionIndex - 1));
+        }
+
         safeBind('#btn-complete', () => this.completeAndNext());
         safeBind('#btn-complete-mobile', () => this.completeAndNext());
         safeBind('#btn-start-exam', () => this.startTheExam());
