@@ -90,13 +90,27 @@ class Store extends EventTarget {
     async loadLanguage(langCode) {
         try {
             const path = `./locales/${langCode.toLowerCase()}.json`;
-            const res = await fetch(path);
+            // Add cache buster to prevent stale partial loads during dev
+            const res = await fetch(path, { cache: 'no-cache' });
             if (!res.ok) throw new Error(`Missing language file: ${path}`);
             const data = await res.json();
             this.update({ i18nData: data });
         } catch (e) {
-            console.error("Language load failed, falling back to EN", e);
-            if (langCode !== 'EN') await this.loadLanguage('EN');
+            console.error(`Language load failed for ${langCode}`, e);
+            
+            // Fallback logic
+            if (langCode !== 'EN') {
+                console.log("Falling back to EN...");
+                await this.loadLanguage('EN');
+            } else {
+                // Critical Failure Fallback
+                this.update({ i18nData: { 
+                    appTitle: "Arbor (Recovery Mode)", 
+                    loading: "Loading...", 
+                    errorTitle: "Language Error",
+                    errorNoTrees: "Could not load language files. Please check connection."
+                }});
+            }
         }
     }
 
@@ -109,7 +123,7 @@ class Store extends EventTarget {
                     // CRITICAL: Arrays like welcomeSteps must return an array/object 
                     // to prevent "Cannot read property of undefined" crashes in .map()
                     if (prop === 'welcomeSteps') {
-                        return Array(5).fill({ title: '...', text: '...', icon: '...' });
+                        return Array(5).fill({ title: 'Loading...', text: '...', icon: '...' });
                     }
                     // For text strings, return the key name so developers/users know what is loading/missing
                     return String(prop);
@@ -155,23 +169,35 @@ class Store extends EventTarget {
     toggleTheme() { this.update({ theme: this.state.theme === 'light' ? 'dark' : 'light' }); }
     
     async setLanguage(lang) { 
-        if(this.state.lang !== lang) {
-            // IMMEDIATE VISUAL FEEDBACK: Start loading spinner now
-            this.update({ loading: true });
+        if (this.state.lang === lang) return;
+
+        // 1. Indicate Loading State Immediately
+        this.update({ loading: true, error: null });
+        
+        try {
+            // 2. Load Strings (Wait for this before switching logic)
+            await this.loadLanguage(lang); 
             
-            try {
-                // 1. Fetch new strings
-                await this.loadLanguage(lang); 
-                
-                // 2. Update state to new lang code
-                this.update({ lang, searchCache: {} });
-                
-                // 3. Reload Graph Data using CACHE if available (false = do not force refresh)
+            // 3. Update Language State (Triggers Sidebar/UI refresh)
+            this.update({ lang, searchCache: {} });
+            
+            // 4. Reload Graph Data for the new language
+            // We pass forceRefresh=false to use cached rawGraphData if available, 
+            // making language switching instant if data is already in memory.
+            if (this.state.activeSource) {
                 await this.loadData(this.state.activeSource, false); 
-            } catch (e) {
-                console.error("Set language failed", e);
-                this.update({ loading: false, error: "Failed to switch language." });
+            } else {
+                this.update({ loading: false });
             }
+
+        } catch (e) {
+            console.error("Set language failed", e);
+            this.update({ 
+                loading: false, 
+                error: `Failed to switch language: ${e.message}. Attempting to recover.` 
+            });
+            // Attempt recovery to EN if failed
+            if (lang !== 'EN') this.setLanguage('EN');
         }
     }
     
@@ -239,7 +265,11 @@ class Store extends EventTarget {
     async loadData(source, forceRefresh = true) {
         if (!source) return;
         
-        this.update({ loading: true, error: null, activeSource: source });
+        // Don't set loading here if we are already loading (e.g. language switch), 
+        // but update activeSource
+        if (!this.state.loading) this.update({ loading: true, error: null });
+        this.update({ activeSource: source });
+        
         localStorage.setItem('arbor-active-source-id', source.id);
 
         try {
@@ -247,14 +277,13 @@ class Store extends EventTarget {
             
             // SMART CACHE: If we have data and we are not forcing refresh and IDs match
             // We use the cached raw data.
-            // Note: rawGraphData stores the whole JSON (all languages)
             if (!forceRefresh && this.state.rawGraphData && this.state.activeSource?.id === source.id) {
                 json = this.state.rawGraphData;
                 console.log("Using cached graph data for rapid switching.");
             } else {
                 const url = source.url; 
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 15000);
+                const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout
 
                 const res = await fetch(url, { signal: controller.signal });
                 clearTimeout(timeoutId);
@@ -263,23 +292,28 @@ class Store extends EventTarget {
                 json = await res.json();
             }
             
-            // Ensure UI strings are loaded
+            // Ensure UI strings are loaded (Safety check)
             if (!this.state.i18nData) await this.loadLanguage(this.state.lang);
 
             // Select Language Branch
             // Prioritize selected language, fallback to first available if missing
-            let langData = json.languages?.[this.state.lang];
+            let langData = null;
             
-            if (!langData) {
-                // Fallback logic
-                const availableLangs = Object.keys(json.languages || {});
-                if (availableLangs.length > 0) {
-                    langData = json.languages[availableLangs[0]];
+            if (json.languages) {
+                langData = json.languages[this.state.lang];
+                
+                // Fallback if specific language is missing in the tree
+                if (!langData) {
+                    const availableLangs = Object.keys(json.languages);
+                    if (availableLangs.length > 0) {
+                        langData = json.languages[availableLangs[0]];
+                        console.warn(`Language ${this.state.lang} not found in tree. Falling back to ${availableLangs[0]}.`);
+                    }
                 }
             }
 
             if (!langData) {
-                throw new Error("No content found in this tree.");
+                throw new Error("No valid content found in this tree.");
             }
             
             if (json.universeName && json.universeName !== source.name) {
@@ -314,7 +348,7 @@ class Store extends EventTarget {
             setTimeout(() => this.update({ lastActionMessage: null }), 3000);
         } catch (e) {
             console.error(e);
-            const msg = e.name === 'AbortError' ? 'Connection timed out (15s).' : e.message;
+            const msg = e.name === 'AbortError' ? 'Connection timed out (20s).' : e.message;
             this.update({ loading: false, error: msg });
         }
     }

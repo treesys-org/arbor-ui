@@ -40,13 +40,17 @@ class ArborModalLanguage extends HTMLElement {
 
         this.querySelector('.btn-close').onclick = () => this.close();
         
-        this.querySelectorAll('.btn-lang-sel').forEach(b => b.onclick = (e) => {
-            // Close first to make UI feel responsive, then trigger state change which activates global loader
-            this.close();
-            // Small timeout to allow modal close animation to start before heavy lifting
-            setTimeout(() => {
-                store.setLanguage(e.currentTarget.dataset.code);
-            }, 50);
+        this.querySelectorAll('.btn-lang-sel').forEach(b => {
+             b.onclick = (e) => {
+                const code = e.currentTarget.dataset.code;
+                this.close();
+                // Ensure the stack clears for UI repaint before freezing with data processing
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        store.setLanguage(code);
+                    });
+                });
+             };
         });
     }
 }
