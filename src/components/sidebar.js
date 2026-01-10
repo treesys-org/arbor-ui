@@ -114,7 +114,7 @@ class ArborSidebar extends HTMLElement {
              </button>
              
              <div class="flex items-center gap-2">
-                <!-- Basket Mobile -->
+                <!-- Basket Mobile (Triggers Progress Widget now, not Profile) -->
                 <button class="js-btn-progress-mobile flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 dark:bg-orange-900/20 border border-orange-100 dark:border-orange-800/30 rounded-full active:scale-95 transition-transform">
                     <span class="text-sm">🎒</span>
                     <span class="text-xs font-bold text-orange-700 dark:text-orange-400">${seedsCount}</span>
@@ -205,8 +205,10 @@ class ArborSidebar extends HTMLElement {
         this.querySelectorAll('.js-btn-contrib').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('contributor')));
         this.querySelectorAll('.js-btn-profile').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('profile')));
         
-        // Add listener for Mobile Basket Button to open Profile
-        this.querySelectorAll('.js-btn-progress-mobile').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('profile')));
+        // Mobile Basket Button -> Trigger Global Progress Widget Event instead of Profile
+        this.querySelectorAll('.js-btn-progress-mobile').forEach(b => b.onclick = mobileMenuAction(() => {
+            document.dispatchEvent(new CustomEvent('toggle-progress-widget'));
+        }));
 
         // SAGE AI Button -> Open Sage (Let Sage Modal decide view)
         this.querySelectorAll('.js-btn-sage').forEach(b => b.onclick = mobileMenuAction(() => {

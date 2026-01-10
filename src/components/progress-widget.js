@@ -6,6 +6,9 @@ class ArborProgressWidget extends HTMLElement {
     constructor() {
         super();
         this.isOpen = false;
+        
+        // Bind the handler so we can remove it if needed, though this is a singleton
+        this.toggleHandler = () => this.toggle();
     }
 
     connectedCallback() {
@@ -13,13 +16,20 @@ class ArborProgressWidget extends HTMLElement {
         store.addEventListener('state-change', () => this.render());
         store.addEventListener('graph-update', () => this.render());
         
+        // Listen for the global event from the Mobile Header
+        document.addEventListener('toggle-progress-widget', this.toggleHandler);
+        
         // Close dropdown when clicking outside
         document.addEventListener('click', (e) => {
-            if (this.isOpen && !this.contains(e.target)) {
+            if (this.isOpen && !this.contains(e.target) && !e.target.closest('.js-btn-progress-mobile')) {
                 this.isOpen = false;
                 this.render();
             }
         });
+    }
+    
+    disconnectedCallback() {
+        document.removeEventListener('toggle-progress-widget', this.toggleHandler);
     }
 
     toggle() {
@@ -58,98 +68,134 @@ class ArborProgressWidget extends HTMLElement {
         const circumference = 2 * Math.PI * radius; // ~282.74
         const offset = circumference * (1 - stats.percentage / 100);
 
-        this.innerHTML = `
-        <div class="fixed top-4 right-4 z-30 flex-col items-end hidden md:flex">
+        // Shared Content HTML (Reused for both Desktop Dropdown and Mobile Overlay)
+        const widgetContentHtml = `
+            <!-- Streak & Sun Row -->
+            <div class="w-full flex gap-4 mb-6">
+                <!-- Streak -->
+                <div class="flex-1 bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 flex flex-col items-center justify-center border border-blue-100 dark:border-blue-800/30">
+                    <span class="text-2xl mb-1">💧</span>
+                    <span class="text-lg font-black text-blue-600 dark:text-blue-400 leading-none">${g.streak}</span>
+                    <span class="text-[10px] font-bold text-blue-400 dark:text-blue-500 uppercase mt-1">${ui.streak}</span>
+                </div>
+                
+                <!-- Photosynthesis (XP) -->
+                <div class="flex-1 bg-orange-50 dark:bg-orange-900/20 rounded-xl p-3 flex flex-col items-center justify-center border border-orange-100 dark:border-orange-800/30 relative overflow-hidden">
+                    <div class="absolute bottom-0 left-0 right-0 bg-orange-200 dark:bg-orange-700/30 transition-all duration-500" style="height: ${dailyProgress}%"></div>
+                    <span class="text-2xl mb-1 relative z-10">☀️</span>
+                    <span class="text-lg font-black text-orange-600 dark:text-orange-400 leading-none relative z-10">${g.dailyXP}</span>
+                    <span class="text-[10px] font-bold text-orange-400 dark:text-orange-500 uppercase mt-1 relative z-10">${ui.todayGoal}</span>
+                </div>
+            </div>
+
+            <div class="h-px w-full bg-slate-200 dark:bg-slate-700 mb-6"></div>
+
+            <!-- Main Progress Circle -->
+            <h3 class="text-sm font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4">${ui.progressTitle}</h3>
             
-            <!-- Trigger Button: Seed Bag -->
-            <button id="btn-toggle" class="flex items-center gap-2 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200 dark:border-slate-700 px-4 py-2 rounded-full shadow-sm hover:border-orange-400 dark:hover:border-orange-600 transition-colors">
-                <span class="text-2xl">🎒</span>
-                <span class="font-bold text-slate-600 dark:text-slate-300 text-sm">${itemCount}</span>
+            <div class="relative w-32 h-32 mb-6">
+                <svg class="w-full h-full" viewBox="0 0 100 100">
+                    <circle class="text-slate-200 dark:text-slate-700" stroke-width="10" stroke="currentColor" fill="transparent" r="45" cx="50" cy="50" />
+                    <circle
+                    class="text-green-500 transition-all duration-1000 ease-out"
+                    stroke-width="10"
+                    stroke-dasharray="${circumference}"
+                    stroke-dashoffset="${offset}"
+                    stroke-linecap="round"
+                    stroke="currentColor"
+                    fill="transparent"
+                    r="45"
+                    cx="50"
+                    cy="50"
+                    style="transform: rotate(-90deg); transform-origin: 50% 50%;"
+                    />
+                </svg>
+                <div class="absolute inset-0 flex flex-col items-center justify-center">
+                    <span class="text-3xl font-black text-slate-800 dark:text-white">${stats.percentage}%</span>
+                </div>
+            </div>
+
+            <div class="w-full grid grid-cols-2 gap-4 text-center mb-6">
+                <div>
+                    <p class="text-xl font-bold text-sky-600 dark:text-sky-400">${stats.completedLeaves}</p>
+                    <p class="text-[10px] uppercase font-bold text-slate-400">${ui.progressLessons}</p>
+                </div>
+                <div>
+                    <p class="text-xl font-bold text-purple-600 dark:text-purple-400">${stats.completedModules}</p>
+                    <p class="text-[10px] uppercase font-bold text-slate-400">${ui.progressModules}</p>
+                </div>
+            </div>
+
+            <button id="btn-view-certs" class="w-full py-3 bg-slate-800 hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0V5.625a2.25 2.25 0 00-2.25-2.25h-1.5a2.25 2.25 0 00-2.25-2.25v7.875" /></svg>
+                ${ui.progressViewCerts}
             </button>
+        `;
 
-            <!-- Dropdown -->
-            ${this.isOpen ? `
-            <div class="mt-2 w-80 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-6 flex flex-col items-center animate-in fade-in slide-in-from-top-2 duration-200">
-                
-                <!-- Streak & Sun Row -->
-                <div class="w-full flex gap-4 mb-6">
-                    <!-- Streak -->
-                    <div class="flex-1 bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 flex flex-col items-center justify-center border border-blue-100 dark:border-blue-800/30">
-                        <span class="text-2xl mb-1">💧</span>
-                        <span class="text-lg font-black text-blue-600 dark:text-blue-400 leading-none">${g.streak}</span>
-                        <span class="text-[10px] font-bold text-blue-400 dark:text-blue-500 uppercase mt-1">${ui.streak}</span>
-                    </div>
-                    
-                    <!-- Photosynthesis (XP) -->
-                    <div class="flex-1 bg-orange-50 dark:bg-orange-900/20 rounded-xl p-3 flex flex-col items-center justify-center border border-orange-100 dark:border-orange-800/30 relative overflow-hidden">
-                        <div class="absolute bottom-0 left-0 right-0 bg-orange-200 dark:bg-orange-700/30 transition-all duration-500" style="height: ${dailyProgress}%"></div>
-                        <span class="text-2xl mb-1 relative z-10">☀️</span>
-                        <span class="text-lg font-black text-orange-600 dark:text-orange-400 leading-none relative z-10">${g.dailyXP}</span>
-                        <span class="text-[10px] font-bold text-orange-400 dark:text-orange-500 uppercase mt-1 relative z-10">${ui.todayGoal}</span>
-                    </div>
-                </div>
-
-                <div class="h-px w-full bg-slate-200 dark:bg-slate-700 mb-6"></div>
-
-                <!-- Main Progress Circle -->
-                <h3 class="text-sm font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4">${ui.progressTitle}</h3>
-                
-                <div class="relative w-32 h-32 mb-6">
-                    <svg class="w-full h-full" viewBox="0 0 100 100">
-                        <circle class="text-slate-200 dark:text-slate-700" stroke-width="10" stroke="currentColor" fill="transparent" r="45" cx="50" cy="50" />
-                        <circle
-                        class="text-green-500 transition-all duration-1000 ease-out"
-                        stroke-width="10"
-                        stroke-dasharray="${circumference}"
-                        stroke-dashoffset="${offset}"
-                        stroke-linecap="round"
-                        stroke="currentColor"
-                        fill="transparent"
-                        r="45"
-                        cx="50"
-                        cy="50"
-                        style="transform: rotate(-90deg); transform-origin: 50% 50%;"
-                        />
-                    </svg>
-                    <div class="absolute inset-0 flex flex-col items-center justify-center">
-                        <span class="text-3xl font-black text-slate-800 dark:text-white">${stats.percentage}%</span>
-                    </div>
-                </div>
-
-                <div class="w-full grid grid-cols-2 gap-4 text-center mb-6">
-                    <div>
-                        <p class="text-xl font-bold text-sky-600 dark:text-sky-400">${stats.completedLeaves}</p>
-                        <p class="text-[10px] uppercase font-bold text-slate-400">${ui.progressLessons}</p>
-                    </div>
-                    <div>
-                        <p class="text-xl font-bold text-purple-600 dark:text-purple-400">${stats.completedModules}</p>
-                        <p class="text-[10px] uppercase font-bold text-slate-400">${ui.progressModules}</p>
-                    </div>
-                </div>
-
-                <button id="btn-view-certs" class="w-full py-3 bg-slate-800 hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0V5.625a2.25 2.25 0 00-2.25-2.25h-1.5a2.25 2.25 0 00-2.25-2.25v7.875" /></svg>
-                    ${ui.progressViewCerts}
+        this.innerHTML = `
+        <div class="relative">
+            <!-- Desktop Trigger Button: Seed Bag (Only visible on Desktop) -->
+            <div class="fixed top-4 right-4 z-30 hidden md:flex flex-col items-end">
+                <button id="btn-toggle" class="flex items-center gap-2 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200 dark:border-slate-700 px-4 py-2 rounded-full shadow-sm hover:border-orange-400 dark:hover:border-orange-600 transition-colors">
+                    <span class="text-2xl">🎒</span>
+                    <span class="font-bold text-slate-600 dark:text-slate-300 text-sm">${itemCount}</span>
                 </button>
             </div>
+
+            <!-- POPUPS -->
+            ${this.isOpen ? `
+                <!-- MOBILE: Centered Modal Overlay -->
+                <div id="mobile-widget-overlay" class="md:hidden fixed inset-0 z-[80] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+                    <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-sm border border-slate-200 dark:border-slate-800 p-6 flex flex-col items-center relative animate-in zoom-in-95 duration-200">
+                        <button id="btn-close-mobile" class="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors">✕</button>
+                        ${widgetContentHtml}
+                    </div>
+                </div>
+
+                <!-- DESKTOP: Dropdown (positioned under the button) -->
+                <div class="hidden md:flex fixed top-20 right-4 z-[40] w-80 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-6 flex-col items-center animate-in fade-in slide-in-from-top-2 duration-200">
+                    ${widgetContentHtml}
+                </div>
             ` : ''}
         </div>
         `;
 
-        this.querySelector('#btn-toggle').onclick = (e) => {
-            e.stopPropagation();
-            this.toggle();
-        };
+        // Bind events if elements exist
+        const btnToggle = this.querySelector('#btn-toggle');
+        if (btnToggle) {
+            btnToggle.onclick = (e) => {
+                e.stopPropagation();
+                this.toggle();
+            };
+        }
+
+        const btnCloseMobile = this.querySelector('#btn-close-mobile');
+        if (btnCloseMobile) {
+            btnCloseMobile.onclick = (e) => {
+                e.stopPropagation();
+                this.isOpen = false;
+                this.render();
+            };
+        }
+        
+        const overlay = this.querySelector('#mobile-widget-overlay');
+        if (overlay) {
+            overlay.onclick = (e) => {
+                if (e.target === overlay) {
+                    this.isOpen = false;
+                    this.render();
+                }
+            };
+        }
 
         if(this.isOpen) {
-            const btnCerts = this.querySelector('#btn-view-certs');
-            if(btnCerts) {
-                btnCerts.onclick = () => {
+            this.querySelectorAll('#btn-view-certs').forEach(btn => {
+                btn.onclick = () => {
                     store.setViewMode('certificates');
                     this.isOpen = false;
                     this.render();
                 };
-            }
+            });
         }
     }
 }
