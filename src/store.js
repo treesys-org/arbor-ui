@@ -35,6 +35,7 @@ class Store extends EventTarget {
             sources: [],
             activeSource: null,
             data: null, 
+            rawGraphData: null,
             
             searchCache: {}, 
             
@@ -245,6 +246,7 @@ class Store extends EventTarget {
 
             this.update({ 
                 data: langData, 
+                rawGraphData: json,
                 loading: false, 
                 path: [langData], 
                 lastActionMessage: this.ui.sourceSwitchSuccess 

@@ -371,6 +371,22 @@ class ArborAdminPanel extends HTMLElement {
                     </button>
                  </div>`;
              } else {
+                 // BUILD ICON MAP FOR MULTI-LANGUAGE SUPPORT
+                 // We scan all available languages in the full rawGraphData to find icons by path.
+                 const iconMap = {};
+                 const raw = store.value.rawGraphData;
+                 if (raw && raw.languages) {
+                     const traverse = (nodes) => {
+                         nodes.forEach(n => {
+                             if (n.sourcePath && n.icon) iconMap[n.sourcePath] = n.icon;
+                             if (n.children) traverse(n.children);
+                         });
+                     };
+                     Object.values(raw.languages).forEach(root => {
+                         if (root.children) traverse(root.children);
+                     });
+                 }
+
                  content = `
                  <div class="flex flex-col h-full bg-slate-50/30 overflow-hidden">
                     <div class="p-2 border-b border-slate-100 flex justify-between items-center bg-white dark:bg-slate-900 shrink-0 gap-2">
@@ -395,22 +411,7 @@ class ArborAdminPanel extends HTMLElement {
                               expandedPaths: this.state.expandedPaths,
                               canEdit: (p) => github.canEdit(p),
                               ui: ui,
-                              // NEW: Look up the custom icon from the current loaded graph data
-                              getCustomIcon: (path) => {
-                                   const root = store.value.data;
-                                   if (!root) return null;
-                                   
-                                   // Simple BFS to find the node by sourcePath
-                                   // Since Admin tree view usually matches the active language loaded in store,
-                                   // this should work for the active language folders.
-                                   const queue = [root];
-                                   while(queue.length > 0) {
-                                       const n = queue.shift();
-                                       if (n.sourcePath === path) return n.icon;
-                                       if (n.children) queue.push(...n.children);
-                                   }
-                                   return null;
-                              }
+                              getCustomIcon: (path) => iconMap[path] || null
                           })}
                     </div>
                  </div>`;
