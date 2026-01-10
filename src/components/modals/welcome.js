@@ -55,7 +55,7 @@ class ArborModalWelcome extends HTMLElement {
                                  <div class="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-2xl flex items-center justify-center shadow-sm text-blue-600 dark:text-blue-400">✨</div>
                                  <div>
                                      <h3 class="font-bold text-slate-800 dark:text-white mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">${ui.welcomeSteps[1].title}</h3>
-                                     <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">Drag to move, click to expand. The map is infinite.</p>
+                                     <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">${ui.welcomeSteps[1].text}</p>
                                  </div>
                              </div>
                         </div>
@@ -66,7 +66,7 @@ class ArborModalWelcome extends HTMLElement {
                                  <div class="w-12 h-12 rounded-xl bg-orange-100 dark:bg-orange-900/30 text-2xl flex items-center justify-center shadow-sm text-orange-600 dark:text-orange-400">🌰</div>
                                  <div>
                                      <h3 class="font-bold text-slate-800 dark:text-white mb-1 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">${ui.welcomeSteps[2].title}</h3>
-                                     <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">Complete lessons to collect seeds and grow your garden.</p>
+                                     <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">${ui.welcomeSteps[2].text}</p>
                                  </div>
                              </div>
                         </div>
@@ -77,7 +77,7 @@ class ArborModalWelcome extends HTMLElement {
                                  <div class="w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-900/30 text-2xl flex items-center justify-center shadow-sm text-purple-600 dark:text-purple-400">🧠</div>
                                  <div>
                                      <h3 class="font-bold text-slate-800 dark:text-white mb-1 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">${ui.welcomeSteps[3].title}</h3>
-                                     <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">Connect cloud or local AI (Ollama) to chat with the Sage.</p>
+                                     <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">${ui.welcomeSteps[3].text}</p>
                                  </div>
                              </div>
                         </div>

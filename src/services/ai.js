@@ -42,7 +42,8 @@ class HybridAIService {
     }
 
     async initialize() {
-        if (this.onProgress) this.onProgress({ text: "Despertando al Búho..." });
+        const ui = store.ui || { aiWakingUp: "Waking up..." };
+        if (this.onProgress) this.onProgress({ text: ui.aiWakingUp });
         await this.initializeClient();
         await new Promise(r => setTimeout(r, 500));
         return true;
@@ -73,16 +74,17 @@ class HybridAIService {
     // Explicitly load WebLLM (triggered by UI button)
     async loadWebLLM(progressCallback) {
         if (this.webllmEngine) return true; // Already loaded
+        const ui = store.ui;
 
         // SECURITY CHECK
         if (!window.crossOriginIsolated) {
-            const warning = "⚠️ ADVERTENCIA: Tu navegador no tiene activado 'Cross-Origin Isolation'. WebGPU fallará o será muy lento.";
+            const warning = ui.aiWarningBrowser || "⚠️ WARNING: Cross-Origin Isolation missing.";
             console.warn(warning);
             if(progressCallback) progressCallback(warning);
         }
         
         if (!navigator.gpu) {
-            if (progressCallback) progressCallback("❌ ERROR: Tu navegador no soporta WebGPU.");
+            if (progressCallback) progressCallback(ui.aiErrorWebGpu || "❌ ERROR: No WebGPU.");
             return false;
         }
         
@@ -237,6 +239,7 @@ class HybridAIService {
 
     async chat(messages, contextNode = null) {
         this.abort(); // Cancel any previous pending request
+        const ui = store.ui;
 
         const lastMsgObj = messages[messages.length - 1];
         const lastMsg = lastMsgObj.content;
@@ -382,7 +385,7 @@ class HybridAIService {
             }
         }
 
-        return { text: "Estoy en modo básico. Conéctame a la nube (Gemini), a tu CPU (Ollama) o usa WebGPU en Configuración." };
+        return { text: ui.aiBasicMode || "I am in basic mode. Connect me to the cloud (Gemini), your CPU (Ollama) or use WebGPU in Settings." };
     }
 }
 

@@ -1,11 +1,14 @@
 
+import { store } from '../store.js';
+
 // --- VISUAL BLOCK TEMPLATES ---
 export const BLOCKS = {
     quiz: (q = "", correct = "", options = []) => {
+        const ui = store.ui;
         let optsHtml = options.map(o => `
             <div class="option-row flex gap-2 items-center mb-2">
                 <input type="radio" class="w-4 h-4" disabled>
-                <input type="text" class="quiz-input option-input w-full p-2 border rounded" value="${o}" placeholder="Wrong option">
+                <input type="text" class="quiz-input option-input w-full p-2 border rounded" value="${o}" placeholder="${ui.editorBlockOptions}">
             </div>
         `).join('');
         
@@ -13,49 +16,58 @@ export const BLOCKS = {
         <div class="edit-block-wrapper arbor-quiz-edit my-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl relative group" contenteditable="false">
             <div class="remove-btn absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center cursor-pointer shadow opacity-0 group-hover:opacity-100 transition-opacity z-10" onclick="this.parentElement.remove()">✕</div>
             
-            <div class="quiz-header text-green-800 dark:text-green-300 font-bold text-xs uppercase mb-2">❓ Quiz Question</div>
-            <input type="text" class="quiz-input question-input w-full p-2 border border-green-300 dark:border-green-700 rounded mb-4 font-bold bg-white dark:bg-slate-800 dark:text-white" value="${q}" placeholder="Question text...">
+            <div class="quiz-header text-green-800 dark:text-green-300 font-bold text-xs uppercase mb-2">❓ ${ui.editorBlockQuizQuestion}</div>
+            <input type="text" class="quiz-input question-input w-full p-2 border border-green-300 dark:border-green-700 rounded mb-4 font-bold bg-white dark:bg-slate-800 dark:text-white" value="${q}" placeholder="${ui.editorBlockQuizQuestion}...">
             
-            <div class="quiz-header text-green-800 dark:text-green-300 font-bold text-xs uppercase mb-2">Correct Answer</div>
+            <div class="quiz-header text-green-800 dark:text-green-300 font-bold text-xs uppercase mb-2">${ui.editorBlockCorrect}</div>
             <div class="option-row flex gap-2 items-center mb-4">
                 <input type="radio" checked class="w-4 h-4 accent-green-600" disabled>
-                <input type="text" class="quiz-input correct-input w-full p-2 border border-green-300 dark:border-green-700 rounded bg-white dark:bg-slate-800 dark:text-white" value="${correct}" placeholder="The correct answer">
+                <input type="text" class="quiz-input correct-input w-full p-2 border border-green-300 dark:border-green-700 rounded bg-white dark:bg-slate-800 dark:text-white" value="${correct}" placeholder="${ui.editorBlockCorrect}">
             </div>
 
-            <div class="quiz-header text-green-800 dark:text-green-300 font-bold text-xs uppercase mb-2">Other Options</div>
+            <div class="quiz-header text-green-800 dark:text-green-300 font-bold text-xs uppercase mb-2">${ui.editorBlockOptions}</div>
             <div class="options-container">
                 ${optsHtml || `
                 <div class="option-row flex gap-2 items-center mb-2">
                     <input type="radio" disabled class="w-4 h-4">
-                    <input type="text" class="quiz-input option-input w-full p-2 border rounded bg-white dark:bg-slate-800 dark:text-white dark:border-slate-700" placeholder="Wrong option 1">
+                    <input type="text" class="quiz-input option-input w-full p-2 border rounded bg-white dark:bg-slate-800 dark:text-white dark:border-slate-700" placeholder="${ui.editorBlockOptions} 1">
                 </div>
                 `}
             </div>
-            <button class="text-xs text-green-700 dark:text-green-400 font-bold mt-2 hover:underline" onclick="const div = document.createElement('div'); div.className='option-row flex gap-2 items-center mb-2'; div.innerHTML='<input type=\\'radio\\' disabled class=\\'w-4 h-4\\'><input type=\\'text\\' class=\\'quiz-input option-input w-full p-2 border rounded bg-white dark:bg-slate-800 dark:text-white dark:border-slate-700\\' placeholder=\\'Another option\\'>'; this.previousElementSibling.appendChild(div);">+ Add Option</button>
+            <button class="text-xs text-green-700 dark:text-green-400 font-bold mt-2 hover:underline" onclick="const div = document.createElement('div'); div.className='option-row flex gap-2 items-center mb-2'; div.innerHTML='<input type=\\'radio\\' disabled class=\\'w-4 h-4\\'><input type=\\'text\\' class=\\'quiz-input option-input w-full p-2 border rounded bg-white dark:bg-slate-800 dark:text-white dark:border-slate-700\\' placeholder=\\'${ui.editorBlockOptions}\\'>'; this.previousElementSibling.appendChild(div);">${ui.editorBlockAddOption}</button>
         </div>
         <p><br></p>`;
     },
-    section: (title = "") => `
+    section: (title = "") => {
+        const ui = store.ui;
+        return `
         <div class="edit-block-wrapper arbor-section-edit my-8 pl-4 border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-r relative group" contenteditable="false">
             <div class="remove-btn absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center cursor-pointer shadow opacity-0 group-hover:opacity-100 transition-opacity z-10" onclick="this.parentElement.remove()">✕</div>
-            <span class="text-blue-800 dark:text-blue-300 font-bold text-xs uppercase block mb-1">New Section</span>
-            <input type="text" class="section-input w-full bg-transparent border-none text-xl font-bold text-slate-800 dark:text-white outline-none placeholder-blue-300" value="${title}" placeholder="Section Title">
+            <span class="text-blue-800 dark:text-blue-300 font-bold text-xs uppercase block mb-1">${ui.editorBlockSection}</span>
+            <input type="text" class="section-input w-full bg-transparent border-none text-xl font-bold text-slate-800 dark:text-white outline-none placeholder-blue-300" value="${title}" placeholder="${ui.editorBlockPlaceholder}">
         </div>
-        <p><br></p>`,
-    media: (type, url = "") => `
+        <p><br></p>`;
+    },
+    media: (type, url = "") => {
+        const ui = store.ui;
+        return `
         <div class="edit-block-wrapper arbor-media-edit my-6 p-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl relative group flex flex-col items-center" data-type="${type}" contenteditable="false">
             <div class="remove-btn absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center cursor-pointer shadow opacity-0 group-hover:opacity-100 transition-opacity z-10" onclick="this.parentElement.remove()">✕</div>
             <span class="text-slate-500 dark:text-slate-400 font-bold text-xs uppercase mb-2">${type.toUpperCase()}</span>
             ${type === 'image' && url ? `<img src="${url}" class="max-h-48 rounded shadow mb-2 object-contain bg-white">` : ''}
             <div class="w-full flex gap-2">
                 <span class="text-slate-400 select-none">🔗</span>
-                <input type="text" class="media-url-input flex-1 p-1 text-sm border rounded bg-white dark:bg-slate-900 dark:text-white dark:border-slate-600" value="${url}" placeholder="Resource URL (https://...)">
+                <input type="text" class="media-url-input flex-1 p-1 text-sm border rounded bg-white dark:bg-slate-900 dark:text-white dark:border-slate-600" value="${url}" placeholder="${ui.editorBlockMediaUrl} (https://...)">
             </div>
         </div>
-        <p><br></p>`,
-    callout: (text = "") => `
-        <blockquote class="arbor-callout-edit my-6 border-l-4 border-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 p-4 italic text-slate-600 dark:text-slate-300 rounded-r relative group" contenteditable="true">${text || 'Write a tip or important note here...'}</blockquote>
-        <p><br></p>`
+        <p><br></p>`;
+    },
+    callout: (text = "") => {
+        const ui = store.ui;
+        return `
+        <blockquote class="arbor-callout-edit my-6 border-l-4 border-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 p-4 italic text-slate-600 dark:text-slate-300 rounded-r relative group" contenteditable="true">${text || ui.editorBlockCallout}</blockquote>
+        <p><br></p>`;
+    }
 };
 
 // --- UTILITIES ---

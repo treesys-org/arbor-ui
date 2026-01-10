@@ -102,7 +102,7 @@ class ArborSage extends HTMLElement {
         const model = this.querySelector('#inp-webllm-model').value;
         aiService.setConfig({ provider: 'webllm', webllmModel: model });
         
-        this.webllmStatus = 'Downloading...';
+        this.webllmStatus = store.ui.sageDownloading || 'Downloading...';
         this.render();
         
         const success = await aiService.loadWebLLM((progressText) => {
@@ -319,7 +319,7 @@ class ArborSage extends HTMLElement {
                         <p class="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase mb-2">${ui.sageApiKeyLabel}</p>
                         <input id="inp-api-key" type="password" placeholder="AIz..." class="w-full text-sm p-3 border-2 border-purple-200 dark:border-purple-800 rounded-xl bg-white dark:bg-slate-900 focus:ring-4 focus:ring-purple-200 outline-none transition-all font-mono text-slate-800 dark:text-white" value="${aiService.config.apiKey || ''}">
                         <div class="text-center pt-2">
-                             <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-xs text-blue-500 hover:underline font-bold">Get API Key ↗</a>
+                             <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-xs text-blue-500 hover:underline font-bold">${ui.sageGetKey} ↗</a>
                         </div>
                     </div>
                     ` : ''}
@@ -334,7 +334,7 @@ class ArborSage extends HTMLElement {
                             <p class="text-xs font-bold text-slate-500 uppercase mb-2">${ui.sageDownloadModel}</p>
                             <div class="flex gap-2 mb-2">
                                 <input id="inp-pull-model" type="text" placeholder="e.g. mistral" class="flex-1 text-xs p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-                                <button id="btn-pull" class="px-3 py-1 bg-slate-800 text-white text-xs font-bold rounded-lg hover:bg-black">Pull</button>
+                                <button id="btn-pull" class="px-3 py-1 bg-slate-800 text-white text-xs font-bold rounded-lg hover:bg-black">${ui.sagePull}</button>
                             </div>
                             <p id="pull-status" class="text-[10px] font-mono text-blue-500 h-4 mb-4">${this.pullStatus}</p>
 
@@ -356,7 +356,7 @@ class ArborSage extends HTMLElement {
                          </select>
 
                          <p class="text-[11px] text-slate-500 leading-tight mb-4">
-                            Executes models directly in your browser. If Llama 3 fails, try <strong>SmolLM2</strong>.
+                            ${ui.sageWebLlmInfo}
                          </p>
 
                          <div class="bg-white dark:bg-slate-900 p-3 rounded-lg border border-blue-200 dark:border-blue-800/50 mb-4">
@@ -463,14 +463,14 @@ class ArborSage extends HTMLElement {
         this.className = "fixed inset-x-0 bottom-0 z-[100] flex flex-col items-end md:bottom-6 md:right-6 md:w-auto pointer-events-none";
         
         let headerGradient = 'from-purple-600 to-indigo-600';
-        let providerName = 'Gemini Cloud';
+        let providerName = ui.sageProviderCloud;
         
         if (isOllama) {
             headerGradient = 'from-orange-500 to-red-500';
-            providerName = 'Local CPU (Ollama)';
+            providerName = ui.sageProviderLocal;
         } else if (isWebLLM) {
             headerGradient = 'from-blue-500 to-cyan-500';
-            providerName = 'Browser GPU (WebLLM)';
+            providerName = ui.sageProviderBrowser;
         }
 
         this.innerHTML = `
@@ -500,9 +500,9 @@ class ArborSage extends HTMLElement {
                 </div>
 
                 <div class="px-3 py-2 flex gap-2 overflow-x-auto custom-scrollbar bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0">
-                    <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 rounded-lg text-xs font-bold hover:bg-purple-100 transition-colors border border-purple-100 dark:border-purple-800" data-action="summarize">📝 Summarize</button>
-                    <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-100 dark:border-blue-800" data-action="explain">🎓 Explain</button>
-                    <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-lg text-xs font-bold hover:bg-green-100 transition-colors border border-green-100 dark:border-green-800" data-action="quiz">❓ Quiz</button>
+                    <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 rounded-lg text-xs font-bold hover:bg-purple-100 transition-colors border border-purple-100 dark:border-purple-800" data-action="summarize">📝 ${ui.sageBtnSummarize}</button>
+                    <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-100 dark:border-blue-800" data-action="explain">🎓 ${ui.sageBtnExplain}</button>
+                    <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-lg text-xs font-bold hover:bg-green-100 transition-colors border border-green-100 dark:border-green-800" data-action="quiz">❓ ${ui.sageBtnQuiz}</button>
                 </div>
 
                 <form id="sage-form" class="p-3 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex gap-2 shrink-0 pb-[calc(0.75rem+env(safe-area-inset-bottom,20px))] md:pb-3">
