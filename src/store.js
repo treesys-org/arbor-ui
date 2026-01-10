@@ -383,6 +383,12 @@ class Store extends EventTarget {
             } else {
                 if (!node.expanded) {
                     if (node.hasUnloadedChildren) await this.loadNodeChildren(node);
+                    
+                    // Trigger Modal if the node is empty (covers both fresh load and cached state)
+                    if (node.children && node.children.length === 0) {
+                        this.setModal({ type: 'emptyModule', node: node });
+                    }
+
                     node.expanded = true;
                 } else {
                     this.collapseRecursively(node);
@@ -421,6 +427,7 @@ class Store extends EventTarget {
                 
                 if (children.length === 0) {
                     node.children = [];
+                    // Trigger modal for initial load
                     this.setModal({ type: 'emptyModule', node: node });
                 } else {
                     children.forEach(child => child.parentId = node.id);
@@ -771,7 +778,7 @@ class Store extends EventTarget {
             
             if (data.b || data.bookmarks) {
                 this.userStore.state.bookmarks = { ...this.userStore.state.bookmarks, ...(data.b || data.bookmarks) };
-                localStorage.setItem('arbor-bookmarks', JSON.stringify(this.userStore.state.bookmarks));
+                localStorage.setItem('arbor-bookmarks', JSON.stringify(this.state.bookmarks));
             }
 
             if (!Array.isArray(newProgress)) throw new Error("Invalid Format");
