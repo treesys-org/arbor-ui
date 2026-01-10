@@ -1,4 +1,5 @@
 
+
 import { store } from '../../store.js';
 
 // Comprehensive Emoji Data
@@ -68,10 +69,10 @@ class ArborModalProfile extends HTMLElement {
         // We render the HTML structure once. Dynamic updates happen in updateView.
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
-            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full relative overflow-hidden flex flex-col max-h-[95vh] border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full relative overflow-hidden flex flex-col max-h-[90dvh] border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
                 <button class="btn-close absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 z-20 transition-colors">✕</button>
                 
-                <div class="p-8 text-center h-full overflow-y-auto custom-scrollbar relative">
+                <div class="p-6 md:p-8 text-center h-full overflow-y-auto custom-scrollbar relative">
                     <div class="relative inline-block">
                         <button id="btn-avatar-picker" class="w-24 h-24 bg-slate-100 dark:bg-slate-800 rounded-full mx-auto flex items-center justify-center text-5xl mb-4 relative group transition-transform hover:scale-105 shadow-inner border border-slate-200 dark:border-slate-700">
                             <span id="avatar-display">${this.state.tempAvatar}</span>
@@ -80,7 +81,7 @@ class ArborModalProfile extends HTMLElement {
                             </div>
                         </button>
                         <!-- Picker -->
-                        <div id="emoji-picker" class="hidden absolute top-full mt-2 left-1/2 -translate-x-1/2 w-80 bg-white dark:bg-slate-800 shadow-2xl rounded-xl border border-slate-200 dark:border-slate-700 z-50 p-0 h-72 overflow-y-auto custom-scrollbar animate-in zoom-in-95 duration-200">
+                        <div id="emoji-picker" class="hidden absolute top-full mt-2 left-1/2 -translate-x-1/2 w-64 md:w-80 bg-white dark:bg-slate-800 shadow-2xl rounded-xl border border-slate-200 dark:border-slate-700 z-50 p-0 h-72 overflow-y-auto custom-scrollbar animate-in zoom-in-95 duration-200">
                             ${Object.entries(EMOJI_DATA).map(([cat, emojis]) => `
                                 <div class="text-xs font-bold text-slate-400 px-3 py-2 uppercase tracking-wider text-left sticky top-0 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm border-b border-slate-100 dark:border-slate-700 z-10">${cat}</div>
                                 <div class="grid grid-cols-6 gap-1 p-2">
@@ -109,7 +110,7 @@ class ArborModalProfile extends HTMLElement {
                     </div>
 
                     <!-- BACKPACK SECTION -->
-                    <div class="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-100 dark:border-slate-700 text-left mb-6 relative overflow-hidden">
+                    <div class="bg-slate-50 dark:bg-slate-800/50 p-4 md:p-6 rounded-2xl border border-slate-100 dark:border-slate-700 text-left mb-6 relative overflow-hidden">
                         <div class="absolute -right-6 -top-6 text-9xl opacity-5 pointer-events-none select-none">🎒</div>
                         
                         <h3 class="font-black text-slate-700 dark:text-slate-200 text-lg mb-2 relative z-10 flex items-center gap-2">
@@ -144,7 +145,7 @@ class ArborModalProfile extends HTMLElement {
                         <h3 class="font-bold text-xs uppercase text-slate-400 mb-4 tracking-widest">${ui.gardenTitle || 'My Seed Collection'}</h3>
                         ${collectedItems.length === 0 
                             ? `<div class="p-8 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl text-center text-slate-400 text-sm italic">${ui.gardenEmpty}</div>`
-                            : `<div class="grid grid-cols-5 sm:grid-cols-6 gap-3">
+                            : `<div class="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-3">
                                 ${collectedItems.map(s => `
                                     <div class="aspect-square bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center text-2xl shadow-sm border border-slate-100 dark:border-slate-700 hover:scale-110 transition-transform cursor-help" title="${s.id}">
                                         ${s.icon}

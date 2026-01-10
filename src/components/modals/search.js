@@ -28,9 +28,9 @@ class ArborModalSearch extends HTMLElement {
 
     render(ui) {
         this.innerHTML = `
-        <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-start justify-center pt-20 bg-slate-900/80 backdrop-blur-md p-4 animate-in fade-in">
-            <div class="w-full max-w-2xl flex flex-col max-h-[80vh] relative cursor-auto">
-                <div class="absolute -top-10 right-0 flex justify-end w-full pb-2">
+        <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-start justify-center pt-4 md:pt-20 bg-slate-900/80 backdrop-blur-md p-4 animate-in fade-in">
+            <div class="w-full max-w-2xl flex flex-col max-h-[85vh] md:max-h-[80vh] relative cursor-auto">
+                <div class="flex justify-end w-full pb-2 md:absolute md:-top-10 md:right-0">
                     <button class="btn-close-search text-white/80 hover:text-white font-bold text-sm flex items-center gap-2 bg-slate-800/50 px-3 py-1.5 rounded-full transition-colors backdrop-blur-sm border border-white/10">
                         <span>${ui.close || 'Close'}</span> ✕
                     </button>
@@ -41,7 +41,7 @@ class ArborModalSearch extends HTMLElement {
                     <input id="inp-search" type="text" placeholder="" 
                         class="w-full bg-[#1e293b] border border-slate-700 text-slate-200 rounded-xl py-4 pl-12 pr-14 font-bold outline-none focus:ring-2 focus:ring-sky-500 shadow-xl text-lg transition-all placeholder:text-slate-500"
                         value="${this.state.query}" autofocus autocomplete="off">
-                    <span class="absolute right-4 top-4 text-[10px] font-bold text-slate-500 border border-slate-600 px-1.5 py-1 rounded bg-[#0f172a] select-none">ESC</span>
+                    <span class="absolute right-4 top-4 text-[10px] font-bold text-slate-500 border border-slate-600 px-1.5 py-1 rounded bg-[#0f172a] select-none hidden md:inline">ESC</span>
                 </div>
                 
                 <div id="search-msg-area" class="text-center text-slate-400 py-4 font-medium text-sm transition-opacity duration-300 ${this.state.query.length > 0 ? 'opacity-100' : 'opacity-0'}">
@@ -108,7 +108,7 @@ class ArborModalSearch extends HTMLElement {
                 </div>
             </button>
             `;
-         }).join('');
+         }).join('') + '<div class="h-10"></div>'; // Extra scroll space
     }
 
     updateResultsDOM() {

@@ -1,5 +1,4 @@
 
-
 import { store } from '../store.js';
 import { parseContent } from '../utils/parser.js';
 import { github } from '../services/github.js';
@@ -400,21 +399,21 @@ class ArborContent extends HTMLElement {
                       🦉 <span class="hidden sm:inline">${ui.navSage}</span>
                    </button>
                    
-                   <button id="btn-propose-change" class="w-9 h-9 flex items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors" title="${ui.proposeChange}">
+                   <button id="btn-propose-change" class="flex w-9 h-9 items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors" title="${ui.proposeChange}">
                         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" /></svg>
                    </button>
 
-                   <button id="btn-export-pdf" class="w-9 h-9 flex items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors" title="${ui.exportTitle}">
+                   <button id="btn-export-pdf" class="flex w-9 h-9 items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors" title="${ui.exportTitle}">
                         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M12 9.75l-3 3m0 0l3 3m-3-3h7.5M3 16.5v2.25" /></svg>
                    </button>
 
-                   <div class="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+                   <div class="block w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
 
                    ${canEdit ? `
-                   <button id="btn-edit-content" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-xs flex items-center gap-2">
+                   <button id="btn-edit-content" class="flex px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-xs items-center gap-2">
                       ✏️ <span class="hidden sm:inline">${ui.editButton}</span>
                    </button>
-                   <div class="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+                   <div class="block w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
                    ` : ''}
 
                    <button id="btn-close-content" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-red-50 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 transition-colors">

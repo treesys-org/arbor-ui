@@ -19,8 +19,11 @@ class ArborModalWelcome extends HTMLElement {
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 animate-in fade-in">
             <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl w-full max-w-4xl relative overflow-hidden flex flex-col md:flex-row max-h-[90vh] md:h-[600px] border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
                 
+                <!-- Global Close Button (Top Right) -->
+                <button class="btn-close absolute top-4 right-4 z-50 w-10 h-10 flex items-center justify-center rounded-full transition-colors text-white bg-black/20 hover:bg-black/30 md:text-slate-400 md:bg-transparent md:hover:bg-slate-100 md:dark:hover:bg-slate-800">✕</button>
+
                 <!-- Left: Hero -->
-                <div class="md:w-5/12 bg-gradient-to-br from-green-500 to-emerald-700 p-8 md:p-12 flex flex-col justify-between text-white relative overflow-hidden">
+                <div class="md:w-5/12 bg-gradient-to-br from-green-500 to-emerald-700 p-8 md:p-12 flex flex-col justify-between text-white relative overflow-hidden shrink-0">
                     <div class="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
                     <div class="absolute bottom-0 left-0 -ml-16 -mb-16 w-64 h-64 bg-black/10 rounded-full blur-3xl pointer-events-none"></div>
 
@@ -41,10 +44,8 @@ class ArborModalWelcome extends HTMLElement {
                 </div>
 
                 <!-- Right: Content -->
-                <div class="md:w-7/12 p-8 md:p-10 bg-white dark:bg-slate-900 flex flex-col overflow-y-auto custom-scrollbar">
-                    <button class="btn-close absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 z-20 transition-colors">✕</button>
-
-                    <h2 class="text-2xl font-black text-slate-800 dark:text-white mb-6 md:mb-8">${ui.tutorialTitle}</h2>
+                <div class="md:w-7/12 p-8 md:p-10 bg-white dark:bg-slate-900 flex flex-col overflow-y-auto custom-scrollbar relative">
+                    <h2 class="text-2xl font-black text-slate-800 dark:text-white mb-6 md:mb-8 mt-4 md:mt-0">${ui.tutorialTitle}</h2>
 
                     <div class="grid grid-cols-1 gap-4 mb-8">
                         

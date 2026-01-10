@@ -41,12 +41,12 @@ class ArborModalEmptyModule extends HTMLElement {
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
             <div class="relative max-w-sm w-full">
-                <!-- Close Button -->
-                <button class="btn-close absolute -top-12 right-0 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors backdrop-blur-md">✕</button>
-
                 <!-- Balloon / Bubble Card -->
                 <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl p-8 text-center relative overflow-visible border border-slate-200 dark:border-slate-800 transform transition-all hover:scale-[1.02]">
                     
+                    <!-- Close Button (Inside Card for Mobile Safety) -->
+                    <button class="btn-close absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors">✕</button>
+
                     <!-- Decorative Balloon Tail (Pointing down to the node) -->
                     <div class="absolute -bottom-3 left-1/2 -translate-x-1/2 w-8 h-8 bg-white dark:bg-slate-900 rotate-45 transform border-r border-b border-slate-200 dark:border-slate-800"></div>
 
