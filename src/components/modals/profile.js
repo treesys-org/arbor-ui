@@ -1,12 +1,11 @@
 
-
 import { store } from '../../store.js';
 
 // Comprehensive Emoji Data
 const EMOJI_DATA = {
     "Faces": ["😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "🥲", "😊", "😇", "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚", "😋", "😛", "😝", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🥸", "🤩", "🥳", "😏", "😒", "😞", "😔", "😟", "😕", "🙁", "☹️", "😣", "😖", "😫", "😩", "🥺", "😢", "😭", "😤", "😠", "😡", "🤬", "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😓", "🤗", "🤔", "🤭", "🤫", "🤥", "😶", "😐", "😑", "😬", "🙄", "😯", "😦", "😧", "😮", "😲", "🥱", "😴", "🤤", "😪", "😵", "🤐", "🥴", "🤢", "🤮", "🤧", "😷", "🤒", "🤕", "🤑", "🤠", "😈", "👿", "👹", "👺", "🤡", "💩", "👻", "💀", "☠️", "👽", "👾", "🤖", "🎃"],
     "People": ["👶", "👧", "🧒", "👦", "👩", "🧑", "👨", "👩‍🦱", "👨‍🦱", "👩‍🦰", "👨‍🦰", "👱‍♀️", "👱‍♂️", "👩‍🦳", "👨‍🦳", "👩‍🦲", "👨‍🦲", "🧔", "👵", "🧓", "👴", "👲", "👳‍♀️", "👳‍♂️", "🧕", "👮‍♀️", "👮‍♂️", "👷‍♀️", "👷‍♂️", "💂‍♀️", "💂‍♂️", "🕵️‍♀️", "🕵️‍♂️", "👩‍⚕️", "👨‍⚕️", "👩‍🌾", "👨‍🌾", "👩‍🍳", "👨‍🍳", "👩‍🎓", "👨‍🎓", "👩‍🎤", "👨‍🎤", "👩‍🏫", "👨‍🏫", "👩‍🏭", "👨‍🏭", "👩‍💻", "👨‍💻", "👩‍💼", "👨‍💼", "👩‍🔧", "👨‍🔧", "👩‍🔬", "👨‍🔬", "👩‍🎨", "👨‍🎨", "👩‍🚒", "👨‍🚒", "👩‍✈️", "👨‍✈️", "👩‍🚀", "👨‍🚀", "👩‍⚖️", "👨‍⚖️", "👰", "🤵", "👸", "🤴", "🦸‍♀️", "🦸‍♂️", "🦹‍♀️", "🦹‍♂️", "🤶", "🎅", "🧙‍♀️", "🧙‍♂️", "🧝‍♀️", "🧝‍♂️", "🧛‍♀️", "🧛‍♂️", "🧟‍♀️", "🧟‍♂️", "🧞‍♀️", "🧞‍♂️", "🧜‍♀️", "🧜‍♂️", "🧚‍♀️", "🧚‍♂️", "👼", "🤰", "🤱", "🙇‍♀️", "🙇‍♂️", "💁‍♀️", "💁‍♂️", "🙅‍♀️", "🙅‍♂️", "🙆‍♀️", "🙆‍♂️", "🙋‍♀️", "🙋‍♂️", "🧏‍♀️", "🧏‍♂️", "🤦‍♀️", "🤦‍♂️", "🤷‍♀️", "🤷‍♂️"],
-    "Animals": ["🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", "🐷", "🐽", "🐸", "🐵", "🙈", "🙉", "🙊", "🐒", "🐔", "🐧", "🐦", "🐤", "🐣", "🐥", "🦆", "🦅", "🦉", "🦇", "🐺", "🐗", "🐴", "🦄", "🐝", "🐛", "🦋", "🐌", "🐞", "🐜", "🦟", "🦗", "🕷️", "🕸️", "🦂", "🐢", "🐍", "🦎", "🦖", "🦕", "🐙", "🦑", "🦐", "🦞", "🦀", "🐡", "🐠", "🐟", "🐬", "🐳", "🐋", "🦈", "🐊", "🐅", "🐆", "🦓", "🦍", "🦧", "🦣", "🐘", "🦛", "🦏", "🐪", "🐫", "🦒", "🦘", "🦬", "🐃", "🐂", "🐄", "🐎", "🐖", "🐏", "🐑", "🦙", "🐐", "🦌", "🐕", "🐩", "🦮", "🐕‍🦺", "🐈", "🐈‍⬛", "🪶", "🐓", "🦃", "🦤", "🦚", "🦜", "🦢", "🦩", "🕊️", "🐇", "🦝", "🦨", "🦡", "🦫", "🦦", "🦥", "🐁", "🐀", "🐿️", "🦔", "🐾", "🐉", "🐲"]
+    "Animals": ["🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", "🐷", "🐽", "🐸", "🐵", "🙉", "🙊", "🐒", "🐔", "🐧", "🐦", "🐤", "🐣", "🐥", "🦆", "🦅", "🦉", "🦇", "🐺", "🐗", "🐴", "🦄", "🐝", "🐛", "🦋", "🐌", "🐞", "🐜", "🦟", "🦗", "🕷️", "🕸️", "🦂", "🐢", "🐍", "🦎", "🦖", "🦕", "🐙", "🦑", "🦐", "🦞", "🦀", "🐡", "🐠", "🐟", "🐬", "🐳", "🐋", "🦈", "🐊", "🐅", "🐆", "🦓", "🦍", "🦧", "🦣", "🐘", "🦛", "🦏", "🐪", "🐫", "🦒", "🦘", "🦬", "🐃", "🐂", "🐄", "🐎", "🐖", "🐏", "🐑", "🦙", "🐐", "🦌", "🐕", "🐩", "🦮", "🐕‍🦺", "🐈", "🐈‍⬛", "🪶", "🐓", "🦃", "🦤", "🦚", "🦜", "🦢", "🦩", "🕊️", "🐇", "🦝", "🦨", "🦡", "🦫", "🦦", "🦥", "🐁", "🐀", "🐿️", "🦔", "🐾", "🐉", "🐲"]
 };
 
 class ArborModalProfile extends HTMLElement {
@@ -15,6 +14,7 @@ class ArborModalProfile extends HTMLElement {
         this.state = {
             showEmojiPicker: false,
             showRestoreInput: false,
+            showLoginWarning: false,
             // Initialize temp state from store to allow immediate UI feedback
             tempAvatar: store.value.gamification.avatar || '👤',
             tempUsername: store.value.gamification.username || ''
@@ -24,6 +24,7 @@ class ArborModalProfile extends HTMLElement {
     connectedCallback() {
         // Initial Full Render
         this.render();
+        store.addEventListener('state-change', () => this.render());
         
         // Listeners for closing picker when clicking outside
         this.pickerListener = (e) => {
@@ -57,6 +58,12 @@ class ArborModalProfile extends HTMLElement {
              else restoreArea.classList.add('hidden');
         }
 
+        const warningOverlay = this.querySelector('#login-warning-overlay');
+        if (warningOverlay) {
+            if (this.state.showLoginWarning) warningOverlay.classList.remove('hidden');
+            else warningOverlay.classList.add('hidden');
+        }
+
         const avatarDisplay = this.querySelector('#avatar-display');
         if (avatarDisplay) avatarDisplay.textContent = this.state.tempAvatar;
     }
@@ -65,8 +72,9 @@ class ArborModalProfile extends HTMLElement {
         const ui = store.ui;
         const g = store.value.gamification;
         const collectedItems = g.seeds || g.fruits || [];
+        const puterUser = store.value.puterUser;
+        const isSyncing = store.value.isSyncing;
         
-        // We render the HTML structure once. Dynamic updates happen in updateView.
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
             <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full relative overflow-hidden flex flex-col max-h-[90dvh] border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
@@ -98,6 +106,52 @@ class ArborModalProfile extends HTMLElement {
                         <span>💾</span> ${ui.saveProfile}
                     </button>
                     
+                    <!-- CLOUD SYNC SECTION (PUTER) -->
+                    <div class="bg-indigo-50 dark:bg-indigo-900/10 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800/30 mb-6 text-left relative overflow-hidden">
+                        
+                        <!-- Disclaimer Overlay -->
+                        <div id="login-warning-overlay" class="hidden absolute inset-0 z-20 bg-white/95 dark:bg-slate-900/95 flex flex-col items-center justify-center p-6 text-center animate-in fade-in">
+                            <h4 class="font-black text-indigo-900 dark:text-white mb-2 text-sm uppercase tracking-wide">${ui.syncLoginWarningTitle || "Cloud Sync Disclaimer"}</h4>
+                            <p class="text-xs text-slate-600 dark:text-slate-300 mb-4 leading-relaxed">${ui.syncLoginWarningBody || "By connecting, your local progress will be replaced by the cloud backup."}</p>
+                            <div class="flex gap-2 w-full">
+                                <button id="btn-cancel-login" class="flex-1 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">${ui.cancel}</button>
+                                <button id="btn-confirm-login" class="flex-1 py-2 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-500 transition-colors shadow-md">${ui.syncLoginConfirm || "Log In"}</button>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="text-xl">☁️</span>
+                            <h3 class="font-bold text-indigo-900 dark:text-indigo-300 text-sm uppercase tracking-wide">Cloud Sync</h3>
+                            ${isSyncing ? '<span class="ml-auto text-xs text-indigo-500 animate-pulse">Syncing...</span>' : ''}
+                        </div>
+                        
+                        ${puterUser ? `
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-xs font-bold text-indigo-700 dark:text-indigo-400">Connected as @${puterUser.username}</p>
+                                    <p class="text-[10px] text-indigo-400 dark:text-indigo-500/70">Progress is backed up automatically.</p>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button id="btn-disconnect-puter" class="p-2 bg-indigo-100 dark:bg-indigo-800 hover:bg-red-100 dark:hover:bg-red-900/30 text-indigo-700 hover:text-red-600 rounded-lg text-xs font-bold transition-colors" title="Sign Out">
+                                        Sign Out ✕
+                                    </button>
+                                </div>
+                            </div>
+                        ` : `
+                            <div class="flex items-center justify-between gap-4">
+                                <div>
+                                    <p class="text-xs text-indigo-600 dark:text-indigo-400/80 leading-tight">Sign in with Puter to sync your progress across devices.</p>
+                                </div>
+                                <button id="btn-show-login-warning" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg shadow-md active:scale-95 transition-transform whitespace-nowrap">
+                                    Connect
+                                </button>
+                            </div>
+                            <div class="mt-2 text-center">
+                                <button id="btn-open-privacy" class="text-[9px] text-indigo-400/60 hover:text-indigo-500 underline italic">${ui.syncPrivacyNote}</button>
+                            </div>
+                        `}
+                    </div>
+
                     <div class="grid grid-cols-2 gap-4 mb-8">
                         <div class="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-xl border border-orange-100 dark:border-orange-800/30">
                             <div class="text-2xl mb-1">🌰</div>
@@ -164,6 +218,41 @@ class ArborModalProfile extends HTMLElement {
     bindEvents() {
         this.querySelector('.btn-close').onclick = () => this.close();
         
+        // Puter Bindings
+        // 1. Show Warning
+        const btnShowWarning = this.querySelector('#btn-show-login-warning');
+        if (btnShowWarning) {
+            btnShowWarning.onclick = () => {
+                this.state.showLoginWarning = true;
+                this.updateView();
+            };
+        }
+
+        // 2. Confirm Login
+        const btnConfirm = this.querySelector('#btn-confirm-login');
+        if (btnConfirm) {
+            btnConfirm.onclick = () => {
+                this.state.showLoginWarning = false;
+                this.updateView();
+                store.connectPuter();
+            };
+        }
+
+        // 3. Cancel Login
+        const btnCancelLogin = this.querySelector('#btn-cancel-login');
+        if (btnCancelLogin) {
+            btnCancelLogin.onclick = () => {
+                this.state.showLoginWarning = false;
+                this.updateView();
+            };
+        }
+
+        const btnDisconnect = this.querySelector('#btn-disconnect-puter');
+        if(btnDisconnect) btnDisconnect.onclick = () => store.disconnectPuter();
+        
+        const btnPrivacy = this.querySelector('#btn-open-privacy');
+        if (btnPrivacy) btnPrivacy.onclick = () => store.setModal('privacy');
+
         // Avatar Picker Toggle
         this.querySelector('#btn-avatar-picker').onclick = (e) => {
             e.stopPropagation();

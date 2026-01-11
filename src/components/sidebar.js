@@ -1,5 +1,4 @@
 
-
 import { store } from '../store.js';
 
 class ArborSidebar extends HTMLElement {
@@ -64,7 +63,9 @@ class ArborSidebar extends HTMLElement {
                     <div class="h-px bg-slate-100 dark:bg-slate-700 my-1 mx-2"></div>
                     <button class="js-btn-contrib menu-item"><span>🐙</span> <span>${ui.navContributor}</span></button>
                     <button class="js-btn-about menu-item"><span>ℹ️</span> <span>${ui.navAbout}</span></button>
-                    <button class="js-btn-impressum menu-item"><span>©</span> <span>${ui.impressumTitle}</span></button>
+                    <div class="h-px bg-slate-100 dark:bg-slate-700 my-1 mx-2"></div>
+                    <button class="js-btn-privacy menu-item"><span>🛡️</span> <span>${ui.privacyTitle || 'Privacy'}</span></button>
+                    <button class="js-btn-impressum menu-item"><span>⚖️</span> <span>${ui.impressumTitle}</span></button>
                 </nav>
             </div>
             `;
@@ -162,8 +163,18 @@ class ArborSidebar extends HTMLElement {
 
             <!-- BOTTOM SECTION -->
             <div class="flex flex-col gap-3 items-center w-full">
+                
                 <div class="relative group"><button class="js-btn-contrib w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white">🐙</button><span class="tooltip">${ui.navContributor}</span></div>
                 <div class="relative group"><button class="js-btn-about w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 15" /></svg></button><span class="tooltip">${ui.navAbout}</span></div>
+                
+                <!-- Privacy Button (Extreme Legal) -->
+                <div class="relative group">
+                    <button class="js-btn-privacy w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors" title="${ui.privacyTitle || 'Privacy'}">
+                        🛡️
+                    </button>
+                    <span class="tooltip">${ui.privacyTitle || 'Privacy'}</span>
+                </div>
+
                 <div class="w-8 h-px bg-slate-200 dark:bg-slate-700 my-1"></div>
                 
                 <div class="relative group"><button class="js-btn-lang w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 text-xl flex items-center justify-center">${store.currentLangInfo.flag}</button><span class="tooltip">${ui.languageTitle}</span></div>
@@ -202,6 +213,7 @@ class ArborSidebar extends HTMLElement {
         this.querySelectorAll('.js-btn-lang').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('language')));
         this.querySelectorAll('.js-btn-help').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('tutorial')));
         this.querySelectorAll('.js-btn-impressum').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('impressum')));
+        this.querySelectorAll('.js-btn-privacy').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('privacy'))); // Bind Privacy
         this.querySelectorAll('.js-btn-contrib').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('contributor')));
         this.querySelectorAll('.js-btn-profile').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('profile')));
         

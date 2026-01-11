@@ -1,8 +1,8 @@
 
-
 import { AVAILABLE_LANGUAGES } from './i18n.js';
 import { github } from './services/github.js';
 import { aiService } from './services/ai.js';
+import { puterSync } from './services/puter-sync.js';
 import { UserStore } from './stores/user-store.js';
 
 const OFFICIAL_DOMAINS = [
@@ -12,34 +12,45 @@ const OFFICIAL_DOMAINS = [
     'raw.githubusercontent.com'
 ];
 
+// Fallback if the manifest fetch fails
 const DEFAULT_SOURCES = [
     {
         id: 'default-arbor',
         name: 'Arbor Knowledge (Official)',
         url: 'https://raw.githubusercontent.com/treesys-org/arbor-knowledge/main/data/data.json',
         isDefault: true,
-        isTrusted: true
+        isTrusted: true,
+        year: 'Rolling'
     }
 ];
+
+// URL to the Master Index (The "Time Machine" registry)
+// In a real deployment, this file exists in the root of the repo.
+const MANIFEST_URL = 'https://raw.githubusercontent.com/treesys-org/arbor-knowledge/main/arbor-index.json';
 
 class Store extends EventTarget {
     constructor() {
         super();
         
         // Sub-Store for User Logic (Gamification, Bookmarks, Progress)
-        this.userStore = new UserStore(() => this.ui);
+        this.userStore = new UserStore(
+            () => this.ui,
+            (data) => this.handleAutoSync(data) 
+        );
 
         this.state = {
             theme: localStorage.getItem('arbor-theme') || 'light',
             lang: localStorage.getItem('arbor-lang') || 'EN',
             i18nData: null, 
-            sources: [],
+            
+            // Source Management
+            officialVersions: [], // From Manifest
+            communitySources: [], // From LocalStorage
             activeSource: null,
+            
             data: null, 
             rawGraphData: null,
-            
             searchCache: {}, 
-            
             path: [], 
             
             // AI State
@@ -48,6 +59,12 @@ class Store extends EventTarget {
                 progress: '',
                 messages: [] 
             },
+            
+            // Cloud Sync State
+            puterUser: null,
+            isSyncing: false,
+            lastSyncTime: null,
+
             selectedNode: null, 
             previewNode: null,
             loading: true,
@@ -60,10 +77,9 @@ class Store extends EventTarget {
         };
         
         this.initialize().then(() => {
-             // User store is self-loading in its constructor
              const streakMsg = this.userStore.checkStreak();
              if (streakMsg) this.notify(streakMsg);
-             this.loadSources();
+             this.initSources();
         });
 
         const ghToken = localStorage.getItem('arbor-gh-token') || sessionStorage.getItem('arbor-gh-token');
@@ -79,6 +95,12 @@ class Store extends EventTarget {
     async initialize() {
         await this.loadLanguage(this.state.lang);
         
+        // Init Puter Sync
+        const pUser = await puterSync.initialize();
+        if (pUser) {
+            this.update({ puterUser: pUser });
+        }
+
         const welcomeSeen = localStorage.getItem('arbor-welcome-seen');
         if (!welcomeSeen) {
             setTimeout(() => {
@@ -87,45 +109,172 @@ class Store extends EventTarget {
         }
     }
 
+    // --- SOURCE & MANIFEST MANAGEMENT ---
+
+    async initSources() {
+        // 1. Load Community Sources (Local)
+        let localSources = [];
+        try { localSources = JSON.parse(localStorage.getItem('arbor-sources')) || []; } catch(e) {}
+        
+        // 2. Fetch Official Manifest (Remote)
+        let officialVersions = [];
+        try {
+            const res = await fetch(MANIFEST_URL, { cache: 'no-cache' });
+            if (res.ok) {
+                const manifest = await res.json();
+                
+                // Parse Manifest Structure
+                if (manifest.rolling) officialVersions.push({ ...manifest.rolling, isOfficial: true, type: 'rolling' });
+                if (manifest.releases && Array.isArray(manifest.releases)) {
+                    officialVersions.push(...manifest.releases.map(r => ({ ...r, isOfficial: true, type: 'archive' })));
+                }
+            } else {
+                throw new Error("Manifest unreachable");
+            }
+        } catch (e) {
+            // Fallback: Use hardcoded default as the "Official" one
+            console.warn("Could not load Arbor Manifest. Using default.", e);
+            officialVersions = [...DEFAULT_SOURCES.map(s => ({ ...s, isOfficial: true, type: 'rolling' }))];
+        }
+
+        this.update({ 
+            officialVersions: officialVersions,
+            communitySources: localSources 
+        });
+
+        // 3. Determine Active Source
+        const savedActiveId = localStorage.getItem('arbor-active-source-id');
+        
+        // Search in both lists
+        let activeSource = officialVersions.find(s => s.id === savedActiveId) || 
+                           localSources.find(s => s.id === savedActiveId);
+
+        // Default to the first official rolling release if nothing found
+        if (!activeSource) activeSource = officialVersions[0];
+
+        this.loadData(activeSource);
+    }
+
+    addCommunitySource(url) {
+        if (!url) return;
+        let name = 'New Tree';
+        try { name = new URL(url, window.location.href).hostname; } catch (e) {}
+        
+        const newSource = { 
+            id: crypto.randomUUID(), 
+            name, 
+            url, 
+            isTrusted: this.isUrlTrusted(url),
+            isOfficial: false,
+            type: 'community'
+        };
+        
+        const newSources = [...this.state.communitySources, newSource];
+        this.update({ communitySources: newSources });
+        localStorage.setItem('arbor-sources', JSON.stringify(newSources));
+        
+        this.loadAndSmartMerge(newSource.id);
+    }
+
+    removeCommunitySource(id) {
+        const newSources = this.state.communitySources.filter(s => s.id !== id);
+        this.update({ communitySources: newSources });
+        localStorage.setItem('arbor-sources', JSON.stringify(newSources));
+        
+        if (this.state.activeSource.id === id) {
+            // Fallback to official
+            const fallback = this.state.officialVersions[0];
+            this.loadAndSmartMerge(fallback.id);
+        }
+    }
+
+    loadAndSmartMerge(sourceId) {
+        let source = this.state.officialVersions.find(s => s.id === sourceId) ||
+                     this.state.communitySources.find(s => s.id === sourceId);
+                     
+        if (!source) return;
+        this.loadData(source, true);
+    }
+
+    // --- PUTER SYNC HANDLERS ---
+
+    async connectPuter() {
+        try {
+            const user = await puterSync.signIn();
+            this.update({ puterUser: user });
+            const cloudData = await puterSync.load();
+            if (cloudData) {
+                this.importProgress(JSON.stringify(cloudData));
+                this.notify("Sync complete. Cloud data loaded.");
+            } else {
+                this.handleAutoSync(this.userStore.getPersistenceData());
+                this.notify("Connected. Local data saved to cloud.");
+            }
+        } catch (e) {
+            console.error(e);
+            this.notify("Sync Error: " + e.message);
+        }
+    }
+
+    async disconnectPuter() {
+        await puterSync.signOut();
+        this.update({ puterUser: null });
+        this.notify("Puter disconnected.");
+    }
+
+    async handleAutoSync(data) {
+        if (this.state.puterUser) {
+            this.update({ isSyncing: true });
+            try {
+                await puterSync.save(data);
+                this.update({ lastSyncTime: new Date() });
+            } catch (e) {
+                console.warn("Background sync failed", e);
+            } finally {
+                this.update({ isSyncing: false });
+            }
+        }
+    }
+
+    async forceCloudPull() {
+        if (!this.state.puterUser) return;
+        this.update({ isSyncing: true });
+        try {
+            const data = await puterSync.load();
+            if (data) {
+                this.importProgress(JSON.stringify(data));
+                this.notify(this.ui.importSuccess);
+            } else {
+                this.notify("No data found in cloud.");
+            }
+        } catch (e) {
+            this.notify("Pull Error: " + e.message);
+        } finally {
+            this.update({ isSyncing: false });
+        }
+    }
+
+    // ---------------------------
+
     async loadLanguage(langCode) {
         try {
             const path = `./locales/${langCode.toLowerCase()}.json`;
-            // Add cache buster to prevent stale partial loads during dev
             const res = await fetch(path, { cache: 'no-cache' });
             if (!res.ok) throw new Error(`Missing language file: ${path}`);
             const data = await res.json();
             this.update({ i18nData: data });
         } catch (e) {
             console.error(`Language load failed for ${langCode}`, e);
-            
-            // Fallback logic
-            if (langCode !== 'EN') {
-                console.log("Falling back to EN...");
-                await this.loadLanguage('EN');
-            } else {
-                // Critical Failure Fallback
-                this.update({ i18nData: { 
-                    appTitle: "Arbor (Recovery Mode)", 
-                    loading: "Loading...", 
-                    errorTitle: "Language Error",
-                    errorNoTrees: "Could not load language files. Please check connection."
-                }});
-            }
+            if (langCode !== 'EN') await this.loadLanguage('EN');
+            else this.update({ i18nData: { appTitle: "Arbor (Recovery)", loading: "Loading...", errorTitle: "Error", errorNoTrees: "Language Error" }});
         }
     }
 
     get ui() { 
-        // Robust fallback: If data isn't loaded, return a Proxy.
-        // The Proxy intercepts requests for properties (like ui.appTitle).
         if (!this.state.i18nData) {
             return new Proxy({}, {
                 get: (target, prop) => {
-                    // CRITICAL: Arrays like welcomeSteps must return an array/object 
-                    // to prevent "Cannot read property of undefined" crashes in .map()
-                    if (prop === 'welcomeSteps') {
-                        return Array(5).fill({ title: 'Loading...', text: '...', icon: '...' });
-                    }
-                    // For text strings, return the key name so developers/users know what is loading/missing
+                    if (prop === 'welcomeSteps') return Array(5).fill({ title: 'Loading...', text: '...', icon: '...' });
                     return String(prop);
                 }
             });
@@ -133,7 +282,6 @@ class Store extends EventTarget {
         return this.state.i18nData; 
     }
     
-    // Merge main state with sub-store states for backward compatibility
     get value() { 
         return { 
             ...this.state,
@@ -170,33 +318,15 @@ class Store extends EventTarget {
     
     async setLanguage(lang) { 
         if (this.state.lang === lang) return;
-
-        // 1. Indicate Loading State Immediately
         this.update({ loading: true, error: null });
-        
         try {
-            // 2. Load Strings (Wait for this before switching logic)
             await this.loadLanguage(lang); 
-            
-            // 3. Update Language State (Triggers Sidebar/UI refresh)
             this.update({ lang, searchCache: {} });
-            
-            // 4. Reload Graph Data for the new language
-            // We pass forceRefresh=false to use cached rawGraphData if available, 
-            // making language switching instant if data is already in memory.
-            if (this.state.activeSource) {
-                await this.loadData(this.state.activeSource, false); 
-            } else {
-                this.update({ loading: false });
-            }
-
+            if (this.state.activeSource) await this.loadData(this.state.activeSource, false); 
+            else this.update({ loading: false });
+            this.goHome();
         } catch (e) {
-            console.error("Set language failed", e);
-            this.update({ 
-                loading: false, 
-                error: `Failed to switch language: ${e.message}. Attempting to recover.` 
-            });
-            // Attempt recovery to EN if failed
+            this.update({ loading: false, error: `Language error: ${e.message}` });
             if (lang !== 'EN') this.setLanguage('EN');
         }
     }
@@ -214,59 +344,9 @@ class Store extends EventTarget {
         } catch { return false; }
     }
 
-    loadSources() {
-        let sources = [];
-        try { sources = JSON.parse(localStorage.getItem('arbor-sources')) || []; } catch(e) {}
-        const mergedSources = [...DEFAULT_SOURCES];
-        sources.forEach(s => {
-            if (!DEFAULT_SOURCES.find(d => d.id === s.id)) mergedSources.push(s);
-        });
-        localStorage.setItem('arbor-sources', JSON.stringify(mergedSources));
-        
-        const savedActiveId = localStorage.getItem('arbor-active-source-id');
-        let activeSource = mergedSources.find(s => s.id === savedActiveId);
-        if (!activeSource) activeSource = mergedSources.find(s => s.id === 'default-arbor');
-
-        this.update({ sources: mergedSources, activeSource });
-        this.loadData(activeSource);
-    }
-
-    addSource(url) {
-        if (!url) return;
-        const isTrusted = this.isUrlTrusted(url);
-        let name = 'New Tree';
-        try { name = new URL(url, window.location.href).hostname; } catch (e) {}
-        const newSource = { id: crypto.randomUUID(), name, url, isTrusted };
-        const newSources = [...this.state.sources, newSource];
-        this.update({ sources: newSources });
-        localStorage.setItem('arbor-sources', JSON.stringify(newSources));
-        this.loadAndSmartMerge(newSource.id);
-    }
-
-    removeSource(id) {
-        const sourceToRemove = this.state.sources.find(s => s.id === id);
-        if (sourceToRemove?.isDefault) return;
-        const newSources = this.state.sources.filter(s => s.id !== id);
-        this.update({ sources: newSources });
-        localStorage.setItem('arbor-sources', JSON.stringify(newSources));
-        if (this.state.activeSource.id === id) {
-            const fallback = newSources.find(s => s.id === 'default-arbor') || newSources[0];
-            this.loadAndSmartMerge(fallback.id);
-        }
-    }
-
-    async loadAndSmartMerge(sourceId) {
-        const source = this.state.sources.find(s => s.id === sourceId);
-        if (!source) return;
-        // When user explicitly clicks "Load", we force refresh (true)
-        this.loadData(source, true);
-    }
-
     async loadData(source, forceRefresh = true) {
         if (!source) return;
         
-        // Don't set loading here if we are already loading (e.g. language switch), 
-        // but update activeSource
         if (!this.state.loading) this.update({ loading: true, error: null });
         this.update({ activeSource: source });
         
@@ -275,15 +355,12 @@ class Store extends EventTarget {
         try {
             let json;
             
-            // SMART CACHE: If we have data and we are not forcing refresh and IDs match
-            // We use the cached raw data.
             if (!forceRefresh && this.state.rawGraphData && this.state.activeSource?.id === source.id) {
                 json = this.state.rawGraphData;
-                console.log("Using cached graph data for rapid switching.");
             } else {
                 const url = source.url; 
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout
+                const timeoutId = setTimeout(() => controller.abort(), 20000); 
 
                 const res = await fetch(url, { signal: controller.signal });
                 clearTimeout(timeoutId);
@@ -292,42 +369,30 @@ class Store extends EventTarget {
                 json = await res.json();
             }
             
-            // Ensure UI strings are loaded (Safety check)
             if (!this.state.i18nData) await this.loadLanguage(this.state.lang);
 
-            // Select Language Branch
-            // Prioritize selected language, fallback to first available if missing
             let langData = null;
-            
             if (json.languages) {
                 langData = json.languages[this.state.lang];
-                
-                // Fallback if specific language is missing in the tree
                 if (!langData) {
                     const availableLangs = Object.keys(json.languages);
-                    if (availableLangs.length > 0) {
-                        langData = json.languages[availableLangs[0]];
-                        console.warn(`Language ${this.state.lang} not found in tree. Falling back to ${availableLangs[0]}.`);
-                    }
+                    if (availableLangs.length > 0) langData = json.languages[availableLangs[0]];
                 }
             }
 
-            if (!langData) {
-                throw new Error("No valid content found in this tree.");
-            }
+            if (!langData) throw new Error("No valid content found in this tree.");
             
-            if (json.universeName && json.universeName !== source.name) {
-                const updatedSources = this.state.sources.map(s => s.id === source.id ? {...s, name: json.universeName} : s);
-                this.update({ sources: updatedSources });
+            // Name Update logic for Community Sources only
+            if (!source.isOfficial && json.universeName && json.universeName !== source.name) {
+                const updatedSources = this.state.communitySources.map(s => s.id === source.id ? {...s, name: json.universeName} : s);
+                this.update({ communitySources: updatedSources });
                 localStorage.setItem('arbor-sources', JSON.stringify(updatedSources));
             }
             
             const examPrefix = this.ui.examLabelPrefix || "Exam: ";
             if (examPrefix) {
                 const applyPrefix = (node) => {
-                    if (node.type === 'exam' && !node.name.startsWith(examPrefix)) {
-                        node.name = examPrefix + node.name;
-                    }
+                    if (node.type === 'exam' && !node.name.startsWith(examPrefix)) node.name = examPrefix + node.name;
                 };
                 const traverse = (node) => {
                     applyPrefix(node);
@@ -348,8 +413,7 @@ class Store extends EventTarget {
             setTimeout(() => this.update({ lastActionMessage: null }), 3000);
         } catch (e) {
             console.error(e);
-            const msg = e.name === 'AbortError' ? 'Connection timed out (20s).' : e.message;
-            this.update({ loading: false, error: msg });
+            this.update({ loading: false, error: e.message });
         }
     }
 
@@ -376,10 +440,7 @@ class Store extends EventTarget {
         if (!nodeData) {
             const inTree = this.findNode(nodeId);
             if (inTree) nodeData = inTree;
-            else {
-                console.error("Cannot navigate: Node not found in memory or search result.");
-                return;
-            }
+            else return;
         }
 
         const pathStr = nodeData.path || nodeData.p;
@@ -391,9 +452,7 @@ class Store extends EventTarget {
         for (let i = 1; i < pathNames.length; i++) {
             const ancestorName = pathNames[i];
             
-            if (currentNode.hasUnloadedChildren) {
-                await this.loadNodeChildren(currentNode);
-            }
+            if (currentNode.hasUnloadedChildren) await this.loadNodeChildren(currentNode);
 
             let nextNode = currentNode.children?.find(child => child.name === ancestorName);
 
@@ -401,22 +460,17 @@ class Store extends EventTarget {
                 const cleanTarget = this.cleanString(ancestorName).replace(/\s+/g, '');
                 nextNode = currentNode.children.find(child => {
                      const cleanChild = this.cleanString(child.name).replace(/\s+/g, '');
-                     if (cleanChild === cleanTarget) return true;
-                     if (child.name.includes(ancestorName)) return true;
-                     return false;
+                     return cleanChild === cleanTarget || child.name.includes(ancestorName);
                 });
             }
 
             if (!nextNode) return;
 
-            if (nextNode.type === 'branch' || nextNode.type === 'root') {
-                nextNode.expanded = true;
-            }
+            if (nextNode.type === 'branch' || nextNode.type === 'root') nextNode.expanded = true;
             currentNode = nextNode;
         }
 
         this.dispatchEvent(new CustomEvent('graph-update'));
-        
         setTimeout(() => {
             this.toggleNode(nodeId);
             this.dispatchEvent(new CustomEvent('focus-node', { detail: nodeId }));
@@ -434,12 +488,7 @@ class Store extends EventTarget {
         const currentIndex = leaves.findIndex(n => n.id === this.state.selectedNode.id);
         if (currentIndex !== -1 && currentIndex < leaves.length - 1) {
             const nextNode = leaves[currentIndex + 1];
-            
-            // LAZY CONTENT LOAD FOR NEXT NODE
-            if (!nextNode.content && nextNode.contentPath) {
-                await this.loadNodeContent(nextNode);
-            }
-            
+            if (!nextNode.content && nextNode.contentPath) await this.loadNodeContent(nextNode);
             await this.navigateTo(nextNode.id, nextNode);
             this.update({ selectedNode: nextNode, previewNode: null });
         } else {
@@ -473,18 +522,10 @@ class Store extends EventTarget {
             if (node.type === 'leaf' || node.type === 'exam') {
                 this.update({ previewNode: node, selectedNode: null });
             } else {
-                // IMPORTANT: Clear preview immediately when interacting with a branch
-                // This prevents the Modal system from prioritizing a stale preview over the "Empty Module" modal
                 this.update({ selectedNode: null, previewNode: null });
-
                 if (!node.expanded) {
                     if (node.hasUnloadedChildren) await this.loadNodeChildren(node);
-                    
-                    // Trigger Modal if the node is empty (Robust check for undefined children)
-                    if (!node.children || node.children.length === 0) {
-                        this.setModal({ type: 'emptyModule', node: node });
-                    }
-
+                    if (!node.children || node.children.length === 0) this.setModal({ type: 'emptyModule', node: node });
                     node.expanded = true;
                 } else {
                     this.collapseRecursively(node);
@@ -522,18 +563,14 @@ class Store extends EventTarget {
                 
                 if (children.length === 0) {
                     node.children = [];
-                    // Trigger modal for initial load
                     this.setModal({ type: 'emptyModule', node: node });
                 } else {
                     children.forEach(child => child.parentId = node.id);
                     node.children = children;
-
                     const examPrefix = this.ui.examLabelPrefix || "Exam: ";
                     if (examPrefix) {
                         node.children.forEach(child => {
-                            if (child.type === 'exam' && !child.name.startsWith(examPrefix)) {
-                                child.name = examPrefix + child.name;
-                            }
+                            if (child.type === 'exam' && !child.name.startsWith(examPrefix)) child.name = examPrefix + child.name;
                         });
                     }
                 }
@@ -550,7 +587,6 @@ class Store extends EventTarget {
         }
     }
     
-    // --- LAZY CONTENT LOADING ---
     async loadNodeContent(node) {
         if (node.content) return;
         if (!node.contentPath) return; 
@@ -580,9 +616,7 @@ class Store extends EventTarget {
     async enterLesson() {
         const node = this.state.previewNode;
         if (node) {
-             if (!node.content && node.contentPath) {
-                 await this.loadNodeContent(node);
-             }
+             if (!node.content && node.contentPath) await this.loadNodeContent(node);
              this.update({ selectedNode: node, previewNode: null });
         }
     }
@@ -612,41 +646,30 @@ class Store extends EventTarget {
                 const res = await fetch(url);
                 if (res.ok) {
                     const shard = await res.json();
-                    
                     const normalized = shard.map(item => ({
-                        id: item.id,
-                        name: item.n || item.name,
-                        type: item.t || item.type,
-                        icon: item.i || item.icon,
-                        description: item.d || item.description,
-                        path: item.p || item.path,
-                        lang: item.l || item.lang
+                        id: item.id, name: item.n || item.name, type: item.t || item.type,
+                        icon: item.i || item.icon, description: item.d || item.description,
+                        path: item.p || item.path, lang: item.l || item.lang
                     }));
-                    
                     this.state.searchCache[cacheKey] = normalized;
                 } else {
                     this.state.searchCache[cacheKey] = [];
                 }
             } catch (e) {
-                console.warn(`Search shard not found for prefix ${prefix}`);
                 this.state.searchCache[cacheKey] = [];
             }
         }
 
         const shard = this.state.searchCache[cacheKey] || [];
-        return shard.filter(n => {
-            return this.cleanString(n.name).includes(q);
-        });
+        return shard.filter(n => this.cleanString(n.name).includes(q));
     }
 
     async searchBroad(char) {
         if (!char || char.length !== 1) return [];
         const c = this.cleanString(char);
         const lang = this.state.lang;
-        
         const suffixes = 'abcdefghijklmnopqrstuvwxyz0123456789'.split('');
         const prefixes = suffixes.map(s => c + s);
-        
         const sourceUrl = this.state.activeSource.url;
         const baseDir = sourceUrl.substring(0, sourceUrl.lastIndexOf('/') + 1);
         
@@ -659,13 +682,9 @@ class Store extends EventTarget {
                 if (res.ok) {
                     const shard = await res.json();
                     const normalized = shard.map(item => ({
-                        id: item.id,
-                        name: item.n || item.name,
-                        type: item.t || item.type,
-                        icon: item.i || item.icon,
-                        description: item.d || item.description,
-                        path: item.p || item.path,
-                        lang: item.l || item.lang
+                        id: item.id, name: item.n || item.name, type: item.t || item.type,
+                        icon: item.i || item.icon, description: item.d || item.description,
+                        path: item.p || item.path, lang: item.l || item.lang
                     }));
                     this.state.searchCache[cacheKey] = normalized;
                     return normalized;
@@ -692,11 +711,9 @@ class Store extends EventTarget {
 
     async initSage() {
         this.update({ ai: { ...this.state.ai, status: 'loading', progress: '0%' } });
-        
         aiService.setCallback((progressReport) => {
              this.update({ ai: { ...this.state.ai, progress: progressReport.text } });
         });
-
         try {
             await aiService.initialize();
             const msgs = [{ role: 'assistant', content: this.ui.sageHello }];
@@ -722,11 +739,8 @@ class Store extends EventTarget {
         this.update({ ai: { ...this.state.ai, status: 'thinking', messages: currentMsgs } });
 
         try {
-            // Lazy load content if Sage needs it for context
             let contextNode = this.state.selectedNode || this.state.previewNode;
-            if (contextNode && !contextNode.content && contextNode.contentPath) {
-                 await this.loadNodeContent(contextNode);
-            }
+            if (contextNode && !contextNode.content && contextNode.contentPath) await this.loadNodeContent(contextNode);
 
             const responseObj = await aiService.chat(currentMsgs, contextNode);
             let finalText = responseObj.text;
@@ -751,10 +765,9 @@ class Store extends EventTarget {
     loadProgress() { this.userStore.loadProgress(); }
     
     checkStreak() { 
-        // Logic moved to UserStore, but we need to handle the UI feedback here
         const msg = this.userStore.checkStreak(); 
         if(msg) this.notify(msg);
-        this.update({}); // Trigger state refresh
+        this.update({});
     }
 
     addXP(amount, silent = false) {
@@ -783,18 +796,13 @@ class Store extends EventTarget {
     markComplete(nodeId, forceState = null) {
         const xpMsg = this.userStore.markComplete(nodeId, forceState);
         if(xpMsg) this.notify(xpMsg);
-        
-        this.update({}); // Refresh UI
+        this.update({}); 
         this.checkForModuleCompletion(nodeId);
     }
 
     markBranchComplete(branchId) {
         if (!branchId) return;
-        
-        // This logic is tree-traversal dependent, so it stays in Main Store,
-        // but calls userStore.markComplete for each node.
         const branchNode = this.findNode(branchId);
-        
         if (branchNode) {
             const markRecursive = (node) => {
                 this.userStore.state.completedNodes.add(node.id);
@@ -805,7 +813,6 @@ class Store extends EventTarget {
                 branchNode.leafIds.forEach(id => this.userStore.state.completedNodes.add(id));
             }
         }
-        
         this.userStore.persist();
         this.update({});
         this.dispatchEvent(new CustomEvent('graph-update'));
@@ -824,16 +831,7 @@ class Store extends EventTarget {
         });
     }
 
-    getExportJson() {
-        const data = { 
-            v: 1, 
-            ts: Date.now(), 
-            p: Array.from(this.userStore.state.completedNodes), 
-            g: this.userStore.state.gamification,
-            b: this.userStore.state.bookmarks 
-        };
-        return JSON.stringify(data, null, 2);
-    }
+    getExportJson() { return this.userStore.getExportJson(); }
 
     downloadProgressFile() {
         const data = this.getExportJson();
@@ -889,22 +887,17 @@ class Store extends EventTarget {
     isCompleted(id) { return this.userStore.isCompleted(id); }
 
     getAvailableCertificates() {
-        // If data.json contains a pre-calculated list of certificates (from builder), use it.
-        // This solves the issue of certificates not showing up if modules are lazy-loaded.
         if (this.state.data && this.state.data.certificates) {
             return this.state.data.certificates.map(c => {
                 const isComplete = this.userStore.state.completedNodes.has(c.id);
                 return { ...c, isComplete };
             });
         }
-        
-        // Fallback to legacy traversal (only finds what is loaded in RAM)
         return this.getModulesStatus().filter(m => m.isCertifiable);
     }
 
     getModulesStatus() {
         if (!this.state.data) return [];
-        
         const modules = [];
         const traverse = (node) => {
             if (node.type === 'branch' || node.type === 'root') {
@@ -916,27 +909,18 @@ class Store extends EventTarget {
                      } else if (node.leafIds) {
                          completedCount = node.leafIds.filter(id => this.userStore.state.completedNodes.has(id)).length;
                      }
-                     
                      const isComplete = this.userStore.state.completedNodes.has(node.id) || (total > 0 && completedCount >= total);
-
                      if (node.type !== 'root') {
                         modules.push({
-                            id: node.id,
-                            name: node.name,
-                            icon: node.icon,
-                            description: node.description,
-                            totalLeaves: total,
-                            completedLeaves: completedCount,
-                            isComplete: isComplete,
-                            path: node.path,
-                            isCertifiable: node.isCertifiable
+                            id: node.id, name: node.name, icon: node.icon, description: node.description,
+                            totalLeaves: total, completedLeaves: completedCount, isComplete: isComplete,
+                            path: node.path, isCertifiable: node.isCertifiable
                         });
                      }
                  }
             }
             if (node.children) node.children.forEach(traverse);
         };
-        
         traverse(this.state.data);
         return modules.sort((a,b) => b.isComplete === a.isComplete ? 0 : (b.isComplete ? 1 : -1));
     }

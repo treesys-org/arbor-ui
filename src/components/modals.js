@@ -14,6 +14,7 @@ import './modals/impressum.js';
 import './modals/export-pdf.js';
 import './modals/certificate-view.js';
 import './modals/empty-module.js';
+import './modals/privacy.js'; // NEW
 
 // Admin Panel is essentially a modal
 import './modals/admin.js';
@@ -105,6 +106,9 @@ class ArborModals extends HTMLElement {
                 break;
             case 'impressum': 
                 this.innerHTML = `<arbor-modal-impressum></arbor-modal-impressum>`; 
+                break;
+            case 'privacy': 
+                this.innerHTML = `<arbor-modal-privacy></arbor-modal-privacy>`; 
                 break;
             case 'emptyModule': 
                 this.innerHTML = `<arbor-modal-empty-module></arbor-modal-empty-module>`; 

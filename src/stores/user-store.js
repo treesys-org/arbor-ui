@@ -3,8 +3,9 @@
 const SEED_TYPES = ['🌲', '🌰', '🌾', '🍁', '🥥', '🥜', '🌰', '🫘', '🍄', '🌱'];
 
 export class UserStore {
-    constructor(uiStringsGetter) {
+    constructor(uiStringsGetter, onPersistCallback = null) {
         this.getUi = uiStringsGetter; // Function to get current UI translations
+        this.onPersist = onPersistCallback;
         this.state = {
             completedNodes: new Set(),
             bookmarks: {},
@@ -44,7 +45,7 @@ export class UserStore {
                         if (parsed.gamification.fruits && !parsed.gamification.seeds) {
                             this.state.gamification.seeds = parsed.gamification.fruits.map(f => ({
                                 ...f,
-                                icon: SEED_TYPES[0] 
+                                ...parsed.gamification.seeds
                             }));
                         }
                     }
@@ -53,13 +54,34 @@ export class UserStore {
         } catch(e) {}
     }
 
-    persist() {
-        const payload = {
+    getPersistenceData() {
+        return {
             progress: Array.from(this.state.completedNodes),
             gamification: this.state.gamification,
+            bookmarks: this.state.bookmarks, // Add bookmarks to cloud sync
             timestamp: Date.now()
         };
+    }
+
+    persist() {
+        const payload = this.getPersistenceData();
         localStorage.setItem('arbor-progress', JSON.stringify(payload));
+        
+        // Trigger external persistence (e.g., Cloud Sync)
+        if (this.onPersist) {
+            this.onPersist(payload);
+        }
+    }
+
+    getExportJson() {
+        const data = { 
+            v: 1, 
+            ts: Date.now(), 
+            p: Array.from(this.state.completedNodes), 
+            g: this.state.gamification,
+            b: this.state.bookmarks 
+        };
+        return JSON.stringify(data, null, 2);
     }
 
     // --- Bookmarks ---
@@ -97,6 +119,8 @@ export class UserStore {
         
         this.state.bookmarks[nodeId] = newBookmark;
         localStorage.setItem('arbor-bookmarks', JSON.stringify(this.state.bookmarks));
+        // Bookmarks change often, maybe debounce this in real app, but for now we sync
+        this.persist();
     }
 
     getBookmark(nodeId, contentRaw) {
