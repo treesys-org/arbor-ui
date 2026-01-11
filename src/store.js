@@ -151,27 +151,31 @@ class Store extends EventTarget {
     async discoverManifest(sourceUrl) {
         if (!sourceUrl) return;
 
-        let indexUrl = '';
         let baseUrl = '';
+        let indexUrl = '';
 
         try {
-            // Heuristic: Assuming standard Arbor structure .../data/data.json
-            // We want to find .../arbor-index.json
+            // Heuristic to find root where arbor-index.json lives.
+            // Assumption: sourceUrl points to /data/data.json or /data/releases/xxxx.json
+            // The index should be at the parent of /data/, i.e. the project root.
             
-            // Handle relative URLs (./data/data.json)
             const absoluteUrl = new URL(sourceUrl, window.location.href).href;
             
-            if (absoluteUrl.endsWith('data.json')) {
-                // Strip 'data/data.json' (last two segments)
-                const parts = absoluteUrl.split('/');
-                parts.splice(-2); 
-                baseUrl = parts.join('/') + '/';
+            if (absoluteUrl.includes('/data/')) {
+                // Split at '/data/' and take the first part
+                const parts = absoluteUrl.split('/data/');
+                baseUrl = parts[0] + '/';
                 indexUrl = baseUrl + 'arbor-index.json';
             } else {
-                // If URL doesn't end in data.json, we can't reliably guess the root.
-                // We abort manifest discovery and just show the single source.
-                this.update({ availableReleases: [] });
-                return;
+                // Fallback: assume relative to current location if relative path
+                if (!sourceUrl.startsWith('http')) {
+                     indexUrl = 'arbor-index.json';
+                     baseUrl = './';
+                } else {
+                     // Unable to determine root safely
+                     this.update({ availableReleases: [] });
+                     return;
+                }
             }
 
             const res = await fetch(indexUrl, { cache: 'no-cache' });
@@ -181,7 +185,7 @@ class Store extends EventTarget {
                 
                 // Helper to map relative URLs in manifest to absolute based on the index location
                 const rebase = (u) => {
-                    if (u && u.startsWith('./')) return baseUrl + u.substring(2);
+                    if (u && u.startsWith('./')) return new URL(u, baseUrl).href;
                     return u;
                 };
 
@@ -202,6 +206,9 @@ class Store extends EventTarget {
                 
                 this.update({ availableReleases: versions });
             } else {
+                // If manifest not found, we still want to show the current active source in the "Releases" list 
+                // so the dropdown isn't broken.
+                console.warn("Manifest not found at", indexUrl);
                 this.update({ availableReleases: [] });
             }
         } catch (e) {

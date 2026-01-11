@@ -2,6 +2,11 @@
 import { store } from '../../store.js';
 
 class ArborModalSources extends HTMLElement {
+    constructor() {
+        super();
+        this.selectedVersionUrl = null;
+    }
+
     connectedCallback() {
         this.render();
     }
@@ -10,80 +15,162 @@ class ArborModalSources extends HTMLElement {
         store.setModal(null);
     }
 
+    handleVersionSelect(e) {
+        this.selectedVersionUrl = e.target.value;
+        this.render();
+    }
+
+    handleSwitch() {
+        if (this.selectedVersionUrl) {
+            // Find the full source object from available releases
+            const releases = store.value.availableReleases || [];
+            const target = releases.find(r => r.url === this.selectedVersionUrl);
+            
+            if (target) {
+                // Construct a new source object based on the active one but with new URL
+                const active = store.value.activeSource;
+                const newSource = {
+                    ...active,
+                    id: target.id || `release-${Date.now()}`,
+                    url: target.url,
+                    type: target.type,
+                    name: target.name || active.name
+                };
+                store.loadData(newSource);
+                this.close();
+            }
+        }
+    }
+
     render() {
         const ui = store.ui;
-        // Use 'availableReleases' which is populated dynamically based on active source context
-        const contextReleases = store.value.availableReleases || [];
-        const community = store.value.communitySources || [];
-        const activeId = store.value.activeSource?.id;
+        const state = store.value;
+        const activeSource = state.activeSource || { name: 'Unknown', url: '' };
+        
+        // 1. Get Releases (Manifest)
+        const releases = state.availableReleases || [];
+        
+        // 2. Identify Current Version URL (normalize relative paths for comparison)
+        const normalize = (u) => {
+            try { return new URL(u, window.location.href).href; } catch(e) { return u; }
+        };
+        const activeUrl = normalize(activeSource.url);
+        
+        // 3. Determine if we have a match in the manifest
+        let currentInManifest = releases.find(r => normalize(r.url) === activeUrl);
+        
+        // If the active source isn't in the manifest (e.g. custom URL or manifest failed), 
+        // we treat it as a standalone entry.
+        const effectiveReleases = releases.length > 0 ? releases : [{
+            id: 'current-unknown',
+            name: 'Current Version',
+            url: activeSource.url,
+            type: 'manual'
+        }];
 
-        const renderCard = (s, isCommunity) => `
-            <div class="p-4 rounded-xl border-2 transition-all group relative ${s.id === activeId ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20' : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900'}">
-                <div class="flex justify-between items-start mb-2">
-                    <div class="flex items-center gap-2">
-                        <span class="text-xl">${s.type === 'rolling' ? '🌊' : (s.type === 'archive' ? '🏛️' : '🌐')}</span>
-                        <div>
-                            <h3 class="font-bold text-slate-800 dark:text-white leading-tight">${s.name}</h3>
-                            ${s.type === 'archive' ? '<span class="text-[10px] bg-slate-200 dark:bg-slate-700 px-1.5 rounded text-slate-500 font-mono">ARCHIVED</span>' : ''}
-                        </div>
-                        ${s.id === activeId ? `<span class="bg-purple-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ml-2">${ui.sourceActive}</span>` : ''}
-                    </div>
-                    ${isCommunity ? `<button class="btn-remove-source text-slate-300 hover:text-red-500 transition-colors p-1" data-id="${s.id}">✕</button>` : ''}
-                </div>
-                
-                ${s.description ? `<p class="text-xs text-slate-500 mb-2 italic">${s.description}</p>` : ''}
-                <p class="text-[10px] text-slate-400 font-mono mb-3 truncate opacity-60">${s.url}</p>
-                
-                ${s.id !== activeId ? `
-                <button class="btn-load-source w-full py-2 bg-slate-100 dark:bg-slate-800 hover:bg-purple-100 dark:hover:bg-purple-900/40 text-slate-600 dark:text-purple-300 font-bold rounded-lg text-xs transition-colors" data-id="${s.id}">
-                    ${ui.sourceLoad}
-                </button>
-                ` : ''}
-            </div>
-        `;
+        // 4. Dropdown State
+        const selectedUrl = this.selectedVersionUrl || activeSource.url;
+        const isDifferent = normalize(selectedUrl) !== activeUrl;
+
+        // 5. Community/Other Sources (exclude the active one by ID)
+        const otherSources = (state.communitySources || []).filter(s => s.id !== activeSource.id);
 
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
-            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-2xl w-full relative overflow-hidden flex flex-col max-h-[95vh] border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-xl w-full relative overflow-hidden flex flex-col max-h-[90vh] border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
                 <button class="btn-close absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 z-20 transition-colors">✕</button>
 
                 <div class="p-6 h-full flex flex-col">
-                    <h2 class="text-2xl font-black mb-2 dark:text-white flex items-center gap-2">
-                        <span>🌳</span> ${ui.sourceManagerTitle}
-                    </h2>
-                    <p class="text-sm text-slate-500 mb-6">${ui.sourceManagerDesc}</p>
+                    <div class="flex items-center gap-3 mb-6">
+                        <span class="text-3xl">🌳</span>
+                        <div>
+                            <h2 class="text-xl font-black dark:text-white leading-none">${ui.sourceManagerTitle}</h2>
+                            <p class="text-xs text-slate-500 mt-1">${ui.sourceManagerDesc}</p>
+                        </div>
+                    </div>
 
-                    <div class="flex-1 overflow-y-auto custom-scrollbar pr-1 pb-4">
+                    <div class="flex-1 overflow-y-auto custom-scrollbar pr-1 pb-4 space-y-6">
                         
-                        <!-- CONTEXTUAL RELEASES -->
-                        <div class="mb-8">
-                            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                <span>📚</span> Versions of Current Tree
-                            </h3>
-                            ${contextReleases.length === 0 
-                                ? `<div class="p-6 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-xl text-center text-slate-400 text-xs">No release history found for this tree.</div>`
-                                : `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${contextReleases.map(s => renderCard(s, false)).join('')}</div>`
-                            }
+                        <!-- ACTIVE TREE CARD -->
+                        <div class="bg-slate-50 dark:bg-slate-950/50 p-5 rounded-2xl border-2 border-purple-500/30 relative overflow-hidden">
+                            <div class="absolute top-0 right-0 bg-purple-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl uppercase tracking-widest">
+                                ${ui.sourceActive}
+                            </div>
+                            
+                            <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-1">${activeSource.name}</h3>
+                            <p class="text-xs text-slate-400 font-mono truncate mb-4 opacity-70">${activeSource.url}</p>
+                            
+                            <div class="flex gap-2 items-end">
+                                <div class="flex-1">
+                                    <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1">Release / Version</label>
+                                    <div class="relative">
+                                        <select id="version-select" class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-purple-500 appearance-none">
+                                            ${effectiveReleases.map(r => `
+                                                <option value="${r.url}" ${normalize(r.url) === normalize(selectedUrl) ? 'selected' : ''}>
+                                                    ${r.type === 'rolling' ? '🌊 ' : (r.type === 'archive' ? '🏛️ ' : '📄 ')} 
+                                                    ${r.name || r.year || 'Unknown Version'}
+                                                </option>
+                                            `).join('')}
+                                        </select>
+                                        <div class="absolute right-3 top-2.5 pointer-events-none text-slate-400 text-xs">▼</div>
+                                    </div>
+                                </div>
+                                
+                                ${isDifferent ? `
+                                <button id="btn-switch-version" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-lg active:scale-95 transition-all animate-in fade-in slide-in-from-right-2">
+                                    Switch
+                                </button>
+                                ` : `
+                                <button disabled class="bg-slate-200 dark:bg-slate-800 text-slate-400 px-4 py-2.5 rounded-xl font-bold text-sm cursor-not-allowed">
+                                    Active
+                                </button>
+                                `}
+                            </div>
+                            
+                            ${releases.length === 0 ? `
+                                <p class="text-[10px] text-red-400 mt-2 flex items-center gap-1">
+                                    <span>⚠️</span> No history found for this tree.
+                                </p>
+                            ` : ''}
                         </div>
 
-                        <!-- COMMUNITY SECTION -->
+                        <!-- OTHER SOURCES LIST -->
                         <div>
                             <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
                                 <span>🌍</span> Saved Trees
                             </h3>
-                            ${community.length === 0 
-                                ? `<div class="p-6 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-xl text-center text-slate-400 text-xs">No external trees added yet.</div>`
-                                : `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${community.map(s => renderCard(s, true)).join('')}</div>`
+                            ${otherSources.length === 0 
+                                ? `<div class="p-6 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-xl text-center text-slate-400 text-xs">No other trees added.</div>`
+                                : `<div class="space-y-2">
+                                    ${otherSources.map(s => `
+                                        <div class="flex items-center justify-between p-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl group hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
+                                            <div class="flex items-center gap-3 overflow-hidden">
+                                                <div class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-lg">🌐</div>
+                                                <div class="min-w-0">
+                                                    <h4 class="font-bold text-sm text-slate-700 dark:text-slate-200 truncate">${s.name}</h4>
+                                                    <p class="text-[10px] text-slate-400 truncate">${s.url}</p>
+                                                </div>
+                                            </div>
+                                            <div class="flex gap-2">
+                                                <button class="btn-load-source px-3 py-1.5 bg-slate-50 dark:bg-slate-800 hover:bg-green-50 dark:hover:bg-green-900/30 text-slate-600 dark:text-green-400 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 transition-colors" data-id="${s.id}">
+                                                    Load
+                                                </button>
+                                                <button class="btn-remove-source px-2 py-1.5 hover:bg-red-50 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 rounded-lg transition-colors" data-id="${s.id}">✕</button>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                   </div>`
                             }
                         </div>
 
                     </div>
 
-                    <div class="pt-4 border-t border-slate-100 dark:border-slate-800">
+                    <!-- ADD NEW -->
+                    <div class="pt-4 border-t border-slate-100 dark:border-slate-800 mt-2">
                         <label class="text-[10px] font-bold text-slate-400 uppercase mb-2 block">${ui.sourceAdd}</label>
                         <div class="flex gap-2">
                             <input id="inp-source-url" type="text" placeholder="https://.../data/data.json" class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-purple-500 dark:text-white">
-                            <button id="btn-add-source" class="bg-purple-600 text-white px-4 py-2 rounded-xl font-bold shadow-lg hover:bg-purple-50 active:scale-95 transition-transform">
+                            <button id="btn-add-source" class="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-2 rounded-xl font-bold shadow-lg hover:opacity-90 active:scale-95 transition-transform">
                                 +
                             </button>
                         </div>
@@ -92,7 +179,14 @@ class ArborModalSources extends HTMLElement {
             </div>
         </div>`;
 
+        // Event Bindings
         this.querySelector('.btn-close').onclick = () => this.close();
+        
+        const sel = this.querySelector('#version-select');
+        if (sel) sel.onchange = (e) => this.handleVersionSelect(e);
+        
+        const btnSwitch = this.querySelector('#btn-switch-version');
+        if (btnSwitch) btnSwitch.onclick = () => this.handleSwitch();
 
         this.querySelectorAll('.btn-load-source').forEach(btn => {
             btn.onclick = () => {
@@ -103,9 +197,8 @@ class ArborModalSources extends HTMLElement {
         
         this.querySelectorAll('.btn-remove-source').forEach(btn => {
             btn.onclick = (e) => {
-                e.stopPropagation();
                 if(confirm('Delete tree?')) store.removeCommunitySource(btn.dataset.id);
-                this.close();
+                this.render(); // Re-render to update list
             };
         });
         
@@ -115,8 +208,7 @@ class ArborModalSources extends HTMLElement {
                 const url = this.querySelector('#inp-source-url').value.trim();
                 if (url) {
                     store.addCommunitySource(url);
-                    this.querySelector('#inp-source-url').value = ''; 
-                    this.close(); 
+                    this.render();
                 }
             };
         }
