@@ -16,21 +16,10 @@
         .dialogue-name { position: absolute; top: -20px; left: 20px; background: #000; color: #fff; padding: 5px 15px; font-family: 'Press Start 2P', cursive; font-size: 0.8rem; border: 2px solid #fff; }
         #input-area { position: absolute; bottom: 25px; left: 30px; right: 30px; display: none; gap: 10px; z-index: 20; }
         input[type="text"] { flex: 1; background: #000; color: #0f0; border: 2px solid #fff; padding: 10px; font-family: 'VT323', monospace; font-size: 1.5rem; outline: none; }
-        #dev-warning { position: fixed; inset:0; background:rgba(0,0,0,0.9); z-index:100; display:flex; align-items:center; justify-content:center; }
     </style>
 </head>
 <body>
     
-    <!-- Dev Mode Warning (Only shown if NOT inside Arbor) -->
-    <div id="dev-warning" class="hidden">
-        <div class="pixel-panel p-8 text-center max-w-md">
-            <h1 class="text-2xl font-bold mb-4 text-red-600">MODO DESARROLLO</h1>
-            <p class="mb-4 text-sm">Este juego espera el entorno <strong>Arbor SDK</strong>.</p>
-            <p class="mb-4 text-sm text-gray-500">Para probarlo fuera de Arbor, necesitamos simular el SDK.</p>
-            <button onclick="DevMock.activate()" class="bg-blue-600 text-white px-6 py-3 font-bold border-4 border-black hover:bg-blue-500">SIMULAR ARBOR</button>
-        </div>
-    </div>
-
     <div id="game-container">
         <div class="absolute top-2 right-2 text-xs font-mono text-gray-500 bg-black/50 px-2 py-1 rounded" id="debug-status">Initializing...</div>
         
@@ -79,11 +68,8 @@ const ContentLoader = {
         // 2. Fetch Content
         try {
             const url = `${sourceBase}/content/${modulePath.replace(/^\//, '')}.json`; // Guessed path structure
-            // Fallback strategy: try to find the node file to get content path if simple guess fails? 
-            // For simplicity, let's assume standard structure: /content/PATH.json
-            // Actually, we need to read the node JSON first to get 'contentPath'.
             
-            // Try Node Info First
+            // Try Node Info First to get exact content path if possible
             const nodeUrl = `${sourceBase}/nodes/${modulePath.replace(/^\//, '')}.json`;
             const nodeRes = await fetch(nodeUrl);
             
@@ -99,8 +85,6 @@ const ContentLoader = {
                 }
             } 
             
-            // Fallback: Just try to fetch content directly if path implies a leaf
-            // (Not implemented for brevity, assuming valid module path passed)
             throw new Error("No content found in module.");
 
         } catch (e) {
@@ -122,11 +106,8 @@ const Game = {
         this.canvas.width = 1024; this.canvas.height = 768;
         this.ctx = this.canvas.getContext('2d');
         
-        // Check for Arbor SDK
-        if (!window.Arbor) {
-            document.getElementById('dev-warning').classList.remove('hidden');
-            return;
-        }
+        // Silent fail if no SDK (User won't see anything if opened directly, as requested)
+        if (!window.Arbor) return;
 
         this.setStatus(`Conectado como ${window.Arbor.user.username}`);
         this.startLoop();
@@ -144,7 +125,6 @@ const Game = {
         this.uiShowDialog("PROFESOR", `Hoy veremos: ${data.title}. (Preparando...)`);
         
         // --- THE MAGIC: ARBOR AI CALL ---
-        // We just ask Arbor. Arbor handles the provider.
         const prompt = `
         Texto: "${data.text.substring(0, 2000)}".
         Genera JSON: {
@@ -217,7 +197,6 @@ const Game = {
 
             if(this.boardItems.every(i=>i.done)) {
                 setTimeout(()=>this.uiShowDialog("PROFESOR", "¡Clase terminada!"), 2000);
-                // Can trigger Arbor effects
                 return;
             }
         }
@@ -276,33 +255,7 @@ const Game = {
     }
 };
 
-// --- DEV MOCK (For standalone testing) ---
-const DevMock = {
-    activate: () => {
-        document.getElementById('dev-warning').classList.add('hidden');
-        window.Arbor = {
-            user: { username: "DevPlayer", avatar: "🛠️" },
-            params: {},
-            ai: {
-                chat: async (msgs) => {
-                    console.log("[DevMock AI] Chat:", msgs);
-                    return new Promise(resolve => setTimeout(() => {
-                        // Mock Responses based on content hints
-                        const txt = msgs[0].content;
-                        if(txt.includes('Genera JSON')) return resolve(`{"topic":"Dev Topic","points":["A","B"],"intro":"Dev Intro"}`);
-                        if(txt.includes('Genera pregunta')) return resolve(`{"q":"Dev Question?"}`);
-                        if(txt.includes('Evalúa')) return resolve(`{"ok":true,"msg":"Dev Correct"}`);
-                        resolve("Dev Response");
-                    }, 1000));
-                }
-            },
-            game: { addXP: (x) => console.log("XP:", x) }
-        };
-        Game.init();
-    }
-};
-
-window.onload = () => Game.init(); // Will trigger dev warning if no Arbor
+window.onload = () => Game.init();
 </script>
 </body>
 </html>

@@ -3,15 +3,21 @@ import { store } from '../../store.js';
 import { aiService } from '../../services/ai.js';
 
 class ArborModalGamePlayer extends HTMLElement {
+    constructor() {
+        super();
+        // State for part-by-part iterator
+        this.cursorIndex = 0;
+        this.activeModuleId = null;
+        this.moduleLessons = []; 
+    }
+
     connectedCallback() {
         this.render();
-        this.setupBridge(); // Initialize the communication bridge
-        // Slight delay to allow DOM paint before heavy fetch
+        this.setupBridge(); 
         setTimeout(() => this.loadGame(), 50);
     }
 
     disconnectedCallback() {
-        // Clean up global bridge to prevent memory leaks or conflicts
         delete window.__ARBOR_GAME_BRIDGE__;
     }
 
@@ -19,19 +25,59 @@ class ArborModalGamePlayer extends HTMLElement {
         store.setModal('arcade'); 
     }
 
-    /**
-     * Sets up the API Bridge that the iframe will call.
-     * The iframe sees 'window.Arbor', which calls 'window.parent.__ARBOR_GAME_BRIDGE__'
-     */
+    // --- HELPER: Prepare Curriculum Iterator ---
+    async prepareCurriculum() {
+        const { moduleId } = store.value.modal || {};
+        if (!moduleId) return;
+        
+        this.activeModuleId = moduleId;
+        const moduleNode = store.findNode(moduleId);
+        
+        if (!moduleNode) return;
+
+        // If children unloaded, load them first
+        if (moduleNode.hasUnloadedChildren) {
+            await store.loadNodeChildren(moduleNode);
+        }
+
+        // Flatten leaves (lessons)
+        this.moduleLessons = [];
+        const traverse = (n) => {
+            if (n.type === 'leaf' || n.type === 'exam') this.moduleLessons.push(n);
+            if (n.children) n.children.forEach(traverse);
+        };
+        traverse(moduleNode);
+        
+        this.cursorIndex = 0;
+        console.log(`[Arbor Game Bridge] Prepared ${this.moduleLessons.length} lessons for module ${moduleNode.name}`);
+    }
+
+    // --- HELPER: Fetch Specific Content ---
+    async fetchLessonContent(node) {
+        if (!node) return null;
+        if (!node.content && node.contentPath) {
+            await store.loadNodeContent(node);
+        }
+        // Return raw text (stripped of HTML ideally, or let game handle it)
+        // We do a basic strip here to be safe for token limits
+        const raw = node.content || "";
+        const clean = raw.replace(/<[^>]*>?/gm, ''); 
+        return { 
+            id: node.id,
+            title: node.name,
+            text: clean,
+            raw: raw
+        };
+    }
+
     setupBridge() {
+        // Initialize curriculum data before game asks
+        this.prepareCurriculum();
+
         window.__ARBOR_GAME_BRIDGE__ = {
             // 1. AI Capability
             chat: async (messages, context) => {
-                // The game sends messages. We route them through the active Arbor AI Service (Puter/Ollama/etc)
-                // We wrap the result to simplify it for the game dev
                 try {
-                    // We don't pass a node context here because the Game controls the context now.
-                    // The game is the "Context Node" effectively.
                     const response = await aiService.chat(messages, null); 
                     return { success: true, text: response.text };
                 } catch (e) {
@@ -46,21 +92,36 @@ class ArborModalGamePlayer extends HTMLElement {
                 return true;
             },
             
-            triggerConfetti: () => {
-                // Optional: Allow game to trigger UI effects in the main app
-                // Implementation pending in store
+            triggerConfetti: () => { },
+
+            // 3. CURRICULUM API (Part-by-Part Consumption)
+            
+            // Get the list of all lessons (metadata only)
+            getCurriculum: () => {
+                return this.moduleLessons.map(l => ({ id: l.id, title: l.name }));
             },
 
-            // 3. Navigation
+            // Get Next Lesson (Iterator) - Useful for linear games
+            getNextLesson: async () => {
+                if (this.cursorIndex >= this.moduleLessons.length) return null;
+                const node = this.moduleLessons[this.cursorIndex];
+                this.cursorIndex++;
+                return await this.fetchLessonContent(node);
+            },
+
+            // Get Specific Lesson by Index
+            getLessonAt: async (index) => {
+                if (index < 0 || index >= this.moduleLessons.length) return null;
+                return await this.fetchLessonContent(this.moduleLessons[index]);
+            },
+
+            // 4. Navigation
             close: () => {
                 this.close();
             }
         };
     }
 
-    /**
-     * Calculates the jsDelivr CDN URL for a given GitHub file path.
-     */
     getCdnBase(urlStr) {
         try {
             let user, repo, branch, path;
@@ -123,7 +184,6 @@ class ArborModalGamePlayer extends HTMLElement {
             
             let html = await response.text();
 
-            // Inject Base Tag for Relative Assets
             const cdnBase = this.getCdnBase(url);
             if (cdnBase) {
                 const baseTag = `<base href="${cdnBase}">`;
@@ -132,10 +192,6 @@ class ArborModalGamePlayer extends HTMLElement {
                     : `${baseTag}${html}`;
             }
 
-            // --- THE ARBOR SDK INJECTION ---
-            // This script creates the 'window.Arbor' object inside the iframe.
-            // It proxies calls to the parent window's __ARBOR_GAME_BRIDGE__.
-            
             const contextData = {
                 lang: store.value.lang,
                 theme: store.value.theme,
@@ -153,18 +209,14 @@ class ArborModalGamePlayer extends HTMLElement {
                 <script>
                     (function() {
                         const bridge = window.parent.__ARBOR_GAME_BRIDGE__;
-                        
-                        // Static Context
                         const ctx = ${JSON.stringify(contextData)};
 
                         window.Arbor = {
-                            // Data
                             lang: ctx.lang,
                             theme: ctx.theme,
                             user: ctx.user,
                             params: ctx.env.params,
 
-                            // AI Interface
                             ai: {
                                 chat: async (messages) => {
                                     if (!bridge) return { success: false, error: "Disconnected" };
@@ -174,14 +226,19 @@ class ArborModalGamePlayer extends HTMLElement {
                                 }
                             },
 
-                            // Game Interface
                             game: {
                                 addXP: (amount) => bridge ? bridge.addXP(amount) : console.log("XP Added (Dev):", amount),
                                 exit: () => bridge ? bridge.close() : console.log("Exit called"),
+                            },
+                            
+                            // NEW: Content API
+                            content: {
+                                getList: () => bridge ? bridge.getCurriculum() : [],
+                                getNext: async () => bridge ? await bridge.getNextLesson() : null,
+                                getAt: async (idx) => bridge ? await bridge.getLessonAt(idx) : null
                             }
                         };
-                        
-                        console.log("🌳 Arbor SDK Initialized");
+                        console.log("🌳 Arbor SDK Initialized (v2.0)");
                     })();
                 </script>
             `;
@@ -212,7 +269,6 @@ class ArborModalGamePlayer extends HTMLElement {
 
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[80] bg-black/95 backdrop-blur-sm flex flex-col animate-in fade-in h-full w-full">
-            <!-- Toolbar -->
             <div class="flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800 text-white shrink-0">
                 <div class="flex items-center gap-4">
                     <button id="btn-back" class="flex items-center gap-2 text-slate-400 hover:text-white hover:bg-white/10 px-3 py-1.5 rounded-lg transition-colors text-sm font-bold">
@@ -232,7 +288,6 @@ class ArborModalGamePlayer extends HTMLElement {
                 </div>
             </div>
             
-            <!-- Game Container -->
             <div class="flex-1 relative bg-black overflow-hidden flex items-center justify-center">
                 <div id="loader" class="absolute inset-0 flex flex-col items-center justify-center text-slate-600 z-0">
                     <div class="w-10 h-10 border-4 border-slate-800 border-t-purple-600 rounded-full animate-spin mb-4"></div>

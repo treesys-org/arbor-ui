@@ -7,6 +7,10 @@ class ArborModalArcade extends HTMLElement {
         this.activeTab = 'games'; // 'games' | 'sources'
         this.discoveredGames = [];
         this.isLoading = false;
+        
+        // Setup State
+        this.selectedGame = null;
+        this.selectedModuleId = null;
     }
 
     async connectedCallback() {
@@ -22,15 +26,11 @@ class ArborModalArcade extends HTMLElement {
         
         const promises = repos.map(async (repo) => {
             try {
-                // If local path, ensure no cache issues or strict CORS if not served properly
-                // For GitHub/Remote, normal fetch.
                 const res = await fetch(repo.url, { cache: 'no-cache' });
                 if (res.ok) {
                     const games = await res.json();
                     
-                    // Normalize relative paths in the manifest based on manifest URL
                     const repoBase = repo.url.substring(0, repo.url.lastIndexOf('/') + 1);
-                    
                     const normalize = (path) => {
                         if (!path) return '';
                         if (path.startsWith('http') || path.startsWith('//')) return path;
@@ -41,15 +41,13 @@ class ArborModalArcade extends HTMLElement {
 
                     const tagged = games.map(g => ({ 
                         ...g, 
-                        path: normalize(g.path || g.url), // Normalized absolute URL
+                        path: normalize(g.path || g.url), 
                         repoId: repo.id, 
                         repoName: repo.name,
                         isOfficial: repo.isOfficial
                     }));
                     
                     this.discoveredGames.push(...tagged);
-                } else {
-                    console.warn(`Repo ${repo.name} fetch error: ${res.status}`);
                 }
             } catch (e) {
                 console.warn(`Failed to load repo ${repo.name}`, e);
@@ -65,46 +63,65 @@ class ArborModalArcade extends HTMLElement {
         store.setModal(null);
     }
 
-    getCurrentContext() {
-        const { previewNode, selectedNode, data } = store.value;
-        let node = previewNode || selectedNode;
-        if (node) {
-            if (node.type === 'leaf' || node.type === 'exam') {
-                if (node.parentId) node = store.findNode(node.parentId) || node;
-            }
+    // Enter Setup Mode
+    prepareLaunch(game) {
+        this.selectedGame = game;
+        
+        // Auto-select current module if available
+        const current = this.getCurrentContext();
+        if (current && (current.type === 'branch' || current.type === 'root')) {
+            this.selectedModuleId = current.id;
+        } else if (current && current.parentId) {
+            this.selectedModuleId = current.parentId;
         } else {
-            node = data; 
+            // Default to root if nothing selected
+            const root = store.value.data;
+            this.selectedModuleId = root ? root.id : null;
         }
-        return node;
+        
+        this.render();
     }
 
-    launchGame(gameUrl, title) {
-        const activeSource = store.value.activeSource;
-        if (!activeSource) {
-            alert("No active knowledge tree selected.");
-            return;
-        }
+    cancelLaunch() {
+        this.selectedGame = null;
+        this.selectedModuleId = null;
+        this.render();
+    }
 
-        const contextNode = this.getCurrentContext();
+    getCurrentContext() {
+        const { previewNode, selectedNode, data } = store.value;
+        return previewNode || selectedNode || data;
+    }
+
+    launchGame() {
+        if (!this.selectedGame || !this.selectedModuleId) return;
         
-        // Context Parameters
+        const activeSource = store.value.activeSource;
+        const moduleNode = store.findNode(this.selectedModuleId);
+        
+        if (!activeSource || !moduleNode) return;
+
         const treeUrl = encodeURIComponent(activeSource.url);
         const lang = store.value.lang || 'EN';
-        const modulePath = contextNode?.apiPath ? encodeURIComponent(contextNode.apiPath) : ''; 
+        const modulePath = moduleNode.apiPath ? encodeURIComponent(moduleNode.apiPath) : ''; 
 
-        let finalUrl = gameUrl;
+        let finalUrl = this.selectedGame.path;
         const separator = finalUrl.includes('?') ? '&' : '?';
         
+        // Standard Context Parameters
         finalUrl += `${separator}source=${treeUrl}&lang=${lang}`;
         if (modulePath) {
             finalUrl += `&module=${modulePath}`;
         }
+        
+        // Include ID for bridge to find internal object
+        finalUrl += `&moduleId=${this.selectedModuleId}`;
 
-        // Open in Internal Modal Player
         store.setModal({ 
             type: 'game-player', 
             url: finalUrl,
-            title: title || 'Arcade Game'
+            title: this.selectedGame.name,
+            moduleId: this.selectedModuleId 
         });
     }
 
@@ -121,7 +138,7 @@ class ArborModalArcade extends HTMLElement {
         const url = this.querySelector('#inp-repo-url').value.trim();
         if (!url) return;
         store.userStore.addGameRepo(url);
-        this.loadAllGames(); // Reload to fetch new repo
+        this.loadAllGames(); 
     }
 
     removeRepo(id) {
@@ -134,21 +151,19 @@ class ArborModalArcade extends HTMLElement {
     render() {
         const ui = store.ui;
         
-        // 1. Combine Games (Discovered + Manual)
+        // 1. SETUP VIEW (Pre-Launch)
+        if (this.selectedGame) {
+            this.renderSetup(ui);
+            return;
+        }
+
+        // 2. MAIN ARCADE VIEW
         const manualGames = store.userStore.state.installedGames.map(g => ({
-            ...g,
-            repoName: 'Manual Install',
-            isManual: true,
-            path: g.url // unifying property
+            ...g, repoName: 'Manual Install', isManual: true, path: g.url 
         }));
         
         const allGames = [...this.discoveredGames, ...manualGames];
         const repos = store.userStore.state.gameRepos;
-
-        // Context Info
-        const contextNode = this.getCurrentContext();
-        const contextName = contextNode?.name || "Root (All Content)";
-        const contextIcon = contextNode?.icon || "🌳";
 
         // --- TABS ---
         const tabsHtml = `
@@ -171,7 +186,7 @@ class ArborModalArcade extends HTMLElement {
             } else if (allGames.length === 0) {
                 contentHtml = `<div class="p-8 text-center text-slate-400 italic">No games found. Check your sources.</div>`;
             } else {
-                contentHtml = allGames.map(g => `
+                contentHtml = allGames.map((g, idx) => `
                     <div class="flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl hover:shadow-md transition-shadow group mb-3">
                         <div class="flex items-center gap-4 min-w-0">
                             <div class="w-12 h-12 rounded-xl bg-orange-100 dark:bg-orange-900/30 text-2xl flex items-center justify-center border border-orange-200 dark:border-orange-800">
@@ -187,8 +202,8 @@ class ArborModalArcade extends HTMLElement {
                             </div>
                         </div>
                         <div class="flex gap-2">
-                            <button class="btn-launch px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold rounded-xl shadow-lg hover:scale-105 active:scale-95 transition-transform" 
-                                    data-url="${g.path}" data-name="${g.name}">
+                            <button class="btn-prepare px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold rounded-xl shadow-lg hover:scale-105 active:scale-95 transition-transform" 
+                                    data-idx="${idx}" data-manual="${g.isManual}">
                                 ${ui.arcadePlay || "Play"}
                             </button>
                             ${g.isManual ? `
@@ -198,7 +213,6 @@ class ArborModalArcade extends HTMLElement {
                     </div>
                 `).join('');
                 
-                // Add Custom Game Input at bottom of list
                 contentHtml += `
                 <div class="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
                     <label class="block text-[10px] font-bold text-slate-400 uppercase mb-2">Add Single Game URL</label>
@@ -212,8 +226,6 @@ class ArborModalArcade extends HTMLElement {
                 `;
             }
         } 
-        
-        // --- LIST VIEW (SOURCES) ---
         else if (this.activeTab === 'sources') {
             contentHtml = `
             <div class="space-y-3 mb-6">
@@ -244,42 +256,24 @@ class ArborModalArcade extends HTMLElement {
                         Add
                     </button>
                 </div>
-                <p class="text-[10px] text-blue-400 mt-2">
-                    A repository is a <code>manifest.json</code> file containing a list of games.
-                </p>
             </div>
             `;
         }
 
-        // --- MAIN RENDER ---
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
             <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-2xl w-full relative overflow-hidden flex flex-col max-h-[90vh] border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
                 <button class="btn-close absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 z-20 transition-colors">✕</button>
 
                 <div class="p-6 h-full flex flex-col">
-                    <div class="flex items-center gap-3 mb-2 shrink-0">
+                    <div class="flex items-center gap-3 mb-4 shrink-0">
                         <span class="text-3xl">🎮</span>
                         <div>
                             <h2 class="text-xl font-black dark:text-white leading-none">${ui.arcadeTitle || "Arbor Arcade"}</h2>
-                            <p class="text-xs text-slate-500 mt-1">${ui.arcadeDesc || "Context-aware educational games."}</p>
+                            <p class="text-xs text-slate-500 mt-1">${ui.arcadeDesc}</p>
                         </div>
                     </div>
                     
-                    <!-- Context Indicator -->
-                    <div class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800 flex items-center justify-between shrink-0">
-                        <div class="flex items-center gap-2 overflow-hidden">
-                            <span class="text-xl">${contextIcon}</span>
-                            <div class="min-w-0">
-                                <p class="text-[10px] uppercase font-bold text-blue-400 dark:text-blue-300 tracking-wider">${ui.arcadeContext || "Target Context"}</p>
-                                <p class="font-bold text-blue-900 dark:text-blue-100 text-sm truncate">${contextName}</p>
-                            </div>
-                        </div>
-                        <div class="text-[10px] text-blue-400 px-2 text-right leading-tight hidden sm:block">
-                            Select a topic on the map<br>to change context.
-                        </div>
-                    </div>
-
                     ${tabsHtml}
 
                     <div class="flex-1 overflow-y-auto custom-scrollbar p-1 py-4">
@@ -289,9 +283,68 @@ class ArborModalArcade extends HTMLElement {
             </div>
         </div>`;
 
-        // Bindings
-        this.querySelector('.btn-close').onclick = () => this.close();
+        this.bindMainEvents();
+    }
+
+    // --- SETUP RENDERER (Detailed Selection) ---
+    renderSetup(ui) {
+        const availableModules = store.getModulesStatus();
+        const selectedModule = availableModules.find(m => m.id === this.selectedModuleId) || availableModules[0];
         
+        this.innerHTML = `
+        <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full relative overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
+                <button class="btn-cancel-launch absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 z-20 transition-colors">✕</button>
+
+                <div class="p-8">
+                    <div class="text-center mb-6">
+                        <div class="w-20 h-20 bg-orange-100 dark:bg-orange-900/30 rounded-3xl mx-auto flex items-center justify-center text-4xl mb-4 border-2 border-orange-200 dark:border-orange-800">
+                            ${this.selectedGame.icon || '🕹️'}
+                        </div>
+                        <h2 class="text-2xl font-black text-slate-800 dark:text-white">${this.selectedGame.name}</h2>
+                        <p class="text-sm text-slate-500 font-bold uppercase tracking-wider mt-1">${ui.arcadeSetup || "Game Setup"}</p>
+                    </div>
+
+                    <!-- DISCLAIMER -->
+                    <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800 mb-6 flex gap-3 items-start">
+                        <span class="text-xl">🧠</span>
+                        <p class="text-xs text-blue-800 dark:text-blue-300 font-medium leading-relaxed">
+                            ${ui.arcadeDisclaimer || "⚠️ This game uses AI."}
+                        </p>
+                    </div>
+
+                    <!-- MODULE SELECTOR -->
+                    <div class="mb-8">
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-2">${ui.arcadeSelectModule || "Select Module"}</label>
+                        <div class="relative">
+                            <select id="sel-module" class="w-full appearance-none bg-slate-100 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-white py-3 pl-4 pr-10 rounded-xl font-bold text-sm outline-none focus:border-orange-500 transition-colors">
+                                ${availableModules.map(m => `
+                                    <option value="${m.id}" ${this.selectedModuleId === m.id ? 'selected' : ''}>
+                                        ${m.icon || '📂'} ${m.name}
+                                    </option>
+                                `).join('')}
+                            </select>
+                            <div class="absolute right-4 top-3.5 text-slate-400 pointer-events-none">▼</div>
+                        </div>
+                    </div>
+
+                    <button id="btn-start-game" class="w-full py-4 bg-orange-600 text-white font-black text-lg rounded-2xl shadow-xl hover:bg-orange-500 active:scale-95 transition-all flex items-center justify-center gap-2">
+                        <span>🚀</span> ${ui.arcadeStart || "START"}
+                    </button>
+                </div>
+            </div>
+        </div>`;
+
+        this.querySelector('.btn-cancel-launch').onclick = () => this.cancelLaunch();
+        
+        const sel = this.querySelector('#sel-module');
+        if(sel) sel.onchange = (e) => { this.selectedModuleId = e.target.value; };
+
+        this.querySelector('#btn-start-game').onclick = () => this.launchGame();
+    }
+
+    bindMainEvents() {
+        this.querySelector('.btn-close').onclick = () => this.close();
         this.querySelector('#tab-games').onclick = () => { this.activeTab = 'games'; this.render(); };
         this.querySelector('#tab-sources').onclick = () => { this.activeTab = 'sources'; this.render(); };
         
@@ -301,8 +354,18 @@ class ArborModalArcade extends HTMLElement {
         const btnAddRepo = this.querySelector('#btn-add-repo');
         if(btnAddRepo) btnAddRepo.onclick = () => this.addRepo();
 
-        this.querySelectorAll('.btn-launch').forEach(b => {
-            b.onclick = (e) => this.launchGame(e.currentTarget.dataset.url, e.currentTarget.dataset.name);
+        this.querySelectorAll('.btn-prepare').forEach(b => {
+            b.onclick = (e) => {
+                const isManual = e.currentTarget.dataset.manual === 'true';
+                const idx = parseInt(e.currentTarget.dataset.idx);
+                
+                // Reconstruct the game object from the rendered list index
+                // (Simplified for this example, ideally lookup by ID)
+                const manualGames = store.userStore.state.installedGames.map(g => ({...g, isManual: true, path: g.url}));
+                const allGames = [...this.discoveredGames, ...manualGames];
+                
+                this.prepareLaunch(allGames[idx]);
+            };
         });
 
         this.querySelectorAll('.btn-remove-game').forEach(b => {

@@ -25,17 +25,6 @@
 </head>
 <body class="bg-slate-50 text-slate-800 h-screen w-screen flex flex-col overflow-hidden">
 
-    <!-- DEV WARNING (Shown only if not in Arbor) -->
-    <div id="dev-warning" class="fixed inset-0 z-[100] bg-slate-900/95 flex items-center justify-center hidden">
-        <div class="bg-white p-8 rounded-2xl max-w-md text-center shadow-2xl">
-            <h1 class="text-2xl font-black text-red-600 mb-2">DEV MODE</h1>
-            <p class="text-sm text-slate-500 mb-6">Arbor Bridge not detected. Run simulation?</p>
-            <button onclick="DevMock.activate()" class="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold hover:scale-105 transition-transform">
-                Launch Mock Environment
-            </button>
-        </div>
-    </div>
-
     <!-- LOADING SCREEN -->
     <div id="loader">
         <div class="text-6xl mb-4 animate-bounce">🌱</div>
@@ -76,10 +65,7 @@ const App = {
     
     init: async () => {
         // 1. Wait for Bridge
-        if (!window.Arbor) {
-            document.getElementById('dev-warning').classList.remove('hidden');
-            return; // Stop here, wait for DevMock
-        }
+        if (!window.Arbor) return; // Silent fail if standalone
 
         // 2. Load Content via URL Params provided by Arbor context
         App.setLoading("Reading Scroll...");
@@ -248,43 +234,6 @@ const ContentHelper = {
         if (url.endsWith('data.json')) return url.substring(0, url.lastIndexOf('/'));
         if (url.endsWith('/data')) return url.substring(0, url.lastIndexOf('/'));
         return url;
-    }
-};
-
-// --- DEV MOCK (Simulates Arbor environment for standalone testing) ---
-const DevMock = {
-    activate: () => {
-        document.getElementById('dev-warning').classList.add('hidden');
-        
-        // Inject Mock Bridge
-        window.Arbor = {
-            user: { username: "Dev", avatar: "🛠️" },
-            params: {
-                module: 'en/01-computing', // Default for testing
-                // Using valid repo for fetching real content in dev mode
-                source: 'https://raw.githubusercontent.com/treesys-org/arbor-knowledge/main/data' 
-            },
-            ai: {
-                chat: async (msgs) => {
-                    console.log("[DevMock AI Request]:", msgs[0].content);
-                    await new Promise(r => setTimeout(r, 1500)); // Simulate network
-                    // Mock Response
-                    return JSON.stringify([
-                        {term: "DevTerm1", def: "Definition 1"},
-                        {term: "DevTerm2", def: "Definition 2"},
-                        {term: "DevTerm3", def: "Definition 3"},
-                        {term: "DevTerm4", def: "Definition 4"},
-                        {term: "DevTerm5", def: "Definition 5"},
-                        {term: "DevTerm6", def: "Definition 6"}
-                    ]);
-                }
-            },
-            game: {
-                addXP: (xp) => console.log(`[DevMock Game] Added ${xp} XP`)
-            }
-        };
-        
-        App.init();
     }
 };
 
