@@ -55,11 +55,13 @@ class ArborModalGamePlayer extends HTMLElement {
         // Recursive function to gather all leaves
         // This ensures that if a user selects a high-level folder, we dig down to find actual lessons.
         const collectLeaves = async (node) => {
-            // Base Case: Leaf found
-            if (node.type === 'leaf' || node.type === 'exam') {
+            // Base Case: Leaf found (Filter out Exams)
+            if (node.type === 'leaf') {
                 this.playlist.push(node);
                 return;
             }
+            // Skip exams explicitly
+            if (node.type === 'exam') return;
 
             // Recursive Step: Branch
             if (node.type === 'branch' || node.type === 'root') {
@@ -83,7 +85,7 @@ class ArborModalGamePlayer extends HTMLElement {
         console.log(`[Arbor Game Bridge] Prepared ${this.playlist.length} items from node: ${rootNode.name}`);
         
         if (this.playlist.length === 0) {
-            throw new Error("This module is empty (No lessons found to play). Please select a different module.");
+            throw new Error("This module contains no playable lessons (Exams excluded). Please select a different module.");
         }
     }
 
