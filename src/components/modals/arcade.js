@@ -162,8 +162,6 @@ class ArborModalArcade extends HTMLElement {
             if (!this.filterText || n.name.toLowerCase().includes(this.filterText.toLowerCase())) {
                 nodes.push({ ...n, depth });
             }
-            // Always traverse children even if parent doesn't match? 
-            // Better UX: Show parent if child matches? For simplicity: just list matching nodes.
             if (n.children) {
                 n.children.forEach(c => traverse(c, depth + 1));
             }
@@ -316,8 +314,8 @@ class ArborModalArcade extends HTMLElement {
         const nodeList = this.getFlatNodes();
         const selectedNode = nodeList.find(n => n.id === this.selectedNodeId);
         
-        // Filter Nodes
-        const filteredNodes = nodeList.slice(0, 100); // Limit rendering for performance if empty query
+        // Increased limit to show more items, especially children in deep trees
+        const filteredNodes = nodeList.slice(0, 300); 
 
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
@@ -348,21 +346,33 @@ class ArborModalArcade extends HTMLElement {
                             ${filteredNodes.map(n => {
                                 const isSelected = this.selectedNodeId === n.id;
                                 const isLeaf = n.type === 'leaf' || n.type === 'exam';
+                                
+                                // Distinct styling for leaves vs modules to make selection easier
+                                let icon = n.icon;
+                                if (!icon) icon = isLeaf ? '📄' : '📁';
+                                
+                                const typeBadge = isLeaf 
+                                    ? `<span class="text-[9px] bg-purple-100 text-purple-700 px-1.5 rounded uppercase font-bold tracking-wider">Lesson</span>`
+                                    : `<span class="text-[9px] bg-slate-200 text-slate-600 px-1.5 rounded uppercase font-bold tracking-wider">Module</span>`;
+
                                 return `
                                 <button class="btn-select-node w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 transition-colors text-sm
                                     ${isSelected ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-200 ring-1 ring-orange-500' : 'hover:bg-white dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400'}"
                                     data-id="${n.id}">
-                                    <span class="text-lg">${n.icon || (isLeaf ? '📄' : '📁')}</span>
+                                    <span class="text-lg">${icon}</span>
                                     <div class="min-w-0">
-                                        <p class="font-bold truncate leading-tight">${n.name}</p>
-                                        <p class="text-[10px] opacity-70 truncate">${isLeaf ? 'Lesson' : 'Module'}</p>
+                                        <div class="flex items-center gap-2">
+                                            <p class="font-bold truncate leading-tight">${n.name}</p>
+                                            ${typeBadge}
+                                        </div>
+                                        <p class="text-[10px] opacity-60 truncate">${n.path || 'No path'}</p>
                                     </div>
                                     ${isSelected ? '<span class="ml-auto text-orange-500 font-bold">✔</span>' : ''}
                                 </button>
                                 `;
                             }).join('')}
                             
-                            ${filteredNodes.length === 0 ? `<div class="p-4 text-center text-xs text-slate-400">No matching content found.</div>` : ''}
+                            ${filteredNodes.length === 0 ? `<div class="p-4 text-center text-xs text-slate-400">No matching content found. Try expanding the map first.</div>` : ''}
                         </div>
                     </div>
 
