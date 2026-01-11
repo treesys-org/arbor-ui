@@ -120,23 +120,29 @@ export class SourceManager {
 
         try {
             const absoluteSource = new URL(sourceUrl, window.location.href).href;
+            const candidates = [];
+
+            // STRATEGY 1: Check Sibling (Standard for data.json in data folder)
+            // e.g. .../data/data.json -> .../data/arbor-index.json
+            candidates.push(new URL('arbor-index.json', absoluteSource).href);
+
+            // STRATEGY 2: Check Parent (Fix for Releases inside subfolders)
+            // e.g. .../data/releases/v1.json -> .../data/arbor-index.json
+            candidates.push(new URL('../arbor-index.json', absoluteSource).href);
             
-            // STRATEGY 1: Check Sibling (Portable Standard)
-            const siblingUrl = new URL('arbor-index.json', absoluteSource).href;
-            
-            // STRATEGY 2: Check Root (Legacy Standard)
-            let rootUrl = null;
+            // STRATEGY 3: Explicit /data/ root detection
             const lower = absoluteSource.toLowerCase();
             if (lower.includes('/data/')) {
                  const idx = lower.lastIndexOf('/data/'); 
-                 const rootBase = absoluteSource.substring(0, idx) + '/';
-                 rootUrl = rootBase + 'arbor-index.json';
+                 const rootBase = absoluteSource.substring(0, idx);
+                 // Check root/data/arbor-index.json
+                 candidates.push(`${rootBase}/data/arbor-index.json`);
             }
 
-            const candidates = [siblingUrl];
-            if (rootUrl && rootUrl !== siblingUrl) candidates.push(rootUrl);
+            // Deduplicate
+            const uniqueCandidates = [...new Set(candidates)];
 
-            for (const url of candidates) {
+            for (const url of uniqueCandidates) {
                  try {
                      const res = await fetch(`${url}?t=${Date.now()}`, { cache: 'no-cache' });
                      if (res.ok) {
@@ -160,7 +166,7 @@ export class SourceManager {
                      }
                  } catch(e) { }
             }
-            this.update({ availableReleases: [], manifestUrlAttempted: candidates.join(' | ') });
+            this.update({ availableReleases: [], manifestUrlAttempted: uniqueCandidates.join(' | ') });
 
         } catch (e) {
             this.update({ availableReleases: [] });

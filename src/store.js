@@ -146,46 +146,51 @@ class Store extends EventTarget {
     }
 
     processLoadedData(json) {
-        // Fallback for lang
-        if (!this.state.i18nData) this.loadLanguage(this.state.lang);
+        try {
+            // Fallback for lang
+            if (!this.state.i18nData) this.loadLanguage(this.state.lang);
 
-        let langData = null;
-        if (json.languages) {
-            langData = json.languages[this.state.lang];
-            if (!langData) {
-                const availableLangs = Object.keys(json.languages);
-                if (availableLangs.length > 0) langData = json.languages[availableLangs[0]];
+            let langData = null;
+            if (json && json.languages) {
+                langData = json.languages[this.state.lang];
+                if (!langData) {
+                    const availableLangs = Object.keys(json.languages);
+                    if (availableLangs.length > 0) langData = json.languages[availableLangs[0]];
+                }
             }
-        }
 
-        if (!langData) {
-            this.update({ loading: false, error: "No valid content found." });
-            return;
-        }
-        
-        // Post-processing (Exam Prefixes)
-        const examPrefix = this.ui.examLabelPrefix || "Exam: ";
-        if (examPrefix) {
-            const applyPrefix = (node) => {
-                if (node.type === 'exam' && !node.name.startsWith(examPrefix)) node.name = examPrefix + node.name;
-            };
-            const traverse = (node) => {
-                applyPrefix(node);
-                if (node.children) node.children.forEach(traverse);
-            };
-            traverse(langData);
-        }
+            if (!langData) {
+                this.update({ loading: false, error: "No valid content found in this tree." });
+                return;
+            }
+            
+            // Post-processing (Exam Prefixes)
+            const examPrefix = this.ui.examLabelPrefix || "Exam: ";
+            if (examPrefix) {
+                const applyPrefix = (node) => {
+                    if (node.type === 'exam' && !node.name.startsWith(examPrefix)) node.name = examPrefix + node.name;
+                };
+                const traverse = (node) => {
+                    applyPrefix(node);
+                    if (node.children) node.children.forEach(traverse);
+                };
+                traverse(langData);
+            }
 
-        this.update({ 
-            data: langData, 
-            rawGraphData: json,
-            loading: false, 
-            path: [langData], 
-            lastActionMessage: this.ui.sourceSwitchSuccess 
-        });
-        
-        this.dispatchEvent(new CustomEvent('graph-update'));
-        setTimeout(() => this.update({ lastActionMessage: null }), 3000);
+            this.update({ 
+                data: langData, 
+                rawGraphData: json,
+                loading: false, 
+                path: [langData], 
+                lastActionMessage: this.ui.sourceSwitchSuccess 
+            });
+            
+            this.dispatchEvent(new CustomEvent('graph-update'));
+            setTimeout(() => this.update({ lastActionMessage: null }), 3000);
+        } catch (e) {
+            console.error("Data Processing Error", e);
+            this.update({ loading: false, error: "Failed to process data structure." });
+        }
     }
 
     addCommunitySource(url) { this.sourceManager.addCommunitySource(url); }
