@@ -56,15 +56,19 @@ export class UserStore {
                 }
             }
             
-            // Ensure Official Repo Exists if list is empty or missing official
-            if (!this.state.gameRepos.some(r => r.id === 'official')) {
-                this.state.gameRepos.unshift({
-                    id: 'official',
-                    name: 'Arbor Official',
-                    url: './arbor-games/manifest.json',
-                    isOfficial: true
-                });
-            }
+            // FIX: Always reset/update the Official Repo to ensure it points to the Cloud, not local folder
+            // 1. Remove old/local official entry that might be cached in localStorage
+            this.state.gameRepos = this.state.gameRepos.filter(r => r.id !== 'official');
+            
+            // 2. Add correct Cloud URL pointing to treesys-org/arbor-games
+            this.state.gameRepos.unshift({
+                id: 'official',
+                name: 'Arbor Official',
+                // Pointing to Raw GitHub ensures the manifest JSON loads correctly cross-origin.
+                // Note: For the HTML games to run perfectly, GitHub Pages should be enabled on the repo.
+                url: 'https://raw.githubusercontent.com/treesys-org/arbor-games/main/manifest.json',
+                isOfficial: true
+            });
 
         } catch(e) {}
     }
