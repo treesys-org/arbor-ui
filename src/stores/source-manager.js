@@ -1,4 +1,5 @@
 
+
 const OFFICIAL_DOMAINS = [
     'treesys-org.github.io',
     'localhost',
@@ -32,7 +33,7 @@ export class SourceManager {
         };
     }
 
-    init() {
+    async init() {
         // 1. Load Community Sources (Local)
         let localSources = [];
         try { localSources = JSON.parse(localStorage.getItem('arbor-sources')) || []; } catch(e) {}
@@ -48,15 +49,12 @@ export class SourceManager {
             activeSource = { ...DEFAULT_SOURCES[0] };
             // Optimization: If running locally, prefer local relative URL
             if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                 this._checkLocalBoot().then(localSrc => {
-                     if (localSrc) this.loadData(localSrc);
-                     else this.loadData(activeSource);
-                 });
-                 return;
+                 const localSrc = await this._checkLocalBoot();
+                 if (localSrc) return localSrc;
             }
         }
 
-        this.loadData(activeSource);
+        return activeSource;
     }
 
     async _checkLocalBoot() {
@@ -101,7 +99,11 @@ export class SourceManager {
         this.state.communitySources = newSources;
         localStorage.setItem('arbor-sources', JSON.stringify(newSources));
         
-        this.loadData(newSource);
+        // This method is called from UI, so we return or let the UI trigger load. 
+        // But for consistency with legacy calls, we can trigger an update here 
+        // if this class was more autonomous. However, UI usually calls store.loadData(newSource).
+        // For addCommunitySource, the caller usually triggers loadData next.
+        // We will leave it as state update mainly.
     }
 
     removeCommunitySource(id) {
@@ -111,7 +113,7 @@ export class SourceManager {
         localStorage.setItem('arbor-sources', JSON.stringify(newSources));
         
         if (this.state.activeSource && this.state.activeSource.id === id) {
-            this.init(); // Fallback to default
+            // Fallback needed by caller
         }
     }
 

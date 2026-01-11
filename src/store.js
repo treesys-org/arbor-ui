@@ -1,4 +1,5 @@
 
+
 import { AVAILABLE_LANGUAGES } from './i18n.js';
 import { github } from './services/github.js';
 import { aiService } from './services/ai.js';
@@ -62,10 +63,15 @@ class Store extends EventTarget {
         );
         
         // 4. Initialization
-        this.initialize().then(() => {
+        this.initialize().then(async () => {
              const streakMsg = this.userStore.checkStreak();
              if (streakMsg) this.notify(streakMsg);
-             this.sourceManager.init();
+             
+             // Initial Source Load
+             const source = await this.sourceManager.init();
+             if (source) {
+                 this.loadData(source);
+             }
         });
 
         const ghToken = localStorage.getItem('arbor-gh-token') || sessionStorage.getItem('arbor-gh-token');
