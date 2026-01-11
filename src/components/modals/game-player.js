@@ -68,6 +68,22 @@ class ArborModalGamePlayer extends HTMLElement {
         const loader = this.querySelector('#loader');
         const errorMsg = this.querySelector('#error-msg');
 
+        // STRATEGY: 
+        // 1. If GitHub -> Fetch Text -> Inject Base -> srcdoc
+        // 2. If External -> iframe.src
+        
+        const isGitHub = url.includes('github.com') || url.includes('raw.githubusercontent.com');
+
+        if (!isGitHub) {
+            // Direct load for non-GitHub URLs
+            iframe.src = url;
+            iframe.onload = () => {
+                loader.classList.add('hidden');
+                iframe.classList.remove('opacity-0');
+            };
+            return;
+        }
+
         try {
             // 1. Get Fetch URL (Raw)
             const fetchUrl = this.getRawUrl(url);

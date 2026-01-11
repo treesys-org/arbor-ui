@@ -21,6 +21,5 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     store.setTheme(initialTheme);
 
-    // Initial Load
-    store.loadSources();
+    // Store initializes itself in its constructor via this.initialize()
 });
