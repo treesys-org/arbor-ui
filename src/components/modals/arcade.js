@@ -7,6 +7,7 @@ class ArborModalArcade extends HTMLElement {
         this.activeTab = 'games'; // 'games' | 'sources'
         this.discoveredGames = [];
         this.isLoading = false;
+        this.isPreparingContext = false;
         
         // Setup State
         this.selectedGame = null;
@@ -64,25 +65,47 @@ class ArborModalArcade extends HTMLElement {
         store.setModal(null);
     }
 
+    // --- RECURSIVE LOADER ---
+    async ensureTreeLoaded(node, depth = 0) {
+        // Safety limit to prevent infinite loading on massive trees
+        if (depth > 4) return; 
+
+        if (node.type === 'branch' || node.type === 'root') {
+            if (node.hasUnloadedChildren) {
+                await store.loadNodeChildren(node);
+            }
+            if (node.children) {
+                // Load children in parallel
+                await Promise.all(node.children.map(c => this.ensureTreeLoaded(c, depth + 1)));
+            }
+        }
+    }
+
     // Enter Setup Mode
-    prepareLaunch(game) {
+    async prepareLaunch(game) {
         this.selectedGame = game;
-        
-        // Auto-select current context
+        this.isPreparingContext = true;
+        this.render(); // Show loading state
+
+        // 1. Ensure the tree is loaded so the user can select anything
+        const root = store.value.data;
+        if (root) {
+            await this.ensureTreeLoaded(root);
+        }
+
+        // 2. Auto-select current context
         const current = this.getCurrentContext();
         if (current) {
-            // Smart Selection: If looking at an Exam, select parent. Leaves are ok.
             if (current.type === 'exam') {
                 this.selectedNodeId = current.parentId;
             } else {
                 this.selectedNodeId = current.id;
             }
         } else {
-            // Default to root
-            const root = store.value.data;
             this.selectedNodeId = root ? root.id : null;
         }
         
+        this.isPreparingContext = false;
         this.render();
     }
 
@@ -316,10 +339,21 @@ class ArborModalArcade extends HTMLElement {
 
     // --- SETUP RENDERER (Detailed Selection) ---
     renderSetup(ui) {
+        if (this.isPreparingContext) {
+             this.innerHTML = `
+             <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
+                <div class="bg-white dark:bg-slate-900 rounded-3xl p-8 flex flex-col items-center">
+                    <div class="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                    <p class="font-bold text-slate-600 dark:text-slate-300">Scanning Knowledge Tree...</p>
+                </div>
+             </div>
+             `;
+             return;
+        }
+
         const nodeList = this.getFlatNodes();
-        
         // Increased limit to show more items, especially children in deep trees
-        const filteredNodes = nodeList.slice(0, 300); 
+        const filteredNodes = nodeList.slice(0, 500); 
 
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
