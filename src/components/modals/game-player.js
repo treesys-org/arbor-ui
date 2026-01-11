@@ -7,8 +7,8 @@ class ArborModalGamePlayer extends HTMLElement {
         super();
         // State for part-by-part iterator
         this.cursorIndex = 0;
-        this.activeModuleId = null;
-        this.moduleLessons = []; 
+        this.activeNodeId = null;
+        this.playlist = []; 
     }
 
     connectedCallback() {
@@ -30,26 +30,33 @@ class ArborModalGamePlayer extends HTMLElement {
         const { moduleId } = store.value.modal || {};
         if (!moduleId) return;
         
-        this.activeModuleId = moduleId;
-        const moduleNode = store.findNode(moduleId);
+        this.activeNodeId = moduleId;
+        const node = store.findNode(moduleId);
         
-        if (!moduleNode) return;
+        if (!node) return;
 
-        // If children unloaded, load them first
-        if (moduleNode.hasUnloadedChildren) {
-            await store.loadNodeChildren(moduleNode);
+        this.playlist = [];
+
+        // CASE A: It's a Leaf (Single Lesson)
+        if (node.type === 'leaf' || node.type === 'exam') {
+            this.playlist.push(node);
+        } 
+        // CASE B: It's a Branch (Module)
+        else {
+            // If children unloaded, load them first
+            if (node.hasUnloadedChildren) {
+                await store.loadNodeChildren(node);
+            }
+            // Flatten leaves (lessons)
+            const traverse = (n) => {
+                if (n.type === 'leaf' || n.type === 'exam') this.playlist.push(n);
+                if (n.children) n.children.forEach(traverse);
+            };
+            traverse(node);
         }
-
-        // Flatten leaves (lessons)
-        this.moduleLessons = [];
-        const traverse = (n) => {
-            if (n.type === 'leaf' || n.type === 'exam') this.moduleLessons.push(n);
-            if (n.children) n.children.forEach(traverse);
-        };
-        traverse(moduleNode);
         
         this.cursorIndex = 0;
-        console.log(`[Arbor Game Bridge] Prepared ${this.moduleLessons.length} lessons for module ${moduleNode.name}`);
+        console.log(`[Arbor Game Bridge] Prepared ${this.playlist.length} items from node: ${node.name}`);
     }
 
     // --- HELPER: Fetch Specific Content ---
@@ -59,7 +66,6 @@ class ArborModalGamePlayer extends HTMLElement {
             await store.loadNodeContent(node);
         }
         // Return raw text (stripped of HTML ideally, or let game handle it)
-        // We do a basic strip here to be safe for token limits
         const raw = node.content || "";
         const clean = raw.replace(/<[^>]*>?/gm, ''); 
         return { 
@@ -98,21 +104,29 @@ class ArborModalGamePlayer extends HTMLElement {
             
             // Get the list of all lessons (metadata only)
             getCurriculum: () => {
-                return this.moduleLessons.map(l => ({ id: l.id, title: l.name }));
+                return this.playlist.map(l => ({ id: l.id, title: l.name }));
             },
 
             // Get Next Lesson (Iterator) - Useful for linear games
             getNextLesson: async () => {
-                if (this.cursorIndex >= this.moduleLessons.length) return null;
-                const node = this.moduleLessons[this.cursorIndex];
+                // If playlist empty (e.g. empty module), return null
+                if (this.playlist.length === 0) return null;
+
+                // Loop if we reach end? Or stop? Let's loop for endless play
+                if (this.cursorIndex >= this.playlist.length) {
+                    this.cursorIndex = 0; 
+                }
+                
+                const node = this.playlist[this.cursorIndex];
                 this.cursorIndex++;
+                
                 return await this.fetchLessonContent(node);
             },
 
             // Get Specific Lesson by Index
             getLessonAt: async (index) => {
-                if (index < 0 || index >= this.moduleLessons.length) return null;
-                return await this.fetchLessonContent(this.moduleLessons[index]);
+                if (index < 0 || index >= this.playlist.length) return null;
+                return await this.fetchLessonContent(this.playlist[index]);
             },
 
             // 4. Navigation
