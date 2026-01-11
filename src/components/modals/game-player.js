@@ -9,12 +9,24 @@ class ArborModalGamePlayer extends HTMLElement {
         this.cursorIndex = 0;
         this.activeNodeId = null;
         this.playlist = []; 
+        this.isPreparing = true;
     }
 
-    connectedCallback() {
-        this.render();
-        this.setupBridge(); 
-        setTimeout(() => this.loadGame(), 50);
+    async connectedCallback() {
+        this.render(); // Render loader state immediately
+        
+        // CRITICAL FIX: Await curriculum preparation BEFORE loading the game
+        // This prevents the game from asking for content before it's fetched
+        try {
+            await this.prepareCurriculum();
+            this.setupBridge();
+            this.isPreparing = false;
+            this.render(); // Re-render to show iframe container
+            this.loadGame();
+        } catch (e) {
+            console.error("Failed to prepare game context", e);
+            this.innerHTML = `<div class="text-white p-8 text-center">Error loading content: ${e.message}</div>`;
+        }
     }
 
     disconnectedCallback() {
@@ -45,6 +57,9 @@ class ArborModalGamePlayer extends HTMLElement {
         else {
             // If children unloaded, load them first
             if (node.hasUnloadedChildren) {
+                // Determine source for API call
+                // We must use the Store's logic or call store action, 
+                // but store.loadNodeChildren updates the graph. We want that.
                 await store.loadNodeChildren(node);
             }
             // Flatten leaves (lessons)
@@ -62,6 +77,7 @@ class ArborModalGamePlayer extends HTMLElement {
     // --- HELPER: Fetch Specific Content ---
     async fetchLessonContent(node) {
         if (!node) return null;
+        // Check if content is loaded in memory
         if (!node.content && node.contentPath) {
             await store.loadNodeContent(node);
         }
@@ -77,9 +93,7 @@ class ArborModalGamePlayer extends HTMLElement {
     }
 
     setupBridge() {
-        // Initialize curriculum data before game asks
-        this.prepareCurriculum();
-
+        // window.__ARBOR_GAME_BRIDGE__ is the API the iframe calls
         window.__ARBOR_GAME_BRIDGE__ = {
             // 1. AI Capability
             chat: async (messages, context) => {
@@ -180,12 +194,15 @@ class ArborModalGamePlayer extends HTMLElement {
         const loader = this.querySelector('#loader');
         const errorMsg = this.querySelector('#error-msg');
         
+        // Just in case iframe isn't in DOM yet (though render() ensures it)
+        if (!iframe) return;
+
         const isGitHub = url.includes('github.com') || url.includes('raw.githubusercontent.com');
 
         if (!isGitHub) {
             iframe.src = url;
             iframe.onload = () => {
-                loader.classList.add('hidden');
+                if(loader) loader.classList.add('hidden');
                 iframe.classList.remove('opacity-0');
             };
             return;
@@ -263,13 +280,13 @@ class ArborModalGamePlayer extends HTMLElement {
             iframe.srcdoc = html;
 
             iframe.onload = () => {
-                loader.classList.add('hidden');
+                if(loader) loader.classList.add('hidden');
                 iframe.classList.remove('opacity-0');
             };
 
         } catch (e) {
             console.error("Game Load Failed:", e);
-            loader.classList.add('hidden');
+            if(loader) loader.classList.add('hidden');
             if (errorMsg) {
                 errorMsg.classList.remove('hidden');
                 errorMsg.innerHTML = `<div class="text-red-500 font-bold p-4">Error loading game: ${e.message}</div>`;
@@ -280,6 +297,8 @@ class ArborModalGamePlayer extends HTMLElement {
     render() {
         const { url, title } = store.value.modal || {};
         if (!url) { this.close(); return; }
+
+        const loadingText = this.isPreparing ? "Reading Knowledge Tree..." : "Loading Cartridge...";
 
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[80] bg-black/95 backdrop-blur-sm flex flex-col animate-in fade-in h-full w-full">
@@ -305,12 +324,14 @@ class ArborModalGamePlayer extends HTMLElement {
             <div class="flex-1 relative bg-black overflow-hidden flex items-center justify-center">
                 <div id="loader" class="absolute inset-0 flex flex-col items-center justify-center text-slate-600 z-0">
                     <div class="w-10 h-10 border-4 border-slate-800 border-t-purple-600 rounded-full animate-spin mb-4"></div>
-                    <p class="text-xs font-mono uppercase tracking-widest">Loading Cartridge...</p>
+                    <p class="text-xs font-mono uppercase tracking-widest animate-pulse">${loadingText}</p>
                 </div>
                 <div id="error-msg" class="hidden absolute inset-0 flex flex-col items-center justify-center z-10 p-4"></div>
+                ${!this.isPreparing ? `
                 <iframe class="relative z-10 w-full h-full border-none bg-white opacity-0 transition-opacity duration-500" 
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; gamepad" 
                     allowfullscreen sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-pointer-lock allow-modals"></iframe>
+                ` : ''}
             </div>
         </div>`;
 
