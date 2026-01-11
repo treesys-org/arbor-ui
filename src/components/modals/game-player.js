@@ -10,6 +10,7 @@ class ArborModalGamePlayer extends HTMLElement {
         this.activeNodeId = null;
         this.playlist = []; 
         this.isPreparing = true;
+        this.error = null;
     }
 
     async connectedCallback() {
@@ -25,7 +26,9 @@ class ArborModalGamePlayer extends HTMLElement {
             this.loadGame();
         } catch (e) {
             console.error("Failed to prepare game context", e);
-            this.innerHTML = `<div class="text-white p-8 text-center">Error loading content: ${e.message}</div>`;
+            this.error = e.message;
+            this.isPreparing = false;
+            this.render();
         }
     }
 
@@ -37,41 +40,51 @@ class ArborModalGamePlayer extends HTMLElement {
         store.setModal('arcade'); 
     }
 
-    // --- HELPER: Prepare Curriculum Iterator ---
+    // --- HELPER: Prepare Curriculum Iterator (Recursive) ---
     async prepareCurriculum() {
         const { moduleId } = store.value.modal || {};
-        if (!moduleId) return;
+        if (!moduleId) throw new Error("No context module selected.");
         
         this.activeNodeId = moduleId;
-        const node = store.findNode(moduleId);
+        const rootNode = store.findNode(moduleId);
         
-        if (!node) return;
+        if (!rootNode) throw new Error("Could not find the selected module in memory.");
 
         this.playlist = [];
 
-        // CASE A: It's a Leaf (Single Lesson)
-        if (node.type === 'leaf' || node.type === 'exam') {
-            this.playlist.push(node);
-        } 
-        // CASE B: It's a Branch (Module)
-        else {
-            // If children unloaded, load them first
-            if (node.hasUnloadedChildren) {
-                // Determine source for API call
-                // We must use the Store's logic or call store action, 
-                // but store.loadNodeChildren updates the graph. We want that.
-                await store.loadNodeChildren(node);
+        // Recursive function to gather all leaves
+        // This ensures that if a user selects a high-level folder, we dig down to find actual lessons.
+        const collectLeaves = async (node) => {
+            // Base Case: Leaf found
+            if (node.type === 'leaf' || node.type === 'exam') {
+                this.playlist.push(node);
+                return;
             }
-            // Flatten leaves (lessons)
-            const traverse = (n) => {
-                if (n.type === 'leaf' || n.type === 'exam') this.playlist.push(n);
-                if (n.children) n.children.forEach(traverse);
-            };
-            traverse(node);
-        }
+
+            // Recursive Step: Branch
+            if (node.type === 'branch' || node.type === 'root') {
+                // 1. Load Children if they are not in memory yet (Lazy Loading)
+                if (node.hasUnloadedChildren) {
+                    await store.loadNodeChildren(node);
+                }
+                
+                // 2. Traverse Children
+                if (node.children && node.children.length > 0) {
+                    for (const child of node.children) {
+                        await collectLeaves(child);
+                    }
+                }
+            }
+        };
+
+        await collectLeaves(rootNode);
         
         this.cursorIndex = 0;
-        console.log(`[Arbor Game Bridge] Prepared ${this.playlist.length} items from node: ${node.name}`);
+        console.log(`[Arbor Game Bridge] Prepared ${this.playlist.length} items from node: ${rootNode.name}`);
+        
+        if (this.playlist.length === 0) {
+            throw new Error("This module is empty (No lessons found to play). Please select a different module.");
+        }
     }
 
     // --- HELPER: Fetch Specific Content ---
@@ -289,7 +302,7 @@ class ArborModalGamePlayer extends HTMLElement {
             if(loader) loader.classList.add('hidden');
             if (errorMsg) {
                 errorMsg.classList.remove('hidden');
-                errorMsg.innerHTML = `<div class="text-red-500 font-bold p-4">Error loading game: ${e.message}</div>`;
+                errorMsg.innerHTML = `<div class="text-red-500 font-bold p-4 bg-red-100 rounded-lg border border-red-200">Error loading game: ${e.message}</div>`;
             }
         }
     }
@@ -298,8 +311,29 @@ class ArborModalGamePlayer extends HTMLElement {
         const { url, title } = store.value.modal || {};
         if (!url) { this.close(); return; }
 
-        const loadingText = this.isPreparing ? "Reading Knowledge Tree..." : "Loading Cartridge...";
+        let loadingText = "Loading Cartridge...";
+        if (this.isPreparing) {
+            loadingText = `Reading Knowledge Tree... (${this.playlist.length} lessons found)`;
+        }
 
+        // Error View
+        if (this.error) {
+            this.innerHTML = `
+            <div id="modal-backdrop" class="fixed inset-0 z-[80] bg-black/95 backdrop-blur-sm flex flex-col animate-in fade-in h-full w-full items-center justify-center">
+                <div class="bg-slate-900 border border-red-500/50 p-8 rounded-2xl max-w-md text-center shadow-2xl">
+                    <div class="text-4xl mb-4">🍂</div>
+                    <h2 class="text-xl font-bold text-white mb-2">Could not start game</h2>
+                    <p class="text-sm text-red-300 font-mono mb-6">${this.error}</p>
+                    <button class="btn-close px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition-colors">
+                        Close
+                    </button>
+                </div>
+            </div>`;
+            this.querySelector('.btn-close').onclick = () => store.setModal(null);
+            return;
+        }
+
+        // Standard View
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[80] bg-black/95 backdrop-blur-sm flex flex-col animate-in fade-in h-full w-full">
             <div class="flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800 text-white shrink-0">
