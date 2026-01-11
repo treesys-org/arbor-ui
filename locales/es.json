@@ -1,4 +1,3 @@
-
 {
   "appTitle": "ARBOR",
   "appSubtitle": "Open University",
@@ -56,6 +55,7 @@
   "navSearch": "Buscar",
   "navCertificates": "Certificados",
   "navSources": "Árboles",
+  "navArcade": "Arcade",
   "navHelp": "Tutorial",
   "navContributor": "Modo Editor",
   "navSage": "Preguntar al Sabio",
@@ -332,5 +332,15 @@
   "privacyLink": "Leer Política Completa",
   "syncLoginWarningTitle": "Aviso de Sincronización",
   "syncLoginWarningBody": "Al conectar, tu progreso local será <strong>reemplazado</strong> por la copia de seguridad de la nube si existe.<br><br>También guardaremos tu <strong>Nombre</strong> y <strong>Emoji</strong> en la nube para identificarte.",
-  "syncLoginConfirm": "Entendido, Iniciar Sesión"
+  "syncLoginConfirm": "Entendido, Iniciar Sesión",
+  "arcadeTitle": "Arbor Arcade",
+  "arcadeDesc": "Juegos educativos sensibles al contexto. Juega juegos que se adaptan a lo que estás aprendiendo.",
+  "arcadeFeatured": "Juegos Destacados",
+  "arcadeLibrary": "Mi Biblioteca",
+  "arcadeAdd": "Añadir URL de Juego",
+  "arcadePlay": "Jugar",
+  "arcadeAddBtn": "Instalar",
+  "arcadePlaceholder": "https://.../juego/index.html",
+  "arcadeDeveloperNote": "Nota para Desarrolladores: Los juegos reciben el contexto vía parámetros URL (?source=...&module=...). ¡Crea tu propio motor!",
+  "arcadeContext": "Contexto Actual"
 }

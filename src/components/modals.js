@@ -14,7 +14,8 @@ import './modals/impressum.js';
 import './modals/export-pdf.js';
 import './modals/certificate-view.js';
 import './modals/empty-module.js';
-import './modals/privacy.js'; // NEW
+import './modals/privacy.js';
+import './modals/arcade.js'; // NEW
 
 // Admin Panel is essentially a modal
 import './modals/admin.js';
@@ -97,6 +98,9 @@ class ArborModals extends HTMLElement {
                 break;
             case 'sources': 
                 this.innerHTML = `<arbor-modal-sources></arbor-modal-sources>`; 
+                break;
+            case 'arcade': 
+                this.innerHTML = `<arbor-modal-arcade></arbor-modal-arcade>`; 
                 break;
             case 'about': 
                 this.innerHTML = `<arbor-modal-about></arbor-modal-about>`; 

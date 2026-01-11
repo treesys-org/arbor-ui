@@ -9,6 +9,8 @@ export class UserStore {
         this.state = {
             completedNodes: new Set(),
             bookmarks: {},
+            installedGames: [], // Single games added manually
+            gameRepos: [], // Repositories (manifests) of games
             gamification: {
                 username: '',
                 avatar: '👤',
@@ -49,8 +51,21 @@ export class UserStore {
                             }));
                         }
                     }
+                    if (parsed.installedGames) this.state.installedGames = parsed.installedGames;
+                    if (parsed.gameRepos) this.state.gameRepos = parsed.gameRepos;
                 }
             }
+            
+            // Ensure Official Repo Exists if list is empty or missing official
+            if (!this.state.gameRepos.some(r => r.id === 'official')) {
+                this.state.gameRepos.unshift({
+                    id: 'official',
+                    name: 'Arbor Official',
+                    url: './arbor-games/manifest.json',
+                    isOfficial: true
+                });
+            }
+
         } catch(e) {}
     }
 
@@ -59,6 +74,8 @@ export class UserStore {
             progress: Array.from(this.state.completedNodes),
             gamification: this.state.gamification,
             bookmarks: this.state.bookmarks, // Add bookmarks to cloud sync
+            installedGames: this.state.installedGames,
+            gameRepos: this.state.gameRepos,
             timestamp: Date.now()
         };
     }
@@ -79,7 +96,9 @@ export class UserStore {
             ts: Date.now(), 
             p: Array.from(this.state.completedNodes), 
             g: this.state.gamification,
-            b: this.state.bookmarks 
+            b: this.state.bookmarks,
+            games: this.state.installedGames,
+            repos: this.state.gameRepos
         };
         return JSON.stringify(data, null, 2);
     }
@@ -219,5 +238,31 @@ export class UserStore {
 
     isCompleted(id) {
         return this.state.completedNodes.has(id);
+    }
+
+    // --- Arcade / Games ---
+    addGame(name, url, icon) {
+        const newGame = { id: crypto.randomUUID(), name, url, icon: icon || '🎮' };
+        this.state.installedGames = [...this.state.installedGames, newGame];
+        this.persist();
+    }
+
+    removeGame(id) {
+        this.state.installedGames = this.state.installedGames.filter(g => g.id !== id);
+        this.persist();
+    }
+
+    addGameRepo(url) {
+        let name = "Custom Repository";
+        try { name = new URL(url).hostname; } catch(e){}
+        
+        const newRepo = { id: crypto.randomUUID(), name, url, isOfficial: false };
+        this.state.gameRepos.push(newRepo);
+        this.persist();
+    }
+
+    removeGameRepo(id) {
+        this.state.gameRepos = this.state.gameRepos.filter(r => r.id !== id);
+        this.persist();
     }
 }
