@@ -15,7 +15,8 @@ import './modals/export-pdf.js';
 import './modals/certificate-view.js';
 import './modals/empty-module.js';
 import './modals/privacy.js';
-import './modals/arcade.js'; // NEW
+import './modals/arcade.js'; 
+import './modals/game-player.js'; // NEW: Game Player Iframe
 
 // Admin Panel is essentially a modal
 import './modals/admin.js';
@@ -101,6 +102,9 @@ class ArborModals extends HTMLElement {
                 break;
             case 'arcade': 
                 this.innerHTML = `<arbor-modal-arcade></arbor-modal-arcade>`; 
+                break;
+            case 'game-player': 
+                this.innerHTML = `<arbor-modal-game-player></arbor-modal-game-player>`; 
                 break;
             case 'about': 
                 this.innerHTML = `<arbor-modal-about></arbor-modal-about>`; 

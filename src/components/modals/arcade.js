@@ -78,7 +78,7 @@ class ArborModalArcade extends HTMLElement {
         return node;
     }
 
-    launchGame(gameUrl) {
+    launchGame(gameUrl, title) {
         const activeSource = store.value.activeSource;
         if (!activeSource) {
             alert("No active knowledge tree selected.");
@@ -100,7 +100,12 @@ class ArborModalArcade extends HTMLElement {
             finalUrl += `&module=${modulePath}`;
         }
 
-        window.open(finalUrl, '_blank');
+        // Open in Internal Modal Player
+        store.setModal({ 
+            type: 'game-player', 
+            url: finalUrl,
+            title: title || 'Arcade Game'
+        });
     }
 
     addCustomGame() {
@@ -182,7 +187,8 @@ class ArborModalArcade extends HTMLElement {
                             </div>
                         </div>
                         <div class="flex gap-2">
-                            <button class="btn-launch px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold rounded-xl shadow-lg hover:scale-105 active:scale-95 transition-transform" data-url="${g.path}">
+                            <button class="btn-launch px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold rounded-xl shadow-lg hover:scale-105 active:scale-95 transition-transform" 
+                                    data-url="${g.path}" data-name="${g.name}">
                                 ${ui.arcadePlay || "Play"}
                             </button>
                             ${g.isManual ? `
@@ -296,7 +302,7 @@ class ArborModalArcade extends HTMLElement {
         if(btnAddRepo) btnAddRepo.onclick = () => this.addRepo();
 
         this.querySelectorAll('.btn-launch').forEach(b => {
-            b.onclick = (e) => this.launchGame(e.currentTarget.dataset.url);
+            b.onclick = (e) => this.launchGame(e.currentTarget.dataset.url, e.currentTarget.dataset.name);
         });
 
         this.querySelectorAll('.btn-remove-game').forEach(b => {
