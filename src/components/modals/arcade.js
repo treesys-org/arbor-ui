@@ -10,7 +10,8 @@ class ArborModalArcade extends HTMLElement {
         
         // Setup State
         this.selectedGame = null;
-        this.selectedModuleId = null;
+        this.selectedNodeId = null;
+        this.filterText = '';
     }
 
     async connectedCallback() {
@@ -67,16 +68,14 @@ class ArborModalArcade extends HTMLElement {
     prepareLaunch(game) {
         this.selectedGame = game;
         
-        // Auto-select current module if available
+        // Auto-select current context
         const current = this.getCurrentContext();
-        if (current && (current.type === 'branch' || current.type === 'root')) {
-            this.selectedModuleId = current.id;
-        } else if (current && current.parentId) {
-            this.selectedModuleId = current.parentId;
+        if (current) {
+            this.selectedNodeId = current.id;
         } else {
-            // Default to root if nothing selected
+            // Default to root
             const root = store.value.data;
-            this.selectedModuleId = root ? root.id : null;
+            this.selectedNodeId = root ? root.id : null;
         }
         
         this.render();
@@ -84,7 +83,8 @@ class ArborModalArcade extends HTMLElement {
 
     cancelLaunch() {
         this.selectedGame = null;
-        this.selectedModuleId = null;
+        this.selectedNodeId = null;
+        this.filterText = '';
         this.render();
     }
 
@@ -94,34 +94,37 @@ class ArborModalArcade extends HTMLElement {
     }
 
     launchGame() {
-        if (!this.selectedGame || !this.selectedModuleId) return;
+        if (!this.selectedGame || !this.selectedNodeId) return;
         
         const activeSource = store.value.activeSource;
-        const moduleNode = store.findNode(this.selectedModuleId);
+        const targetNode = store.findNode(this.selectedNodeId);
         
-        if (!activeSource || !moduleNode) return;
+        if (!activeSource || !targetNode) return;
 
         const treeUrl = encodeURIComponent(activeSource.url);
         const lang = store.value.lang || 'EN';
-        const modulePath = moduleNode.apiPath ? encodeURIComponent(moduleNode.apiPath) : ''; 
+        
+        // Determine path for legacy games that might parse URL manually
+        const modulePath = targetNode.apiPath || targetNode.contentPath || ''; 
+        const encodedPath = encodeURIComponent(modulePath);
 
         let finalUrl = this.selectedGame.path;
         const separator = finalUrl.includes('?') ? '&' : '?';
         
         // Standard Context Parameters
         finalUrl += `${separator}source=${treeUrl}&lang=${lang}`;
-        if (modulePath) {
-            finalUrl += `&module=${modulePath}`;
+        if (encodedPath) {
+            finalUrl += `&module=${encodedPath}`;
         }
         
-        // Include ID for bridge to find internal object
-        finalUrl += `&moduleId=${this.selectedModuleId}`;
+        // CRITICAL: Include ID for the internal bridge to find the object in memory
+        finalUrl += `&moduleId=${this.selectedNodeId}`;
 
         store.setModal({ 
             type: 'game-player', 
             url: finalUrl,
             title: this.selectedGame.name,
-            moduleId: this.selectedModuleId 
+            moduleId: this.selectedNodeId 
         });
     }
 
@@ -146,6 +149,28 @@ class ArborModalArcade extends HTMLElement {
             store.userStore.removeGameRepo(id);
             this.loadAllGames();
         }
+    }
+
+    // Flattens the tree for the list view
+    getFlatNodes() {
+        const root = store.value.data;
+        if (!root) return [];
+        
+        const nodes = [];
+        const traverse = (n, depth) => {
+            // Add if it matches filter (or if filter is empty)
+            if (!this.filterText || n.name.toLowerCase().includes(this.filterText.toLowerCase())) {
+                nodes.push({ ...n, depth });
+            }
+            // Always traverse children even if parent doesn't match? 
+            // Better UX: Show parent if child matches? For simplicity: just list matching nodes.
+            if (n.children) {
+                n.children.forEach(c => traverse(c, depth + 1));
+            }
+        };
+        
+        traverse(root, 0);
+        return nodes;
     }
 
     render() {
@@ -288,59 +313,96 @@ class ArborModalArcade extends HTMLElement {
 
     // --- SETUP RENDERER (Detailed Selection) ---
     renderSetup(ui) {
-        const availableModules = store.getModulesStatus();
-        const selectedModule = availableModules.find(m => m.id === this.selectedModuleId) || availableModules[0];
+        const nodeList = this.getFlatNodes();
+        const selectedNode = nodeList.find(n => n.id === this.selectedNodeId);
         
+        // Filter Nodes
+        const filteredNodes = nodeList.slice(0, 100); // Limit rendering for performance if empty query
+
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
-            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full relative overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full h-[85vh] relative overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
                 <button class="btn-cancel-launch absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 z-20 transition-colors">✕</button>
 
-                <div class="p-8">
-                    <div class="text-center mb-6">
-                        <div class="w-20 h-20 bg-orange-100 dark:bg-orange-900/30 rounded-3xl mx-auto flex items-center justify-center text-4xl mb-4 border-2 border-orange-200 dark:border-orange-800">
+                <div class="p-6 flex-1 flex flex-col h-full overflow-hidden">
+                    <div class="text-center mb-6 shrink-0">
+                        <div class="w-16 h-16 bg-orange-100 dark:bg-orange-900/30 rounded-2xl mx-auto flex items-center justify-center text-3xl mb-3 border-2 border-orange-200 dark:border-orange-800">
                             ${this.selectedGame.icon || '🕹️'}
                         </div>
-                        <h2 class="text-2xl font-black text-slate-800 dark:text-white">${this.selectedGame.name}</h2>
-                        <p class="text-sm text-slate-500 font-bold uppercase tracking-wider mt-1">${ui.arcadeSetup || "Game Setup"}</p>
-                    </div>
-
-                    <!-- DISCLAIMER -->
-                    <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800 mb-6 flex gap-3 items-start">
-                        <span class="text-xl">🧠</span>
-                        <p class="text-xs text-blue-800 dark:text-blue-300 font-medium leading-relaxed">
-                            ${ui.arcadeDisclaimer || "⚠️ This game uses AI."}
-                        </p>
+                        <h2 class="text-xl font-black text-slate-800 dark:text-white">${this.selectedGame.name}</h2>
+                        <p class="text-xs text-slate-500 font-bold uppercase tracking-wider mt-1">${ui.arcadeSetup || "Game Setup"}</p>
                     </div>
 
                     <!-- MODULE SELECTOR -->
-                    <div class="mb-8">
-                        <label class="block text-xs font-bold text-slate-400 uppercase mb-2">${ui.arcadeSelectModule || "Select Module"}</label>
-                        <div class="relative">
-                            <select id="sel-module" class="w-full appearance-none bg-slate-100 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-white py-3 pl-4 pr-10 rounded-xl font-bold text-sm outline-none focus:border-orange-500 transition-colors">
-                                ${availableModules.map(m => `
-                                    <option value="${m.id}" ${this.selectedModuleId === m.id ? 'selected' : ''}>
-                                        ${m.icon || '📂'} ${m.name}
-                                    </option>
-                                `).join('')}
-                            </select>
-                            <div class="absolute right-4 top-3.5 text-slate-400 pointer-events-none">▼</div>
+                    <div class="flex-1 flex flex-col min-h-0">
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase mb-2">${ui.arcadeSelectModule || "Select Context"}</label>
+                        
+                        <div class="relative mb-2">
+                            <span class="absolute left-3 top-2.5 text-slate-400 text-sm">🔍</span>
+                            <input id="inp-filter-context" type="text" placeholder="${ui.searchPlaceholder || "Search..."}" 
+                                class="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-xl py-2 pl-9 pr-4 text-sm font-bold text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-orange-500"
+                                value="${this.filterText}" autocomplete="off">
+                        </div>
+
+                        <div class="flex-1 overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-950/50 rounded-xl border border-slate-100 dark:border-slate-800 p-2 space-y-1">
+                            ${filteredNodes.map(n => {
+                                const isSelected = this.selectedNodeId === n.id;
+                                const isLeaf = n.type === 'leaf' || n.type === 'exam';
+                                return `
+                                <button class="btn-select-node w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 transition-colors text-sm
+                                    ${isSelected ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-200 ring-1 ring-orange-500' : 'hover:bg-white dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400'}"
+                                    data-id="${n.id}">
+                                    <span class="text-lg">${n.icon || (isLeaf ? '📄' : '📁')}</span>
+                                    <div class="min-w-0">
+                                        <p class="font-bold truncate leading-tight">${n.name}</p>
+                                        <p class="text-[10px] opacity-70 truncate">${isLeaf ? 'Lesson' : 'Module'}</p>
+                                    </div>
+                                    ${isSelected ? '<span class="ml-auto text-orange-500 font-bold">✔</span>' : ''}
+                                </button>
+                                `;
+                            }).join('')}
+                            
+                            ${filteredNodes.length === 0 ? `<div class="p-4 text-center text-xs text-slate-400">No matching content found.</div>` : ''}
                         </div>
                     </div>
 
-                    <button id="btn-start-game" class="w-full py-4 bg-orange-600 text-white font-black text-lg rounded-2xl shadow-xl hover:bg-orange-500 active:scale-95 transition-all flex items-center justify-center gap-2">
-                        <span>🚀</span> ${ui.arcadeStart || "START"}
-                    </button>
+                    <div class="pt-4 mt-4 border-t border-slate-100 dark:border-slate-800 shrink-0">
+                        <button id="btn-start-game" class="w-full py-4 bg-orange-600 text-white font-black text-lg rounded-2xl shadow-xl hover:bg-orange-500 active:scale-95 transition-all flex items-center justify-center gap-2" ${!this.selectedNodeId ? 'disabled style="opacity:0.5"' : ''}>
+                            <span>🚀</span> ${ui.arcadeStart || "START GAME"}
+                        </button>
+                        <p class="text-[10px] text-center text-slate-400 mt-2">${ui.arcadeDisclaimer || "⚠️ Uses AI"}</p>
+                    </div>
                 </div>
             </div>
         </div>`;
 
         this.querySelector('.btn-cancel-launch').onclick = () => this.cancelLaunch();
         
-        const sel = this.querySelector('#sel-module');
-        if(sel) sel.onchange = (e) => { this.selectedModuleId = e.target.value; };
+        const filterInp = this.querySelector('#inp-filter-context');
+        if(filterInp) {
+            filterInp.focus();
+            filterInp.oninput = (e) => {
+                this.filterText = e.target.value;
+                this.render(); // Re-render list
+                setTimeout(() => {
+                    const el = this.querySelector('#inp-filter-context');
+                    if(el) {
+                        el.focus(); 
+                        el.selectionStart = el.selectionEnd = el.value.length;
+                    }
+                }, 0);
+            };
+        }
 
-        this.querySelector('#btn-start-game').onclick = () => this.launchGame();
+        this.querySelectorAll('.btn-select-node').forEach(b => {
+            b.onclick = (e) => {
+                this.selectedNodeId = e.currentTarget.dataset.id;
+                this.render();
+            };
+        });
+
+        const btnStart = this.querySelector('#btn-start-game');
+        if(btnStart && !btnStart.disabled) btnStart.onclick = () => this.launchGame();
     }
 
     bindMainEvents() {
@@ -358,12 +420,8 @@ class ArborModalArcade extends HTMLElement {
             b.onclick = (e) => {
                 const isManual = e.currentTarget.dataset.manual === 'true';
                 const idx = parseInt(e.currentTarget.dataset.idx);
-                
-                // Reconstruct the game object from the rendered list index
-                // (Simplified for this example, ideally lookup by ID)
                 const manualGames = store.userStore.state.installedGames.map(g => ({...g, isManual: true, path: g.url}));
                 const allGames = [...this.discoveredGames, ...manualGames];
-                
                 this.prepareLaunch(allGames[idx]);
             };
         });
