@@ -12,7 +12,7 @@ const OFFICIAL_DOMAINS = [
     'raw.githubusercontent.com'
 ];
 
-// Fallback if the manifest fetch fails
+// Fallback if everything fails
 const DEFAULT_SOURCES = [
     {
         id: 'default-arbor',
@@ -23,10 +23,6 @@ const DEFAULT_SOURCES = [
         year: 'Rolling'
     }
 ];
-
-// URL to the Master Index (The "Time Machine" registry)
-// In a real deployment, this file exists in the root of the repo.
-const MANIFEST_URL = 'https://raw.githubusercontent.com/treesys-org/arbor-knowledge/main/arbor-index.json';
 
 class Store extends EventTarget {
     constructor() {
@@ -116,24 +112,75 @@ class Store extends EventTarget {
         let localSources = [];
         try { localSources = JSON.parse(localStorage.getItem('arbor-sources')) || []; } catch(e) {}
         
-        // 2. Fetch Official Manifest (Remote)
+        // 2. Load Official Manifest
         let officialVersions = [];
+        let manifest = null;
+        let manifestBaseUrl = '';
+
+        // Strategy A: Try Local File (Best for built deployments)
         try {
-            const res = await fetch(MANIFEST_URL, { cache: 'no-cache' });
+            const res = await fetch('./arbor-index.json', { cache: 'no-cache' });
             if (res.ok) {
-                const manifest = await res.json();
-                
-                // Parse Manifest Structure
-                if (manifest.rolling) officialVersions.push({ ...manifest.rolling, isOfficial: true, type: 'rolling' });
-                if (manifest.releases && Array.isArray(manifest.releases)) {
-                    officialVersions.push(...manifest.releases.map(r => ({ ...r, isOfficial: true, type: 'archive' })));
-                }
-            } else {
-                throw new Error("Manifest unreachable");
+                manifest = await res.json();
             }
         } catch (e) {
-            // Fallback: Use hardcoded default as the "Official" one
-            console.warn("Could not load Arbor Manifest. Using default.", e);
+            // Local failed
+        }
+
+        // Strategy B: Try Remote Derived from Default Source (Best for Forks/Dev)
+        // If local is missing, we try to guess where the manifest is based on the default data URL.
+        if (!manifest) {
+            try {
+                const defaultUrl = DEFAULT_SOURCES[0].url;
+                let remoteManifestUrl = null;
+
+                // Heuristic: If it's a raw.githubusercontent URL pointing to /data/data.json
+                // We assume the manifest is at the root /arbor-index.json
+                if (defaultUrl.includes('raw.githubusercontent.com') && defaultUrl.includes('/data/data.json')) {
+                    remoteManifestUrl = defaultUrl.replace('/data/data.json', '/arbor-index.json');
+                }
+
+                if (remoteManifestUrl) {
+                    const res = await fetch(remoteManifestUrl, { cache: 'no-cache' });
+                    if (res.ok) {
+                        manifest = await res.json();
+                        // Base URL is the directory containing arbor-index.json
+                        manifestBaseUrl = remoteManifestUrl.substring(0, remoteManifestUrl.lastIndexOf('/') + 1);
+                    }
+                }
+            } catch (e) {
+                console.warn("Remote manifest fetch failed", e);
+            }
+        }
+
+        // Parse Manifest
+        if (manifest) {
+            // Helper to rebase URLs if loaded from remote
+            const rebase = (url) => {
+                if (manifestBaseUrl && url && url.startsWith('./')) {
+                    return manifestBaseUrl + url.substring(2);
+                }
+                return url;
+            };
+
+            if (manifest.rolling) {
+                officialVersions.push({ 
+                    ...manifest.rolling, 
+                    url: rebase(manifest.rolling.url),
+                    isOfficial: true, 
+                    type: 'rolling' 
+                });
+            }
+            if (manifest.releases && Array.isArray(manifest.releases)) {
+                officialVersions.push(...manifest.releases.map(r => ({ 
+                    ...r, 
+                    url: rebase(r.url),
+                    isOfficial: true, 
+                    type: 'archive' 
+                })));
+            }
+        } else {
+            // Last resort fallback
             officialVersions = [...DEFAULT_SOURCES.map(s => ({ ...s, isOfficial: true, type: 'rolling' }))];
         }
 
