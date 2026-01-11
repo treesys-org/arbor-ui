@@ -40,9 +40,9 @@ class Store extends EventTarget {
             i18nData: null, 
             
             // Source Management
-            officialVersions: [], // From Manifest
             communitySources: [], // From LocalStorage
             activeSource: null,
+            availableReleases: [], // Dynamic list based on current active source context
             
             data: null, 
             rawGraphData: null,
@@ -112,94 +112,102 @@ class Store extends EventTarget {
         let localSources = [];
         try { localSources = JSON.parse(localStorage.getItem('arbor-sources')) || []; } catch(e) {}
         
-        // 2. Load Official Manifest
-        let officialVersions = [];
-        let manifest = null;
-        let manifestBaseUrl = '';
+        this.update({ communitySources: localSources });
 
-        // Strategy A: Try Local File (Best for built deployments)
-        try {
-            const res = await fetch('./arbor-index.json', { cache: 'no-cache' });
-            if (res.ok) {
-                manifest = await res.json();
-            }
-        } catch (e) {
-            // Local failed
-        }
-
-        // Strategy B: Try Remote Derived from Default Source (Best for Forks/Dev)
-        // If local is missing, we try to guess where the manifest is based on the default data URL.
-        if (!manifest) {
-            try {
-                const defaultUrl = DEFAULT_SOURCES[0].url;
-                let remoteManifestUrl = null;
-
-                // Heuristic: If it's a raw.githubusercontent URL pointing to /data/data.json
-                // We assume the manifest is at the root /arbor-index.json
-                if (defaultUrl.includes('raw.githubusercontent.com') && defaultUrl.includes('/data/data.json')) {
-                    remoteManifestUrl = defaultUrl.replace('/data/data.json', '/arbor-index.json');
-                }
-
-                if (remoteManifestUrl) {
-                    const res = await fetch(remoteManifestUrl, { cache: 'no-cache' });
-                    if (res.ok) {
-                        manifest = await res.json();
-                        // Base URL is the directory containing arbor-index.json
-                        manifestBaseUrl = remoteManifestUrl.substring(0, remoteManifestUrl.lastIndexOf('/') + 1);
-                    }
-                }
-            } catch (e) {
-                console.warn("Remote manifest fetch failed", e);
-            }
-        }
-
-        // Parse Manifest
-        if (manifest) {
-            // Helper to rebase URLs if loaded from remote
-            const rebase = (url) => {
-                if (manifestBaseUrl && url && url.startsWith('./')) {
-                    return manifestBaseUrl + url.substring(2);
-                }
-                return url;
-            };
-
-            if (manifest.rolling) {
-                officialVersions.push({ 
-                    ...manifest.rolling, 
-                    url: rebase(manifest.rolling.url),
-                    isOfficial: true, 
-                    type: 'rolling' 
-                });
-            }
-            if (manifest.releases && Array.isArray(manifest.releases)) {
-                officialVersions.push(...manifest.releases.map(r => ({ 
-                    ...r, 
-                    url: rebase(r.url),
-                    isOfficial: true, 
-                    type: 'archive' 
-                })));
-            }
-        } else {
-            // Last resort fallback
-            officialVersions = [...DEFAULT_SOURCES.map(s => ({ ...s, isOfficial: true, type: 'rolling' }))];
-        }
-
-        this.update({ 
-            officialVersions: officialVersions,
-            communitySources: localSources 
-        });
-
-        // 3. Determine Active Source
+        // 2. Determine Active Source
         const savedActiveId = localStorage.getItem('arbor-active-source-id');
-        
-        // Search in both lists
-        let activeSource = officialVersions.find(s => s.id === savedActiveId) || 
-                           localSources.find(s => s.id === savedActiveId);
+        let activeSource = localSources.find(s => s.id === savedActiveId);
 
-        // Default to the first official rolling release if nothing found
-        if (!activeSource) activeSource = officialVersions[0];
+        // If no saved active source, or saved one not found in local list...
+        // We need a fallback. We usually start with DEFAULT_SOURCES[0] as a bootstrap.
+        if (!activeSource) {
+            // Check if we have a "boot" manifest locally (e.g. built app)
+            // But we will handle the actual manifest loading in loadData->discoverManifest
+            // So here we just set the initial pointer.
+            activeSource = { ...DEFAULT_SOURCES[0] };
+            
+            // Optimization: If running locally, prefer local relative URL
+            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                 // Check if local data exists
+                 try {
+                     const check = await fetch('./data/data.json', { method: 'HEAD' });
+                     if (check.ok) {
+                         activeSource = {
+                             id: 'local-boot',
+                             name: 'Local Workspace',
+                             url: './data/data.json',
+                             isTrusted: true,
+                             type: 'rolling'
+                         };
+                     }
+                 } catch(e) {}
+            }
+        }
 
         this.loadData(activeSource);
+    }
+
+    // Dynamic Discovery of Releases for the CURRENT active source
+    async discoverManifest(sourceUrl) {
+        if (!sourceUrl) return;
+
+        let indexUrl = '';
+        let baseUrl = '';
+
+        try {
+            // Heuristic: Assuming standard Arbor structure .../data/data.json
+            // We want to find .../arbor-index.json
+            
+            // Handle relative URLs (./data/data.json)
+            const absoluteUrl = new URL(sourceUrl, window.location.href).href;
+            
+            if (absoluteUrl.endsWith('data.json')) {
+                // Strip 'data/data.json' (last two segments)
+                const parts = absoluteUrl.split('/');
+                parts.splice(-2); 
+                baseUrl = parts.join('/') + '/';
+                indexUrl = baseUrl + 'arbor-index.json';
+            } else {
+                // If URL doesn't end in data.json, we can't reliably guess the root.
+                // We abort manifest discovery and just show the single source.
+                this.update({ availableReleases: [] });
+                return;
+            }
+
+            const res = await fetch(indexUrl, { cache: 'no-cache' });
+            if (res.ok) {
+                const manifest = await res.json();
+                const versions = [];
+                
+                // Helper to map relative URLs in manifest to absolute based on the index location
+                const rebase = (u) => {
+                    if (u && u.startsWith('./')) return baseUrl + u.substring(2);
+                    return u;
+                };
+
+                if (manifest.rolling) {
+                    versions.push({ 
+                        ...manifest.rolling, 
+                        url: rebase(manifest.rolling.url),
+                        type: 'rolling' 
+                    });
+                }
+                if (manifest.releases && Array.isArray(manifest.releases)) {
+                    versions.push(...manifest.releases.map(r => ({ 
+                        ...r, 
+                        url: rebase(r.url),
+                        type: 'archive' 
+                    })));
+                }
+                
+                this.update({ availableReleases: versions });
+            } else {
+                this.update({ availableReleases: [] });
+            }
+        } catch (e) {
+            console.warn("Manifest discovery failed", e);
+            this.update({ availableReleases: [] });
+        }
     }
 
     addCommunitySource(url) {
@@ -220,7 +228,7 @@ class Store extends EventTarget {
         this.update({ communitySources: newSources });
         localStorage.setItem('arbor-sources', JSON.stringify(newSources));
         
-        this.loadAndSmartMerge(newSource.id);
+        this.loadData(newSource);
     }
 
     removeCommunitySource(id) {
@@ -229,18 +237,9 @@ class Store extends EventTarget {
         localStorage.setItem('arbor-sources', JSON.stringify(newSources));
         
         if (this.state.activeSource.id === id) {
-            // Fallback to official
-            const fallback = this.state.officialVersions[0];
-            this.loadAndSmartMerge(fallback.id);
+            // Fallback
+            this.initSources(); // Restart init logic to find best default
         }
-    }
-
-    loadAndSmartMerge(sourceId) {
-        let source = this.state.officialVersions.find(s => s.id === sourceId) ||
-                     this.state.communitySources.find(s => s.id === sourceId);
-                     
-        if (!source) return;
-        this.loadData(source, true);
     }
 
     // --- PUTER SYNC HANDLERS ---
@@ -397,6 +396,9 @@ class Store extends EventTarget {
         if (!this.state.loading) this.update({ loading: true, error: null });
         this.update({ activeSource: source });
         
+        // Trigger background discovery of other versions (Manifest)
+        this.discoverManifest(source.url);
+        
         localStorage.setItem('arbor-active-source-id', source.id);
 
         try {
@@ -429,11 +431,16 @@ class Store extends EventTarget {
 
             if (!langData) throw new Error("No valid content found in this tree.");
             
-            // Name Update logic for Community Sources only
-            if (!source.isOfficial && json.universeName && json.universeName !== source.name) {
-                const updatedSources = this.state.communitySources.map(s => s.id === source.id ? {...s, name: json.universeName} : s);
-                this.update({ communitySources: updatedSources });
-                localStorage.setItem('arbor-sources', JSON.stringify(updatedSources));
+            // Name Update logic for Sources (Refresh Name from Data)
+            // If the loaded data has a Universe Name, update our source record to reflect it
+            if (json.universeName && json.universeName !== source.name) {
+                // Update in community list if it's there
+                const updatedCommunity = this.state.communitySources.map(s => s.id === source.id ? {...s, name: json.universeName} : s);
+                this.update({ communitySources: updatedCommunity });
+                localStorage.setItem('arbor-sources', JSON.stringify(updatedCommunity));
+                
+                // Update active source reference
+                this.update({ activeSource: { ...source, name: json.universeName } });
             }
             
             const examPrefix = this.ui.examLabelPrefix || "Exam: ";
@@ -464,6 +471,7 @@ class Store extends EventTarget {
         }
     }
 
+    // [Rest of file unchanged: cleanString, findNode, navigateTo, etc.]
     cleanString(str) {
         if (!str) return "";
         return str.toLowerCase()
@@ -752,6 +760,14 @@ class Store extends EventTarget {
             seen.add(item.id);
             return true;
         });
+    }
+
+    loadAndSmartMerge(sourceId) {
+        let source = this.state.availableReleases.find(s => s.id === sourceId) ||
+                     this.state.communitySources.find(s => s.id === sourceId);
+                     
+        if (!source) return;
+        this.loadData(source, true);
     }
 
     // --- AI / SAGE LOGIC ---

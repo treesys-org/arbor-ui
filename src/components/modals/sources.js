@@ -12,8 +12,8 @@ class ArborModalSources extends HTMLElement {
 
     render() {
         const ui = store.ui;
-        // Sources are now split in the store
-        const official = store.value.officialVersions || [];
+        // Use 'availableReleases' which is populated dynamically based on active source context
+        const contextReleases = store.value.availableReleases || [];
         const community = store.value.communitySources || [];
         const activeId = store.value.activeSource?.id;
 
@@ -55,20 +55,21 @@ class ArborModalSources extends HTMLElement {
 
                     <div class="flex-1 overflow-y-auto custom-scrollbar pr-1 pb-4">
                         
-                        <!-- OFFICIAL SECTION -->
+                        <!-- CONTEXTUAL RELEASES -->
                         <div class="mb-8">
                             <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                <span>🎓</span> Official Curriculum History
+                                <span>📚</span> Versions of Current Tree
                             </h3>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                ${official.map(s => renderCard(s, false)).join('')}
-                            </div>
+                            ${contextReleases.length === 0 
+                                ? `<div class="p-6 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-xl text-center text-slate-400 text-xs">No release history found for this tree.</div>`
+                                : `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${contextReleases.map(s => renderCard(s, false)).join('')}</div>`
+                            }
                         </div>
 
                         <!-- COMMUNITY SECTION -->
                         <div>
                             <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                <span>🌍</span> Community Trees
+                                <span>🌍</span> Saved Trees
                             </h3>
                             ${community.length === 0 
                                 ? `<div class="p-6 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-xl text-center text-slate-400 text-xs">No external trees added yet.</div>`
@@ -81,7 +82,7 @@ class ArborModalSources extends HTMLElement {
                     <div class="pt-4 border-t border-slate-100 dark:border-slate-800">
                         <label class="text-[10px] font-bold text-slate-400 uppercase mb-2 block">${ui.sourceAdd}</label>
                         <div class="flex gap-2">
-                            <input id="inp-source-url" type="text" placeholder="https://.../data.json" class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-purple-500 dark:text-white">
+                            <input id="inp-source-url" type="text" placeholder="https://.../data/data.json" class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-purple-500 dark:text-white">
                             <button id="btn-add-source" class="bg-purple-600 text-white px-4 py-2 rounded-xl font-bold shadow-lg hover:bg-purple-50 active:scale-95 transition-transform">
                                 +
                             </button>
