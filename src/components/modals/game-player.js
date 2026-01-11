@@ -2,64 +2,61 @@
 import { store } from '../../store.js';
 
 class ArborModalGamePlayer extends HTMLElement {
-    constructor() {
-        super();
-        this.currentBlobUrl = null;
-    }
-
     connectedCallback() {
         this.render();
-        // Delay load to ensure DOM is ready
-        setTimeout(() => this.loadGame(), 100);
-    }
-
-    disconnectedCallback() {
-        this.cleanup();
+        // Slight delay to allow DOM paint before heavy fetch
+        setTimeout(() => this.loadGame(), 50);
     }
 
     close() {
-        this.cleanup();
         store.setModal('arcade'); 
     }
 
-    cleanup() {
-        if (this.currentBlobUrl) {
-            URL.revokeObjectURL(this.currentBlobUrl);
-            this.currentBlobUrl = null;
+    /**
+     * Calculates the jsDelivr CDN URL for a given GitHub file path.
+     * This allows relative assets (images, css, js) to load correctly.
+     */
+    getCdnBase(urlStr) {
+        try {
+            // Support both github.com and raw.githubusercontent.com inputs
+            let user, repo, branch, path;
+            const url = new URL(urlStr);
+
+            if (url.hostname === 'github.com') {
+                // https://github.com/USER/REPO/blob/BRANCH/PATH...
+                const parts = url.pathname.split('/').filter(p => p);
+                if (parts.length >= 4 && parts[2] === 'blob') {
+                    [user, repo, , branch, ...path] = parts;
+                }
+            } else if (url.hostname === 'raw.githubusercontent.com') {
+                // https://raw.githubusercontent.com/USER/REPO/BRANCH/PATH...
+                const parts = url.pathname.split('/').filter(p => p);
+                if (parts.length >= 3) {
+                    [user, repo, branch, ...path] = parts;
+                }
+            }
+
+            if (user && repo && branch) {
+                // Remove filename from path to get folder
+                const folderPath = path.slice(0, -1).join('/');
+                const folderSuffix = folderPath ? `/${folderPath}/` : '/';
+                return `https://cdn.jsdelivr.net/gh/${user}/${repo}@${branch}${folderSuffix}`;
+            }
+        } catch (e) {
+            console.warn("CDN Base calc failed", e);
         }
+        return null;
     }
 
-    /**
-     * Converts a GitHub URL into a jsDelivr CDN Base URL.
-     * This allows assets (JS, CSS, Images) to load with correct MIME types.
-     */
-    getCDNBaseUrl(urlStr) {
+    getRawUrl(urlStr) {
         try {
             const url = new URL(urlStr);
-            const path = url.pathname; // /user/repo/blob/branch/folder/index.html
-
-            // Only process GitHub URLs
-            if (!url.hostname.includes('github.com')) return null;
-
-            // Pattern: /USER/REPO/blob/BRANCH/...
-            const parts = path.split('/').filter(p => p);
-            if (parts.length < 4 || parts[2] !== 'blob') return null;
-
-            const user = parts[0];
-            const repo = parts[1];
-            const branch = parts[3];
-            const remainingPath = parts.slice(4).join('/');
-            
-            // Get the folder containing the file
-            const folderPath = remainingPath.substring(0, remainingPath.lastIndexOf('/') + 1);
-
-            // Construct jsDelivr URL
-            // Format: https://cdn.jsdelivr.net/gh/USER/REPO@BRANCH/FOLDER/
-            return `https://cdn.jsdelivr.net/gh/${user}/${repo}@${branch}/${folderPath}`;
-
+            if (url.hostname === 'github.com') {
+                return urlStr.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/');
+            }
+            return urlStr;
         } catch (e) {
-            console.error("CDN Conversion Error", e);
-            return null;
+            return urlStr;
         }
     }
 
@@ -72,43 +69,46 @@ class ArborModalGamePlayer extends HTMLElement {
         const errorMsg = this.querySelector('#error-msg');
 
         try {
-            // 1. Fetch the raw HTML content
-            // We use the raw link for the content itself
-            let fetchUrl = url;
-            if (url.includes('github.com') && url.includes('/blob/')) {
-                fetchUrl = url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/');
-            }
+            // 1. Get Fetch URL (Raw)
+            const fetchUrl = this.getRawUrl(url);
 
+            // 2. Fetch Content
             const response = await fetch(fetchUrl);
-            if (!response.ok) throw new Error(`Failed to download game (${response.status})`);
+            if (!response.ok) {
+                if (response.status === 404) throw new Error("File not found (404). Check the URL.");
+                throw new Error(`Network Error (${response.status})`);
+            }
             
             let html = await response.text();
 
-            // 2. Calculate the CDN Base URL for assets
-            const cdnBase = this.getCDNBaseUrl(url);
-            
-            // 3. Inject the <base> tag
-            // This forces all relative links (script.js, style.css, img.png) to load from the CDN
+            // 3. Inject Base Tag for Relative Assets
+            const cdnBase = this.getCdnBase(url);
             if (cdnBase) {
+                // Inject aggressively at the top
                 const baseTag = `<base href="${cdnBase}">`;
                 if (html.includes('<head>')) {
                     html = html.replace('<head>', `<head>${baseTag}`);
-                } else if (html.includes('<html>')) {
-                    html = html.replace('<html>', `<html><head>${baseTag}</head>`);
                 } else {
-                    html = `<head>${baseTag}</head>` + html;
+                    html = `${baseTag}${html}`;
                 }
             }
 
-            // 4. Create a Blob URL
-            // We use 'text/html' explicitly so the browser renders it
-            const blob = new Blob([html], { type: 'text/html' });
-            this.cleanup(); // Clean previous if any
-            this.currentBlobUrl = URL.createObjectURL(blob);
+            // 4. Inject Context Script (Game Params)
+            // Passes context (lang, theme) to the game via window.ARBOR_CONTEXT
+            const contextScript = `
+                <script>
+                    window.ARBOR_CONTEXT = ${JSON.stringify({
+                        lang: store.value.lang,
+                        theme: store.value.theme,
+                        params: Object.fromEntries(new URLSearchParams(window.location.search))
+                    })};
+                </script>
+            `;
+            html = html.replace('</body>', `${contextScript}</body>`);
 
-            // 5. Load into iframe
-            // Pass context params via hash or query if needed, but blob handles content
-            iframe.src = this.currentBlobUrl;
+            // 5. Render via srcdoc (Most robust method)
+            iframe.removeAttribute('src'); // Ensure no conflicting source
+            iframe.srcdoc = html;
 
             iframe.onload = () => {
                 loader.classList.add('hidden');
@@ -116,18 +116,18 @@ class ArborModalGamePlayer extends HTMLElement {
             };
 
         } catch (e) {
-            console.error("Game Load Failed", e);
+            console.error("Game Load Failed:", e);
             loader.classList.add('hidden');
             if (errorMsg) {
                 errorMsg.classList.remove('hidden');
                 errorMsg.innerHTML = `
-                    <div class="bg-red-900/80 p-6 rounded-xl border border-red-700 max-w-md mx-auto text-center">
-                        <div class="text-3xl mb-2">🔌</div>
-                        <h3 class="font-bold text-white mb-2">Connection Error</h3>
-                        <p class="text-xs text-red-200 font-mono mb-4 bg-black/30 p-2 rounded break-all">${e.message}</p>
-                        <p class="text-sm text-slate-300">
-                            Check if the URL is a valid GitHub file.<br>
-                            Example: <code>https://github.com/user/repo/blob/main/index.html</code>
+                    <div class="text-center p-6 bg-slate-900 rounded-xl border border-red-900/50">
+                        <div class="text-4xl mb-2">👾</div>
+                        <h3 class="text-red-400 font-bold mb-2">Load Error</h3>
+                        <p class="text-xs text-slate-400 font-mono mb-4 break-all bg-black/30 p-2 rounded">${e.message}</p>
+                        <p class="text-xs text-slate-500">
+                            <strong>Tip:</strong> Ensure the URL points to an <code>.html</code> file on GitHub.<br>
+                            Example: <code>https://github.com/user/repo/blob/main/game.html</code>
                         </p>
                     </div>
                 `;
@@ -159,8 +159,8 @@ class ArborModalGamePlayer extends HTMLElement {
                 </div>
                 
                 <div class="flex items-center gap-2">
-                    <a href="${url}" target="_blank" rel="noopener noreferrer" class="hidden md:flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-white px-3 py-1.5 border border-slate-700 rounded-lg transition-colors hover:border-slate-500" title="View Source on GitHub">
-                        <span>Source ↗</span>
+                    <a href="${url}" target="_blank" rel="noopener noreferrer" class="hidden md:flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-white px-3 py-1.5 border border-slate-700 rounded-lg transition-colors hover:border-slate-500" title="Open Source">
+                        <span>Code ↗</span>
                     </a>
                     <button class="btn-close w-9 h-9 flex items-center justify-center rounded-full hover:bg-red-900/50 text-slate-400 hover:text-red-500 transition-colors">✕</button>
                 </div>
@@ -172,7 +172,7 @@ class ArborModalGamePlayer extends HTMLElement {
                 <!-- Loader -->
                 <div id="loader" class="absolute inset-0 flex flex-col items-center justify-center text-slate-600 z-0">
                     <div class="w-10 h-10 border-4 border-slate-800 border-t-purple-600 rounded-full animate-spin mb-4"></div>
-                    <p class="text-xs font-mono uppercase tracking-widest">Inserting Cartridge...</p>
+                    <p class="text-xs font-mono uppercase tracking-widest">Loading Cartridge...</p>
                 </div>
 
                 <!-- Error State -->
@@ -182,7 +182,7 @@ class ArborModalGamePlayer extends HTMLElement {
                     class="relative z-10 w-full h-full border-none bg-white opacity-0 transition-opacity duration-500" 
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; gamepad" 
                     allowfullscreen
-                    sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-pointer-lock"
+                    sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-pointer-lock allow-modals"
                 ></iframe>
             </div>
         </div>`;
