@@ -128,9 +128,10 @@ class ArborModalSources extends HTMLElement {
                             </div>
                             
                             ${releases.length === 0 ? `
-                                <p class="text-[10px] text-red-400 mt-2 flex items-center gap-1">
-                                    <span>⚠️</span> No history found for this tree.
-                                </p>
+                                <div class="text-[10px] text-red-400 mt-2 flex flex-col gap-1 bg-red-50 dark:bg-red-900/10 p-2 rounded">
+                                    <p class="font-bold">⚠️ Manifest Check Failed</p>
+                                    <p class="font-mono text-[9px] break-all opacity-80">Checked at: ${state.manifestUrlAttempted || '...'}</p>
+                                </div>
                             ` : ''}
                         </div>
 

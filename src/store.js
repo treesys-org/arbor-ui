@@ -4,63 +4,46 @@ import { github } from './services/github.js';
 import { aiService } from './services/ai.js';
 import { puterSync } from './services/puter-sync.js';
 import { UserStore } from './stores/user-store.js';
-
-const OFFICIAL_DOMAINS = [
-    'treesys-org.github.io',
-    'localhost',
-    '127.0.0.1',
-    'raw.githubusercontent.com'
-];
-
-// Fallback if everything fails
-const DEFAULT_SOURCES = [
-    {
-        id: 'default-arbor',
-        name: 'Arbor Knowledge (Official)',
-        url: 'https://raw.githubusercontent.com/treesys-org/arbor-knowledge/main/data/data.json',
-        isDefault: true,
-        isTrusted: true,
-        year: 'Rolling'
-    }
-];
+import { SourceManager } from './stores/source-manager.js';
+import { TreeUtils } from './utils/tree-utils.js';
 
 class Store extends EventTarget {
     constructor() {
         super();
         
-        // Sub-Store for User Logic (Gamification, Bookmarks, Progress)
+        // 1. User Persistence Sub-Store
         this.userStore = new UserStore(
             () => this.ui,
             (data) => this.handleAutoSync(data) 
         );
 
+        // 2. Initial State
         this.state = {
             theme: localStorage.getItem('arbor-theme') || 'light',
             lang: localStorage.getItem('arbor-lang') || 'EN',
             i18nData: null, 
             
-            // Source Management
-            communitySources: [], // From LocalStorage
+            // Source & Data State (Managed via SourceManager)
+            communitySources: [], 
             activeSource: null,
-            availableReleases: [], // Dynamic list based on current active source context
+            availableReleases: [],
+            manifestUrlAttempted: null, 
             
-            data: null, 
-            rawGraphData: null,
+            data: null, // Current Language Tree
+            rawGraphData: null, // Full JSON
+            
             searchCache: {}, 
             path: [], 
             
             // AI State
-            ai: {
-                status: 'idle', 
-                progress: '',
-                messages: [] 
-            },
+            ai: { status: 'idle', progress: '', messages: [] },
             
             // Cloud Sync State
             puterUser: null,
             isSyncing: false,
             lastSyncTime: null,
 
+            // UI State
             selectedNode: null, 
             previewNode: null,
             loading: true,
@@ -71,11 +54,18 @@ class Store extends EventTarget {
             lastActionMessage: null,
             githubUser: null
         };
+
+        // 3. Source Manager (Networking & Manifests)
+        this.sourceManager = new SourceManager(
+            (updates) => this.update(updates),
+            () => this.ui
+        );
         
+        // 4. Initialization
         this.initialize().then(() => {
              const streakMsg = this.userStore.checkStreak();
              if (streakMsg) this.notify(streakMsg);
-             this.initSources();
+             this.sourceManager.init();
         });
 
         const ghToken = localStorage.getItem('arbor-gh-token') || sessionStorage.getItem('arbor-gh-token');
@@ -90,239 +80,15 @@ class Store extends EventTarget {
 
     async initialize() {
         await this.loadLanguage(this.state.lang);
-        
-        // Init Puter Sync
         const pUser = await puterSync.initialize();
-        if (pUser) {
-            this.update({ puterUser: pUser });
-        }
+        if (pUser) this.update({ puterUser: pUser });
 
         const welcomeSeen = localStorage.getItem('arbor-welcome-seen');
-        if (!welcomeSeen) {
-            setTimeout(() => {
-                this.setModal('welcome');
-            }, 50); 
-        }
+        if (!welcomeSeen) setTimeout(() => this.setModal('welcome'), 50); 
     }
 
-    // --- SOURCE & MANIFEST MANAGEMENT ---
-
-    async initSources() {
-        // 1. Load Community Sources (Local)
-        let localSources = [];
-        try { localSources = JSON.parse(localStorage.getItem('arbor-sources')) || []; } catch(e) {}
-        
-        this.update({ communitySources: localSources });
-
-        // 2. Determine Active Source
-        const savedActiveId = localStorage.getItem('arbor-active-source-id');
-        let activeSource = localSources.find(s => s.id === savedActiveId);
-
-        // If no saved active source, or saved one not found in local list...
-        // We need a fallback. We usually start with DEFAULT_SOURCES[0] as a bootstrap.
-        if (!activeSource) {
-            // Check if we have a "boot" manifest locally (e.g. built app)
-            // But we will handle the actual manifest loading in loadData->discoverManifest
-            // So here we just set the initial pointer.
-            activeSource = { ...DEFAULT_SOURCES[0] };
-            
-            // Optimization: If running locally, prefer local relative URL
-            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                 // Check if local data exists
-                 try {
-                     const check = await fetch('./data/data.json', { method: 'HEAD' });
-                     if (check.ok) {
-                         activeSource = {
-                             id: 'local-boot',
-                             name: 'Local Workspace',
-                             url: './data/data.json',
-                             isTrusted: true,
-                             type: 'rolling'
-                         };
-                     }
-                 } catch(e) {}
-            }
-        }
-
-        this.loadData(activeSource);
-    }
-
-    // Dynamic Discovery of Releases for the CURRENT active source
-    async discoverManifest(sourceUrl) {
-        if (!sourceUrl) return;
-
-        let baseUrl = '';
-        let indexUrl = '';
-
-        try {
-            // Heuristic to find root where arbor-index.json lives.
-            // Assumption: sourceUrl points to /data/data.json or /data/releases/xxxx.json
-            // The index should be at the parent of /data/, i.e. the project root.
-            
-            const absoluteUrl = new URL(sourceUrl, window.location.href).href;
-            
-            if (absoluteUrl.includes('/data/')) {
-                // Split at '/data/' and take the first part
-                const parts = absoluteUrl.split('/data/');
-                baseUrl = parts[0] + '/';
-                indexUrl = baseUrl + 'arbor-index.json';
-            } else {
-                // Fallback: assume relative to current location if relative path
-                if (!sourceUrl.startsWith('http')) {
-                     indexUrl = 'arbor-index.json';
-                     baseUrl = './';
-                } else {
-                     // Unable to determine root safely
-                     this.update({ availableReleases: [] });
-                     return;
-                }
-            }
-
-            const res = await fetch(indexUrl, { cache: 'no-cache' });
-            if (res.ok) {
-                const manifest = await res.json();
-                const versions = [];
-                
-                // Helper to map relative URLs in manifest to absolute based on the index location
-                const rebase = (u) => {
-                    if (u && u.startsWith('./')) return new URL(u, baseUrl).href;
-                    return u;
-                };
-
-                if (manifest.rolling) {
-                    versions.push({ 
-                        ...manifest.rolling, 
-                        url: rebase(manifest.rolling.url),
-                        type: 'rolling' 
-                    });
-                }
-                if (manifest.releases && Array.isArray(manifest.releases)) {
-                    versions.push(...manifest.releases.map(r => ({ 
-                        ...r, 
-                        url: rebase(r.url),
-                        type: 'archive' 
-                    })));
-                }
-                
-                this.update({ availableReleases: versions });
-            } else {
-                // If manifest not found, we still want to show the current active source in the "Releases" list 
-                // so the dropdown isn't broken.
-                console.warn("Manifest not found at", indexUrl);
-                this.update({ availableReleases: [] });
-            }
-        } catch (e) {
-            console.warn("Manifest discovery failed", e);
-            this.update({ availableReleases: [] });
-        }
-    }
-
-    addCommunitySource(url) {
-        if (!url) return;
-        let name = 'New Tree';
-        try { name = new URL(url, window.location.href).hostname; } catch (e) {}
-        
-        const newSource = { 
-            id: crypto.randomUUID(), 
-            name, 
-            url, 
-            isTrusted: this.isUrlTrusted(url),
-            isOfficial: false,
-            type: 'community'
-        };
-        
-        const newSources = [...this.state.communitySources, newSource];
-        this.update({ communitySources: newSources });
-        localStorage.setItem('arbor-sources', JSON.stringify(newSources));
-        
-        this.loadData(newSource);
-    }
-
-    removeCommunitySource(id) {
-        const newSources = this.state.communitySources.filter(s => s.id !== id);
-        this.update({ communitySources: newSources });
-        localStorage.setItem('arbor-sources', JSON.stringify(newSources));
-        
-        if (this.state.activeSource.id === id) {
-            // Fallback
-            this.initSources(); // Restart init logic to find best default
-        }
-    }
-
-    // --- PUTER SYNC HANDLERS ---
-
-    async connectPuter() {
-        try {
-            const user = await puterSync.signIn();
-            this.update({ puterUser: user });
-            const cloudData = await puterSync.load();
-            if (cloudData) {
-                this.importProgress(JSON.stringify(cloudData));
-                this.notify("Sync complete. Cloud data loaded.");
-            } else {
-                this.handleAutoSync(this.userStore.getPersistenceData());
-                this.notify("Connected. Local data saved to cloud.");
-            }
-        } catch (e) {
-            console.error(e);
-            this.notify("Sync Error: " + e.message);
-        }
-    }
-
-    async disconnectPuter() {
-        await puterSync.signOut();
-        this.update({ puterUser: null });
-        this.notify("Puter disconnected.");
-    }
-
-    async handleAutoSync(data) {
-        if (this.state.puterUser) {
-            this.update({ isSyncing: true });
-            try {
-                await puterSync.save(data);
-                this.update({ lastSyncTime: new Date() });
-            } catch (e) {
-                console.warn("Background sync failed", e);
-            } finally {
-                this.update({ isSyncing: false });
-            }
-        }
-    }
-
-    async forceCloudPull() {
-        if (!this.state.puterUser) return;
-        this.update({ isSyncing: true });
-        try {
-            const data = await puterSync.load();
-            if (data) {
-                this.importProgress(JSON.stringify(data));
-                this.notify(this.ui.importSuccess);
-            } else {
-                this.notify("No data found in cloud.");
-            }
-        } catch (e) {
-            this.notify("Pull Error: " + e.message);
-        } finally {
-            this.update({ isSyncing: false });
-        }
-    }
-
-    // ---------------------------
-
-    async loadLanguage(langCode) {
-        try {
-            const path = `./locales/${langCode.toLowerCase()}.json`;
-            const res = await fetch(path, { cache: 'no-cache' });
-            if (!res.ok) throw new Error(`Missing language file: ${path}`);
-            const data = await res.json();
-            this.update({ i18nData: data });
-        } catch (e) {
-            console.error(`Language load failed for ${langCode}`, e);
-            if (langCode !== 'EN') await this.loadLanguage('EN');
-            else this.update({ i18nData: { appTitle: "Arbor (Recovery)", loading: "Loading...", errorTitle: "Error", errorNoTrees: "Language Error" }});
-        }
-    }
-
+    // --- PROXY ACCESSORS ---
+    
     get ui() { 
         if (!this.state.i18nData) {
             return new Proxy({}, {
@@ -348,6 +114,8 @@ class Store extends EventTarget {
     get currentLangInfo() { return AVAILABLE_LANGUAGES.find(l => l.code === this.state.lang); }
     get dailyXpGoal() { return this.userStore.dailyXpGoal; }
 
+    // --- STATE MANAGEMENT ---
+
     update(partialState) {
         this.state = { ...this.state, ...partialState };
         this.dispatchEvent(new CustomEvent('state-change', { detail: this.value }));
@@ -366,9 +134,86 @@ class Store extends EventTarget {
         setTimeout(() => this.update({ lastActionMessage: null }), 3000);
     }
 
-    setTheme(theme) { this.update({ theme }); }
-    toggleTheme() { this.update({ theme: this.state.theme === 'light' ? 'dark' : 'light' }); }
+    // --- SOURCE & DATA DELEGATION ---
+
+    async loadData(source, forceRefresh = true) {
+        try {
+            const rawJson = await this.sourceManager.loadData(source, this.state.lang, forceRefresh, this.state.rawGraphData);
+            this.processLoadedData(rawJson);
+        } catch(e) {
+            // Error handling is managed inside SourceManager -> update({error})
+        }
+    }
+
+    processLoadedData(json) {
+        // Fallback for lang
+        if (!this.state.i18nData) this.loadLanguage(this.state.lang);
+
+        let langData = null;
+        if (json.languages) {
+            langData = json.languages[this.state.lang];
+            if (!langData) {
+                const availableLangs = Object.keys(json.languages);
+                if (availableLangs.length > 0) langData = json.languages[availableLangs[0]];
+            }
+        }
+
+        if (!langData) {
+            this.update({ loading: false, error: "No valid content found." });
+            return;
+        }
+        
+        // Post-processing (Exam Prefixes)
+        const examPrefix = this.ui.examLabelPrefix || "Exam: ";
+        if (examPrefix) {
+            const applyPrefix = (node) => {
+                if (node.type === 'exam' && !node.name.startsWith(examPrefix)) node.name = examPrefix + node.name;
+            };
+            const traverse = (node) => {
+                applyPrefix(node);
+                if (node.children) node.children.forEach(traverse);
+            };
+            traverse(langData);
+        }
+
+        this.update({ 
+            data: langData, 
+            rawGraphData: json,
+            loading: false, 
+            path: [langData], 
+            lastActionMessage: this.ui.sourceSwitchSuccess 
+        });
+        
+        this.dispatchEvent(new CustomEvent('graph-update'));
+        setTimeout(() => this.update({ lastActionMessage: null }), 3000);
+    }
+
+    addCommunitySource(url) { this.sourceManager.addCommunitySource(url); }
+    removeCommunitySource(id) { this.sourceManager.removeCommunitySource(id); }
     
+    loadAndSmartMerge(sourceId) {
+        let source = this.state.availableReleases.find(s => s.id === sourceId) ||
+                     this.state.communitySources.find(s => s.id === sourceId);
+        if (!source) return;
+        this.loadData(source, true);
+    }
+
+    // --- LANGUAGE & UI ---
+
+    async loadLanguage(langCode) {
+        try {
+            const path = `./locales/${langCode.toLowerCase()}.json`;
+            const res = await fetch(path, { cache: 'no-cache' });
+            if (!res.ok) throw new Error(`Missing language file: ${path}`);
+            const data = await res.json();
+            this.update({ i18nData: data });
+        } catch (e) {
+            console.error(`Language load failed for ${langCode}`, e);
+            if (langCode !== 'EN') await this.loadLanguage('EN');
+            else this.update({ i18nData: { appTitle: "Arbor (Recovery)", loading: "Loading...", errorTitle: "Error", errorNoTrees: "Language Error" }});
+        }
+    }
+
     async setLanguage(lang) { 
         if (this.state.lang === lang) return;
         this.update({ loading: true, error: null });
@@ -383,120 +228,19 @@ class Store extends EventTarget {
             if (lang !== 'EN') this.setLanguage('EN');
         }
     }
-    
+
+    setTheme(theme) { this.update({ theme }); }
+    toggleTheme() { this.update({ theme: this.state.theme === 'light' ? 'dark' : 'light' }); }
     setModal(modal) { this.update({ modal }); }
+    
     setViewMode(viewMode) { 
         this.update({ viewMode });
         if(viewMode === 'certificates') this.update({ modal: null });
     }
 
-    isUrlTrusted(urlStr) {
-        try {
-            const url = new URL(urlStr, window.location.href);
-            return OFFICIAL_DOMAINS.includes(url.hostname);
-        } catch { return false; }
-    }
+    // --- GRAPH & NAVIGATION LOGIC ---
 
-    async loadData(source, forceRefresh = true) {
-        if (!source) return;
-        
-        if (!this.state.loading) this.update({ loading: true, error: null });
-        this.update({ activeSource: source });
-        
-        // Trigger background discovery of other versions (Manifest)
-        this.discoverManifest(source.url);
-        
-        localStorage.setItem('arbor-active-source-id', source.id);
-
-        try {
-            let json;
-            
-            if (!forceRefresh && this.state.rawGraphData && this.state.activeSource?.id === source.id) {
-                json = this.state.rawGraphData;
-            } else {
-                const url = source.url; 
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 20000); 
-
-                const res = await fetch(url, { signal: controller.signal });
-                clearTimeout(timeoutId);
-
-                if (!res.ok) throw new Error(`Failed to fetch data from ${source.name} (Status ${res.status}).`);
-                json = await res.json();
-            }
-            
-            if (!this.state.i18nData) await this.loadLanguage(this.state.lang);
-
-            let langData = null;
-            if (json.languages) {
-                langData = json.languages[this.state.lang];
-                if (!langData) {
-                    const availableLangs = Object.keys(json.languages);
-                    if (availableLangs.length > 0) langData = json.languages[availableLangs[0]];
-                }
-            }
-
-            if (!langData) throw new Error("No valid content found in this tree.");
-            
-            // Name Update logic for Sources (Refresh Name from Data)
-            // If the loaded data has a Universe Name, update our source record to reflect it
-            if (json.universeName && json.universeName !== source.name) {
-                // Update in community list if it's there
-                const updatedCommunity = this.state.communitySources.map(s => s.id === source.id ? {...s, name: json.universeName} : s);
-                this.update({ communitySources: updatedCommunity });
-                localStorage.setItem('arbor-sources', JSON.stringify(updatedCommunity));
-                
-                // Update active source reference
-                this.update({ activeSource: { ...source, name: json.universeName } });
-            }
-            
-            const examPrefix = this.ui.examLabelPrefix || "Exam: ";
-            if (examPrefix) {
-                const applyPrefix = (node) => {
-                    if (node.type === 'exam' && !node.name.startsWith(examPrefix)) node.name = examPrefix + node.name;
-                };
-                const traverse = (node) => {
-                    applyPrefix(node);
-                    if (node.children) node.children.forEach(traverse);
-                };
-                traverse(langData);
-            }
-
-            this.update({ 
-                data: langData, 
-                rawGraphData: json,
-                loading: false, 
-                path: [langData], 
-                lastActionMessage: this.ui.sourceSwitchSuccess 
-            });
-            
-            this.dispatchEvent(new CustomEvent('graph-update'));
-            setTimeout(() => this.update({ lastActionMessage: null }), 3000);
-        } catch (e) {
-            console.error(e);
-            this.update({ loading: false, error: e.message });
-        }
-    }
-
-    // [Rest of file unchanged: cleanString, findNode, navigateTo, etc.]
-    cleanString(str) {
-        if (!str) return "";
-        return str.toLowerCase()
-            .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
-            .replace(/[^a-z0-9\s]/g, ""); 
-    }
-
-    findNode(id, node = this.state.data) {
-        if (!node) return null;
-        if (node.id === id) return node;
-        if (node.children) {
-            for (const child of node.children) {
-                const found = this.findNode(id, child);
-                if (found) return found;
-            }
-        }
-        return null;
-    }
+    findNode(id) { return TreeUtils.findNode(id, this.state.data); }
     
     async navigateTo(nodeId, nodeData = null) {
         if (!nodeData) {
@@ -519,9 +263,9 @@ class Store extends EventTarget {
             let nextNode = currentNode.children?.find(child => child.name === ancestorName);
 
             if (!nextNode && currentNode.children) {
-                const cleanTarget = this.cleanString(ancestorName).replace(/\s+/g, '');
+                const cleanTarget = TreeUtils.cleanString(ancestorName).replace(/\s+/g, '');
                 nextNode = currentNode.children.find(child => {
-                     const cleanChild = this.cleanString(child.name).replace(/\s+/g, '');
+                     const cleanChild = TreeUtils.cleanString(child.name).replace(/\s+/g, '');
                      return cleanChild === cleanTarget || child.name.includes(ancestorName);
                 });
             }
@@ -675,11 +419,13 @@ class Store extends EventTarget {
         }
     }
 
-    async enterLesson() {
+    enterLesson() {
         const node = this.state.previewNode;
         if (node) {
-             if (!node.content && node.contentPath) await this.loadNodeContent(node);
-             this.update({ selectedNode: node, previewNode: null });
+             if (!node.content && node.contentPath) this.loadNodeContent(node).then(() => {
+                 this.update({ selectedNode: node, previewNode: null });
+             });
+             else this.update({ selectedNode: node, previewNode: null });
         }
     }
 
@@ -692,92 +438,14 @@ class Store extends EventTarget {
     openEditor(node) { if (node) this.update({ modal: { type: 'editor', node: node } }); }
     
     async search(query) {
-        if (!query || query.length < 2) return [];
-        const q = this.cleanString(query);
-        const prefix = q.substring(0, 2); 
-        const lang = this.state.lang;
-        const cacheKey = `${lang}_${prefix}`;
-
-        if (!this.state.searchCache[cacheKey]) {
-            try {
-                const sourceUrl = this.state.activeSource.url;
-                const baseDir = sourceUrl.substring(0, sourceUrl.lastIndexOf('/') + 1);
-                const firstChar = prefix.charAt(0);
-                const url = `${baseDir}search/${lang}/${firstChar}/${prefix}.json`;
-                
-                const res = await fetch(url);
-                if (res.ok) {
-                    const shard = await res.json();
-                    const normalized = shard.map(item => ({
-                        id: item.id, name: item.n || item.name, type: item.t || item.type,
-                        icon: item.i || item.icon, description: item.d || item.description,
-                        path: item.p || item.path, lang: item.l || item.lang
-                    }));
-                    this.state.searchCache[cacheKey] = normalized;
-                } else {
-                    this.state.searchCache[cacheKey] = [];
-                }
-            } catch (e) {
-                this.state.searchCache[cacheKey] = [];
-            }
-        }
-
-        const shard = this.state.searchCache[cacheKey] || [];
-        return shard.filter(n => this.cleanString(n.name).includes(q));
+        return TreeUtils.search(query, this.state.activeSource, this.state.lang, this.state.searchCache);
     }
 
     async searchBroad(char) {
-        if (!char || char.length !== 1) return [];
-        const c = this.cleanString(char);
-        const lang = this.state.lang;
-        const suffixes = 'abcdefghijklmnopqrstuvwxyz0123456789'.split('');
-        const prefixes = suffixes.map(s => c + s);
-        const sourceUrl = this.state.activeSource.url;
-        const baseDir = sourceUrl.substring(0, sourceUrl.lastIndexOf('/') + 1);
-        
-        const promises = prefixes.map(async (prefix) => {
-            const cacheKey = `${lang}_${prefix}`;
-            if (this.state.searchCache[cacheKey]) return this.state.searchCache[cacheKey];
-            try {
-                const url = `${baseDir}search/${lang}/${c}/${prefix}.json`;
-                const res = await fetch(url);
-                if (res.ok) {
-                    const shard = await res.json();
-                    const normalized = shard.map(item => ({
-                        id: item.id, name: item.n || item.name, type: item.t || item.type,
-                        icon: item.i || item.icon, description: item.d || item.description,
-                        path: item.p || item.path, lang: item.l || item.lang
-                    }));
-                    this.state.searchCache[cacheKey] = normalized;
-                    return normalized;
-                }
-            } catch(e) { }
-            this.state.searchCache[cacheKey] = [];
-            return [];
-        });
-
-        const results = await Promise.all(promises);
-        const flat = results.flat();
-        const seen = new Set();
-        return flat.filter(item => {
-            if(seen.has(item.id)) return false;
-            const words = this.cleanString(item.name).split(/\s+/);
-            const matchesInitial = words.some(w => w.startsWith(c));
-            if (!matchesInitial) return false; 
-            seen.add(item.id);
-            return true;
-        });
+        return TreeUtils.searchBroad(char, this.state.activeSource, this.state.lang, this.state.searchCache);
     }
 
-    loadAndSmartMerge(sourceId) {
-        let source = this.state.availableReleases.find(s => s.id === sourceId) ||
-                     this.state.communitySources.find(s => s.id === sourceId);
-                     
-        if (!source) return;
-        this.loadData(source, true);
-    }
-
-    // --- AI / SAGE LOGIC ---
+    // --- INTEGRATIONS (AI, Cloud, User) ---
 
     async initSage() {
         this.update({ ai: { ...this.state.ai, status: 'loading', progress: '0%' } });
@@ -826,7 +494,46 @@ class Store extends EventTarget {
         }
     }
 
-    // --- DELEGATED TO USER STORE ---
+    // --- PUTER SYNC ---
+    async connectPuter() {
+        try {
+            const user = await puterSync.signIn();
+            this.update({ puterUser: user });
+            const cloudData = await puterSync.load();
+            if (cloudData) {
+                this.importProgress(JSON.stringify(cloudData));
+                this.notify("Sync complete. Cloud data loaded.");
+            } else {
+                this.handleAutoSync(this.userStore.getPersistenceData());
+                this.notify("Connected. Local data saved to cloud.");
+            }
+        } catch (e) {
+            console.error(e);
+            this.notify("Sync Error: " + e.message);
+        }
+    }
+
+    async disconnectPuter() {
+        await puterSync.signOut();
+        this.update({ puterUser: null });
+        this.notify("Puter disconnected.");
+    }
+
+    async handleAutoSync(data) {
+        if (this.state.puterUser) {
+            this.update({ isSyncing: true });
+            try {
+                await puterSync.save(data);
+                this.update({ lastSyncTime: new Date() });
+            } catch (e) {
+                console.warn("Background sync failed", e);
+            } finally {
+                this.update({ isSyncing: false });
+            }
+        }
+    }
+
+    // --- USER STORE PROXIES ---
 
     computeHash(str) { return this.userStore.computeHash(str); }
     loadBookmarks() { this.userStore.loadBookmarks(); }
@@ -967,32 +674,7 @@ class Store extends EventTarget {
     }
 
     getModulesStatus() {
-        if (!this.state.data) return [];
-        const modules = [];
-        const traverse = (node) => {
-            if (node.type === 'branch' || node.type === 'root') {
-                 const total = node.totalLeaves || 0;
-                 if (total > 0 || node.type === 'branch') {
-                     let completedCount = 0;
-                     if (this.userStore.state.completedNodes.has(node.id)) {
-                         completedCount = total;
-                     } else if (node.leafIds) {
-                         completedCount = node.leafIds.filter(id => this.userStore.state.completedNodes.has(id)).length;
-                     }
-                     const isComplete = this.userStore.state.completedNodes.has(node.id) || (total > 0 && completedCount >= total);
-                     if (node.type !== 'root') {
-                        modules.push({
-                            id: node.id, name: node.name, icon: node.icon, description: node.description,
-                            totalLeaves: total, completedLeaves: completedCount, isComplete: isComplete,
-                            path: node.path, isCertifiable: node.isCertifiable
-                        });
-                     }
-                 }
-            }
-            if (node.children) node.children.forEach(traverse);
-        };
-        traverse(this.state.data);
-        return modules.sort((a,b) => b.isComplete === a.isComplete ? 0 : (b.isComplete ? 1 : -1));
+        return TreeUtils.getModulesStatus(this.state.data, this.userStore.state.completedNodes);
     }
 }
 

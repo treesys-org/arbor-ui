@@ -9,7 +9,7 @@ import time
 import sys
 
 # ==============================================================================
-#  🌳 ARBOR BUILDER V3.5 (CI/CD AUTOMATION READY)
+#  🌳 ARBOR BUILDER V3.6 (PORTABLE DATA PACKAGE)
 # ==============================================================================
 # 1. LIVE MODE (The "Rolling" Branch):
 #    - Priority Source: ./content/rolling
@@ -21,9 +21,9 @@ import sys
 #    - Output: ./data/releases/{YEAR}.json
 #    - Strategy: MONOLITHIC (FAT JSON).
 #
-# EXECUTION RULES:
-# - ZERO INTERACTION (No input() calls).
-# - Safe Orphan Cleaning (Only runs if source was found).
+# 3. INDEX (PORTABLE):
+#    - Output: ./data/arbor-index.json
+#    - URLs are relative to the data folder (e.g., "./data.json").
 # ==============================================================================
 
 # --- CONFIGURATION ---
@@ -42,7 +42,8 @@ SEARCH_DIR = os.path.join(DATA_ROOT_DIR, "search")
 OUTPUT_FILE = os.path.join(DATA_ROOT_DIR, "data.json") 
 RELEASES_OUT_DIR = os.path.join(DATA_ROOT_DIR, "releases")
 
-INDEX_FILE = "arbor-index.json" 
+# IMPORTANT: Index is now inside data/ to be self-contained
+INDEX_FILE = os.path.join(DATA_ROOT_DIR, "arbor-index.json") 
 CACHE_FILE = ".arbor_build_cache.json"
 
 ALLOWED_EXTENSIONS = {'.md'}
@@ -433,16 +434,17 @@ def process_universe(source_root_path, is_archive=False):
 
 def generate_master_index(current_name):
     """
-    Updates arbor-index.json.
+    Updates arbor-index.json inside the data/ folder.
+    URLs are now relative to the data folder itself (cleaner/portable).
     """
-    print(f"📜 Generating Master Index...")
+    print(f"📜 Generating Master Index in {INDEX_FILE}...")
     
     index = {
         "rolling": {
             "id": f"latest-{int(time.time())}",
             "name": f"{current_name} (Rolling)",
             "description": "Latest unstable version. Updates continuously.",
-            "url": "./data/data.json",
+            "url": "./data.json", # Relative to data/
             "year": "Rolling"
         },
         "releases": []
@@ -450,6 +452,7 @@ def generate_master_index(current_name):
 
     if os.path.exists(RELEASES_OUT_DIR):
         files = sorted(os.listdir(RELEASES_OUT_DIR), reverse=True)
+        print(f"   Found releases in {RELEASES_OUT_DIR}: {files}")
         for f in files:
             if f.endswith(".json"):
                 name_no_ext = os.path.splitext(f)[0]
@@ -465,7 +468,7 @@ def generate_master_index(current_name):
                     "id": f"release-{name_no_ext}",
                     "name": release_name,
                     "description": f"Archived snapshot from {name_no_ext}.",
-                    "url": f"./data/releases/{f}",
+                    "url": f"./releases/{f}", # Relative to data/
                     "year": name_no_ext
                 })
 
@@ -476,7 +479,7 @@ def generate_master_index(current_name):
 
 def main():
     start_time = time.time()
-    print(f"\n🌳 Arbor Builder v3.5 (CI/CD Automation Ready)")
+    print(f"\n🌳 Arbor Builder v3.6 (Portable Mode)")
     print(f"==================================================")
     
     load_cache()
