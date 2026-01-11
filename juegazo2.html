@@ -1,0 +1,296 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Garden</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Nunito', sans-serif; }
+        .card { perspective: 1000px; }
+        .card-inner { position: relative; width: 100%; height: 100%; text-align: center; transition: transform 0.6s; transform-style: preserve-3d; cursor: pointer; }
+        .card.flipped .card-inner { transform: rotateY(180deg); }
+        .card-front, .card-back { position: absolute; width: 100%; height: 100%; -webkit-backface-visibility: hidden; backface-visibility: hidden; display: flex; align-items: center; justify-content: center; border-radius: 1rem; padding: 10px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        .card-front { background: linear-gradient(135deg, #10b981, #059669); color: white; font-size: 2rem; }
+        .card-back { background: white; color: #1f2937; transform: rotateY(180deg); border: 2px solid #e5e7eb; font-weight: bold; font-size: 0.8rem; overflow-y: auto; word-break: break-word; }
+        .card.matched .card-back { background: #d1fae5; border-color: #10b981; color: #065f46; }
+        .card-back::-webkit-scrollbar { display: none; }
+        
+        /* Loading Overlay */
+        #loader { position: fixed; inset:0; background: rgba(255,255,255,0.95); z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.5s; }
+        .hidden-fade { opacity: 0; pointer-events: none; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 h-screen w-screen flex flex-col overflow-hidden">
+
+    <!-- DEV WARNING (Shown only if not in Arbor) -->
+    <div id="dev-warning" class="fixed inset-0 z-[100] bg-slate-900/95 flex items-center justify-center hidden">
+        <div class="bg-white p-8 rounded-2xl max-w-md text-center shadow-2xl">
+            <h1 class="text-2xl font-black text-red-600 mb-2">DEV MODE</h1>
+            <p class="text-sm text-slate-500 mb-6">Arbor Bridge not detected. Run simulation?</p>
+            <button onclick="DevMock.activate()" class="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold hover:scale-105 transition-transform">
+                Launch Mock Environment
+            </button>
+        </div>
+    </div>
+
+    <!-- LOADING SCREEN -->
+    <div id="loader">
+        <div class="text-6xl mb-4 animate-bounce">🌱</div>
+        <h2 class="text-2xl font-black text-slate-800">Growing Garden...</h2>
+        <p id="loading-text" class="text-slate-500 mt-2 font-mono text-sm">Waiting for Arbor...</p>
+    </div>
+
+    <!-- GAME HEADER -->
+    <div class="p-4 bg-white border-b border-slate-200 flex justify-between items-center shadow-sm z-10 shrink-0">
+        <div class="flex items-center gap-2">
+            <span class="text-2xl">🧠</span>
+            <div>
+                <h2 class="font-black text-lg leading-none">Memory</h2>
+                <p id="lesson-title" class="text-xs text-slate-400 font-bold uppercase truncate max-w-[150px]">Loading...</p>
+            </div>
+        </div>
+        <div class="flex gap-4 font-bold text-sm">
+            <div class="bg-slate-100 px-3 py-1 rounded-lg">Moves: <span id="moves">0</span></div>
+            <div class="bg-green-100 text-green-700 px-3 py-1 rounded-lg">Pairs: <span id="pairs">0/6</span></div>
+        </div>
+    </div>
+
+    <!-- GAME BOARD -->
+    <div id="game-board" class="flex-1 p-4 grid grid-cols-3 md:grid-cols-4 gap-3 md:gap-4 max-w-5xl mx-auto w-full items-center justify-center content-center overflow-y-auto">
+        <!-- Cards injected here -->
+    </div>
+
+<script>
+// --- CORE GAME LOGIC ---
+const App = {
+    state: {
+        cards: [],
+        flipped: [],
+        matched: [],
+        moves: 0,
+        locked: false
+    },
+    
+    init: async () => {
+        // 1. Wait for Bridge
+        if (!window.Arbor) {
+            document.getElementById('dev-warning').classList.remove('hidden');
+            return; // Stop here, wait for DevMock
+        }
+
+        // 2. Load Content via URL Params provided by Arbor context
+        App.setLoading("Reading Scroll...");
+        const content = await ContentHelper.fetchContent();
+        
+        if (!content) {
+            alert("Could not load lesson content.");
+            return;
+        }
+
+        document.getElementById('lesson-title').innerText = content.title;
+
+        // 3. Generate Game Data using Arbor AI
+        App.setLoading("Asking the Sage...");
+        const pairs = await App.generatePairs(content.text);
+        
+        // 4. Start
+        App.setupBoard(pairs);
+        document.getElementById('loader').classList.add('hidden-fade');
+    },
+
+    setLoading: (msg) => document.getElementById('loading-text').innerText = msg,
+
+    generatePairs: async (text) => {
+        // We use the Arbor Bridge. We don't care if it's Puter or Ollama.
+        const prompt = `
+        Analyze this text: "${text.substring(0, 2000)}".
+        Task: Extract 6 key terms and their short definitions (max 6 words).
+        Format: Strictly JSON Array of objects with 'term' and 'def'.
+        Example: [{"term": "CPU", "def": "Central Processing Unit"}, ...]
+        `;
+
+        try {
+            const responseText = await window.Arbor.ai.chat([{ role: "user", content: prompt }]);
+            
+            // Clean Markdown code blocks if present
+            let cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+            const start = cleanJson.indexOf('[');
+            const end = cleanJson.lastIndexOf(']');
+            if(start !== -1 && end !== -1) {
+                cleanJson = cleanJson.substring(start, end + 1);
+            }
+
+            const data = JSON.parse(cleanJson);
+            if (Array.isArray(data) && data.length >= 3) return data.slice(0, 6);
+            throw new Error("Invalid AI response");
+
+        } catch (e) {
+            console.error("AI Error, using fallback", e);
+            return [
+                {term: "Error", def: "AI Generation Failed"},
+                {term: "Retry", def: "Reload the game"},
+                {term: "Arbor", def: "Knowledge Tree"},
+                {term: "Game", def: "Memory Cards"},
+                {term: "Code", def: "JavaScript"},
+                {term: "Style", def: "Tailwind CSS"}
+            ];
+        }
+    },
+
+    setupBoard: (pairs) => {
+        const cards = [];
+        pairs.forEach((p, i) => {
+            cards.push({ id: i, type: 'term', content: p.term, matchId: i });
+            cards.push({ id: i, type: 'def', content: p.def, matchId: i });
+        });
+        
+        App.state.cards = cards.sort(() => Math.random() - 0.5);
+        
+        const board = document.getElementById('game-board');
+        board.innerHTML = App.state.cards.map((c, idx) => `
+            <div class="card w-full h-24 md:h-32" onclick="App.flip(${idx})">
+                <div class="card-inner" id="card-${idx}">
+                    <div class="card-front">🌿</div>
+                    <div class="card-back p-2 leading-tight flex items-center justify-center h-full w-full text-xs md:text-sm select-none">${c.content}</div>
+                </div>
+            </div>
+        `).join('');
+    },
+
+    flip: (idx) => {
+        if(App.state.locked) return;
+        if(App.state.flipped.includes(idx) || App.state.matched.includes(idx)) return;
+        
+        const cardEl = document.getElementById(`card-${idx}`);
+        cardEl.parentElement.classList.add('flipped');
+        App.state.flipped.push(idx);
+        
+        if(App.state.flipped.length === 2) {
+            App.state.moves++;
+            document.getElementById('moves').innerText = App.state.moves;
+            App.checkMatch();
+        }
+    },
+
+    checkMatch: () => {
+        App.state.locked = true;
+        const [idx1, idx2] = App.state.flipped;
+        const c1 = App.state.cards[idx1];
+        const c2 = App.state.cards[idx2];
+        
+        if(c1.matchId === c2.matchId) {
+            // Match
+            App.state.matched.push(idx1, idx2);
+            App.state.flipped = [];
+            App.state.locked = false;
+            
+            document.getElementById(`card-${idx1}`).parentElement.classList.add('matched');
+            document.getElementById(`card-${idx2}`).parentElement.classList.add('matched');
+            
+            // BRIDGE: Send XP to Arbor
+            if (window.Arbor.game) window.Arbor.game.addXP(10);
+            
+            document.getElementById('pairs').innerText = `${App.state.matched.length / 2}/6`;
+            
+            if(App.state.matched.length === App.state.cards.length) {
+                if (window.Arbor.game) window.Arbor.game.addXP(50); // Completion Bonus
+                setTimeout(() => alert("Garden Grown! 🌻"), 500);
+            }
+        } else {
+            // Fail
+            setTimeout(() => {
+                document.getElementById(`card-${idx1}`).parentElement.classList.remove('flipped');
+                document.getElementById(`card-${idx2}`).parentElement.classList.remove('flipped');
+                App.state.flipped = [];
+                App.state.locked = false;
+            }, 1000);
+        }
+    }
+};
+
+// --- CONTENT HELPER ---
+const ContentHelper = {
+    async fetchContent() {
+        const params = window.Arbor.params || {};
+        // Default source if testing manually, otherwise use injected param
+        const sourceBase = params.source ? this.cleanUrl(params.source) : 'https://raw.githubusercontent.com/treesys-org/arbor-knowledge/main/data';
+        const modulePath = params.module || 'en/01-computing'; // Fallback
+
+        try {
+            // Logic to find a leaf node text
+            // 1. Try to get node info
+            const safePath = modulePath.replace(/^\//, '');
+            const nodeRes = await fetch(`${sourceBase}/nodes/${safePath}.json`);
+            if (!nodeRes.ok) throw new Error("Node not found");
+            
+            const nodes = await nodeRes.json();
+            const leaf = nodes.find(n => n.type === 'leaf');
+            
+            if (leaf) {
+                const contentRes = await fetch(`${sourceBase}/content/${leaf.contentPath}`);
+                const contentData = await contentRes.json();
+                return { 
+                    title: leaf.name, 
+                    text: contentData.content.replace(/<[^>]*>?/gm, '') 
+                };
+            }
+            throw new Error("No leaves found");
+        } catch (e) {
+            console.warn(e);
+            return { title: "Demo Mode", text: "HTML CSS JavaScript Web Internet Browser Code Data API Network Server Client" };
+        }
+    },
+    
+    cleanUrl(url) {
+        if (url.endsWith('data.json')) return url.substring(0, url.lastIndexOf('/'));
+        if (url.endsWith('/data')) return url.substring(0, url.lastIndexOf('/'));
+        return url;
+    }
+};
+
+// --- DEV MOCK (Simulates Arbor environment for standalone testing) ---
+const DevMock = {
+    activate: () => {
+        document.getElementById('dev-warning').classList.add('hidden');
+        
+        // Inject Mock Bridge
+        window.Arbor = {
+            user: { username: "Dev", avatar: "🛠️" },
+            params: {
+                module: 'en/01-computing', // Default for testing
+                // Using valid repo for fetching real content in dev mode
+                source: 'https://raw.githubusercontent.com/treesys-org/arbor-knowledge/main/data' 
+            },
+            ai: {
+                chat: async (msgs) => {
+                    console.log("[DevMock AI Request]:", msgs[0].content);
+                    await new Promise(r => setTimeout(r, 1500)); // Simulate network
+                    // Mock Response
+                    return JSON.stringify([
+                        {term: "DevTerm1", def: "Definition 1"},
+                        {term: "DevTerm2", def: "Definition 2"},
+                        {term: "DevTerm3", def: "Definition 3"},
+                        {term: "DevTerm4", def: "Definition 4"},
+                        {term: "DevTerm5", def: "Definition 5"},
+                        {term: "DevTerm6", def: "Definition 6"}
+                    ]);
+                }
+            },
+            game: {
+                addXP: (xp) => console.log(`[DevMock Game] Added ${xp} XP`)
+            }
+        };
+        
+        App.init();
+    }
+};
+
+// Auto-start
+window.onload = App.init;
+
+</script>
+</body>
+</html>

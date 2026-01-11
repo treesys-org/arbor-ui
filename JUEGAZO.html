@@ -1,0 +1,308 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arbor Classroom</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+    <style>
+        body { background-color: #202020; color: white; font-family: 'VT323', monospace; overflow: hidden; user-select: none; }
+        #game-container { position: relative; width: 1024px; height: 768px; margin: 20px auto; background-color: #353535; box-shadow: 0 0 20px rgba(0,0,0,0.5); border: 4px solid #555; image-rendering: pixelated; }
+        canvas { display: block; width: 100%; height: 100%; }
+        .pixel-panel { background: #fff; border: 4px solid #000; box-shadow: 4px 4px 0px #000; color: #000; font-family: 'VT323', monospace; font-size: 1.5rem; line-height: 1.2; }
+        .dialogue-box { position: absolute; bottom: 20px; left: 20px; right: 20px; height: 180px; padding: 20px; display: none; z-index: 10; }
+        .dialogue-name { position: absolute; top: -20px; left: 20px; background: #000; color: #fff; padding: 5px 15px; font-family: 'Press Start 2P', cursive; font-size: 0.8rem; border: 2px solid #fff; }
+        #input-area { position: absolute; bottom: 25px; left: 30px; right: 30px; display: none; gap: 10px; z-index: 20; }
+        input[type="text"] { flex: 1; background: #000; color: #0f0; border: 2px solid #fff; padding: 10px; font-family: 'VT323', monospace; font-size: 1.5rem; outline: none; }
+        #dev-warning { position: fixed; inset:0; background:rgba(0,0,0,0.9); z-index:100; display:flex; align-items:center; justify-content:center; }
+    </style>
+</head>
+<body>
+    
+    <!-- Dev Mode Warning (Only shown if NOT inside Arbor) -->
+    <div id="dev-warning" class="hidden">
+        <div class="pixel-panel p-8 text-center max-w-md">
+            <h1 class="text-2xl font-bold mb-4 text-red-600">MODO DESARROLLO</h1>
+            <p class="mb-4 text-sm">Este juego espera el entorno <strong>Arbor SDK</strong>.</p>
+            <p class="mb-4 text-sm text-gray-500">Para probarlo fuera de Arbor, necesitamos simular el SDK.</p>
+            <button onclick="DevMock.activate()" class="bg-blue-600 text-white px-6 py-3 font-bold border-4 border-black hover:bg-blue-500">SIMULAR ARBOR</button>
+        </div>
+    </div>
+
+    <div id="game-container">
+        <div class="absolute top-2 right-2 text-xs font-mono text-gray-500 bg-black/50 px-2 py-1 rounded" id="debug-status">Initializing...</div>
+        
+        <canvas id="world"></canvas>
+        
+        <div id="dialogue-box" class="dialogue-box pixel-panel">
+            <div id="dialogue-name" class="dialogue-name">SISTEMA</div>
+            <div id="dialogue-text">Cargando...</div>
+            <div class="absolute bottom-2 right-4 text-xs text-gray-400 animate-pulse">▼ SPACE</div>
+        </div>
+        
+        <div id="input-area">
+            <input type="text" id="player-input" placeholder="Respuesta..." autocomplete="off">
+            <button onclick="Game.submitAnswer()" class="bg-green-600 text-white px-6 border-2 border-white font-bold">ENVIAR</button>
+        </div>
+    </div>
+
+<script>
+// --- ARBOR GAME CLIENT ---
+// This game relies entirely on 'window.Arbor' being injected by the host.
+
+const Config = {
+    // Default fallback content if none provided by Arbor
+    defaultRepo: 'https://raw.githubusercontent.com/treesys-org/arbor-knowledge/main/data',
+    defaultModule: 'en/01-computing/01-computer-science/01-introduction-to-cs'
+};
+
+const ContentLoader = {
+    async fetchText() {
+        // 1. Get Source URL from Arbor Params or Default
+        let sourceBase = Config.defaultRepo;
+        let modulePath = Config.defaultModule;
+
+        if (window.Arbor && window.Arbor.params) {
+            const p = window.Arbor.params;
+            if (p.source) {
+                // Clean URL to get root
+                let src = p.source;
+                if (src.endsWith('data.json')) src = src.substring(0, src.lastIndexOf('/'));
+                if (src.endsWith('/data')) src = src.substring(0, src.lastIndexOf('/'));
+                sourceBase = src;
+            }
+            if (p.module) modulePath = p.module;
+        }
+
+        // 2. Fetch Content
+        try {
+            const url = `${sourceBase}/content/${modulePath.replace(/^\//, '')}.json`; // Guessed path structure
+            // Fallback strategy: try to find the node file to get content path if simple guess fails? 
+            // For simplicity, let's assume standard structure: /content/PATH.json
+            // Actually, we need to read the node JSON first to get 'contentPath'.
+            
+            // Try Node Info First
+            const nodeUrl = `${sourceBase}/nodes/${modulePath.replace(/^\//, '')}.json`;
+            const nodeRes = await fetch(nodeUrl);
+            
+            if (nodeRes.ok) {
+                // If it's a folder, pick a random leaf
+                const nodes = await nodeRes.json();
+                const leaves = nodes.filter(n => n.type === 'leaf');
+                if (leaves.length > 0) {
+                    const randomLesson = leaves[Math.floor(Math.random() * leaves.length)];
+                    const contentRes = await fetch(`${sourceBase}/content/${randomLesson.contentPath}`);
+                    const contentData = await contentRes.json();
+                    return { text: contentData.content, title: randomLesson.name };
+                }
+            } 
+            
+            // Fallback: Just try to fetch content directly if path implies a leaf
+            // (Not implemented for brevity, assuming valid module path passed)
+            throw new Error("No content found in module.");
+
+        } catch (e) {
+            console.error(e);
+            return { text: "Welcome to class. Today we will discuss general knowledge.", title: "General Studies" };
+        }
+    }
+};
+
+const Game = {
+    canvas: null, ctx: null, state: 'INIT',
+    prof: { x: 512, y: 150 },
+    students: [{x:200,y:400,c:'#f00',n:'Lola'},{x:512,y:400,c:'#0f0',n:'Timmy'},{x:824,y:400,c:'#00f',n:'Nerd'}],
+    lessonData: null,
+    boardItems: [],
+    
+    init: async function() {
+        this.canvas = document.getElementById('world');
+        this.canvas.width = 1024; this.canvas.height = 768;
+        this.ctx = this.canvas.getContext('2d');
+        
+        // Check for Arbor SDK
+        if (!window.Arbor) {
+            document.getElementById('dev-warning').classList.remove('hidden');
+            return;
+        }
+
+        this.setStatus(`Conectado como ${window.Arbor.user.username}`);
+        this.startLoop();
+        
+        await this.loadLesson();
+    },
+
+    setStatus(msg) { document.getElementById('debug-status').innerText = msg; },
+
+    async loadLesson() {
+        this.uiShowDialog("SISTEMA", "Descargando lección...");
+        const data = await ContentLoader.fetchText();
+        this.lessonData = data;
+        
+        this.uiShowDialog("PROFESOR", `Hoy veremos: ${data.title}. (Preparando...)`);
+        
+        // --- THE MAGIC: ARBOR AI CALL ---
+        // We just ask Arbor. Arbor handles the provider.
+        const prompt = `
+        Texto: "${data.text.substring(0, 2000)}".
+        Genera JSON: {
+            "topic": "Título corto",
+            "points": ["Punto 1", "Punto 2"],
+            "intro": "Explicación breve del profesor (max 20 palabras)."
+        }`;
+        
+        try {
+            const raw = await window.Arbor.ai.chat([{role: "user", content: prompt}]);
+            const plan = this.parseJSON(raw);
+            
+            if (plan) {
+                this.boardItems = plan.points.map(t => ({text: t, done: false}));
+                this.uiShowDialog("PROFESOR", plan.intro);
+            } else {
+                this.boardItems = [{text: "Análisis", done: false}];
+                this.uiShowDialog("PROFESOR", "Vamos a leer esto juntos.");
+            }
+            this.state = 'LECTURE';
+            window.addEventListener('keydown', this.handleInput);
+            
+        } catch(e) {
+            this.uiShowDialog("SISTEMA", "Error de IA: " + e.message);
+        }
+    },
+
+    async triggerInteraction() {
+        window.removeEventListener('keydown', this.handleInput);
+        this.state = 'INTERACTION';
+        const s = this.students[Math.floor(Math.random()*3)];
+        
+        this.uiShowDialog(s.n, "Profe, una pregunta...");
+        
+        const prompt = `Contexto: ${this.lessonData.text.substring(0,1000)}. Puntos: ${JSON.stringify(this.boardItems)}. Genera pregunta de alumno. JSON: {"q": "pregunta"}`;
+        const res = await window.Arbor.ai.chat([{role:"user",content:prompt}]);
+        const json = this.parseJSON(res);
+        
+        this.currentQ = json?.q || "¿Qué significa esto?";
+        this.uiShowDialog(s.n, this.currentQ);
+        
+        setTimeout(() => {
+            document.getElementById('input-area').style.display='flex';
+            document.getElementById('player-input').focus();
+            this.state = 'INPUT';
+        }, 1000);
+    },
+
+    async submitAnswer() {
+        const ans = document.getElementById('player-input').value;
+        if(!ans) return;
+        
+        document.getElementById('player-input').value='';
+        document.getElementById('input-area').style.display='none';
+        this.uiShowDialog("PROFESOR", "Evaluando...");
+        
+        const prompt = `Pregunta: "${this.currentQ}". Respuesta: "${ans}". Contexto: ${this.lessonData.text.substring(0,500)}. Evalúa. JSON: {"ok": true/false, "msg": "feedback"}`;
+        const res = await window.Arbor.ai.chat([{role:"user",content:prompt}]);
+        const json = this.parseJSON(res);
+        
+        const isOk = json?.ok || false;
+        this.uiShowDialog("PROFESOR", (isOk?"¡Correcto! ":"") + (json?.msg||""));
+        
+        if (isOk) {
+            const item = this.boardItems.find(i=>!i.done);
+            if(item) item.done = true;
+            
+            // Send XP to Arbor
+            if (window.Arbor.game) window.Arbor.game.addXP(20);
+
+            if(this.boardItems.every(i=>i.done)) {
+                setTimeout(()=>this.uiShowDialog("PROFESOR", "¡Clase terminada!"), 2000);
+                // Can trigger Arbor effects
+                return;
+            }
+        }
+        
+        setTimeout(() => {
+            this.uiShowDialog("PROFESOR", "Siguiente... (Espacio)");
+            window.addEventListener('keydown', this.handleInput);
+            this.state = 'LECTURE';
+        }, 3000);
+    },
+
+    handleInput: (e) => {
+        if(e.code==='Space' && Game.state==='LECTURE') Game.triggerInteraction();
+        else if(e.code==='Enter' && Game.state==='INPUT') Game.submitAnswer();
+    },
+
+    parseJSON(str) {
+        try { return JSON.parse(str.substring(str.indexOf('{'), str.lastIndexOf('}')+1)); } catch(e){return null;}
+    },
+
+    uiShowDialog(n,t) {
+        document.getElementById('dialogue-box').style.display='block';
+        document.getElementById('dialogue-name').innerText=n;
+        document.getElementById('dialogue-text').innerText=t;
+    },
+
+    startLoop() {
+        const loop = () => { this.draw(); requestAnimationFrame(loop); };
+        loop();
+    },
+
+    draw() {
+        const ctx = this.ctx; const w = 1024; const h = 768;
+        ctx.fillStyle='#5d4037'; ctx.fillRect(0,300,w,h-300); ctx.fillStyle='#e0e0e0'; ctx.fillRect(0,0,w,300);
+        
+        // Board
+        ctx.fillStyle='#2e3b28'; ctx.fillRect(150,20,w-300,200); 
+        ctx.strokeStyle='#8d6e63'; ctx.lineWidth=10; ctx.strokeRect(150,20,w-300,200);
+        
+        ctx.fillStyle='white'; ctx.font='20px monospace';
+        let y = 60;
+        this.boardItems.forEach(i => {
+            ctx.fillText((i.done?"[x] ":"[ ] ") + i.text, 180, y);
+            y+=30;
+        });
+
+        // Prof
+        ctx.fillStyle='#ffccaa'; ctx.fillRect(this.prof.x,this.prof.y,40,40);
+        ctx.fillStyle='#333'; ctx.fillRect(this.prof.x-5,this.prof.y+40,50,60);
+
+        // Students
+        this.students.forEach(s=>{
+            ctx.fillStyle=s.c; ctx.fillRect(s.x, s.y, 40, 40);
+            ctx.fillStyle='#ffccaa'; ctx.fillRect(s.x+5, s.y-30, 30, 30);
+        });
+    }
+};
+
+// --- DEV MOCK (For standalone testing) ---
+const DevMock = {
+    activate: () => {
+        document.getElementById('dev-warning').classList.add('hidden');
+        window.Arbor = {
+            user: { username: "DevPlayer", avatar: "🛠️" },
+            params: {},
+            ai: {
+                chat: async (msgs) => {
+                    console.log("[DevMock AI] Chat:", msgs);
+                    return new Promise(resolve => setTimeout(() => {
+                        // Mock Responses based on content hints
+                        const txt = msgs[0].content;
+                        if(txt.includes('Genera JSON')) return resolve(`{"topic":"Dev Topic","points":["A","B"],"intro":"Dev Intro"}`);
+                        if(txt.includes('Genera pregunta')) return resolve(`{"q":"Dev Question?"}`);
+                        if(txt.includes('Evalúa')) return resolve(`{"ok":true,"msg":"Dev Correct"}`);
+                        resolve("Dev Response");
+                    }, 1000));
+                }
+            },
+            game: { addXP: (x) => console.log("XP:", x) }
+        };
+        Game.init();
+    }
+};
+
+window.onload = () => Game.init(); // Will trigger dev warning if no Arbor
+</script>
+</body>
+</html>
