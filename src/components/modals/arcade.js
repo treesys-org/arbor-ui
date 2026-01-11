@@ -71,7 +71,12 @@ class ArborModalArcade extends HTMLElement {
         // Auto-select current context
         const current = this.getCurrentContext();
         if (current) {
-            this.selectedNodeId = current.id;
+            // Smart Selection: If looking at an Exam, select parent. Leaves are ok.
+            if (current.type === 'exam') {
+                this.selectedNodeId = current.parentId;
+            } else {
+                this.selectedNodeId = current.id;
+            }
         } else {
             // Default to root
             const root = store.value.data;
@@ -312,7 +317,6 @@ class ArborModalArcade extends HTMLElement {
     // --- SETUP RENDERER (Detailed Selection) ---
     renderSetup(ui) {
         const nodeList = this.getFlatNodes();
-        const selectedNode = nodeList.find(n => n.id === this.selectedNodeId);
         
         // Increased limit to show more items, especially children in deep trees
         const filteredNodes = nodeList.slice(0, 300); 
@@ -345,27 +349,39 @@ class ArborModalArcade extends HTMLElement {
                         <div class="flex-1 overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-950/50 rounded-xl border border-slate-100 dark:border-slate-800 p-2 space-y-1">
                             ${filteredNodes.map(n => {
                                 const isSelected = this.selectedNodeId === n.id;
-                                const isLeaf = n.type === 'leaf' || n.type === 'exam';
+                                const isLeaf = n.type === 'leaf';
+                                const isExam = n.type === 'exam';
                                 
                                 // Distinct styling for leaves vs modules to make selection easier
                                 let icon = n.icon;
-                                if (!icon) icon = isLeaf ? '📄' : '📁';
+                                if (!icon) icon = isLeaf ? '📄' : (isExam ? '⚔️' : '📁');
                                 
-                                const typeBadge = isLeaf 
-                                    ? `<span class="text-[9px] bg-purple-100 text-purple-700 px-1.5 rounded uppercase font-bold tracking-wider">Lesson</span>`
-                                    : `<span class="text-[9px] bg-slate-200 text-slate-600 px-1.5 rounded uppercase font-bold tracking-wider">Module</span>`;
+                                let typeBadge = `<span class="text-[9px] bg-slate-200 text-slate-600 px-1.5 rounded uppercase font-bold tracking-wider">Module</span>`;
+                                if (isLeaf) typeBadge = `<span class="text-[9px] bg-purple-100 text-purple-700 px-1.5 rounded uppercase font-bold tracking-wider">Lesson</span>`;
+                                if (isExam) typeBadge = `<span class="text-[9px] bg-red-100 text-red-700 px-1.5 rounded uppercase font-bold tracking-wider">Exam</span>`;
+                                
+                                // Indentation based on depth
+                                const indentClass = `pl-${Math.min(n.depth * 4, 12) + 3}`;
+                                
+                                // Disable Exams
+                                const isDisabled = isExam;
+                                const actionClass = isDisabled 
+                                    ? 'opacity-40 cursor-not-allowed grayscale bg-slate-50 dark:bg-slate-900' 
+                                    : 'btn-select-node hover:bg-white dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 cursor-pointer';
+                                
+                                const activeClass = isSelected 
+                                    ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-200 ring-1 ring-orange-500' 
+                                    : '';
 
                                 return `
-                                <button class="btn-select-node w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 transition-colors text-sm
-                                    ${isSelected ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-200 ring-1 ring-orange-500' : 'hover:bg-white dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400'}"
-                                    data-id="${n.id}">
-                                    <span class="text-lg">${icon}</span>
+                                <button class="w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 transition-colors text-sm ${indentClass} ${actionClass} ${activeClass}"
+                                    ${!isDisabled ? `data-id="${n.id}"` : 'disabled'}>
+                                    <span class="text-lg opacity-70">${icon}</span>
                                     <div class="min-w-0">
                                         <div class="flex items-center gap-2">
                                             <p class="font-bold truncate leading-tight">${n.name}</p>
                                             ${typeBadge}
                                         </div>
-                                        <p class="text-[10px] opacity-60 truncate">${n.path || 'No path'}</p>
                                     </div>
                                     ${isSelected ? '<span class="ml-auto text-orange-500 font-bold">✔</span>' : ''}
                                 </button>
