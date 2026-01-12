@@ -106,19 +106,7 @@ class ArborModalGamePlayer extends HTMLElement {
         const gameId = store.value.modal.url; // Use URL as a unique ID for data sandboxing
         
         window.__ARBOR_GAME_BRIDGE__ = {
-            chat: (messages) => {
-                return new Promise((resolve) => {
-                    setTimeout(async () => {
-                        try {
-                            const response = await aiService.chat(messages, null);
-                            resolve({ success: true, text: response.text });
-                        } catch (e) {
-                            console.error("Arbor Bridge AI Error:", e);
-                            resolve({ success: false, error: e.message });
-                        }
-                    }, 0);
-                });
-            },
+            // AI chat is now handled directly inside the iframe via its own Puter.js instance.
             addXP: (amount) => {
                 store.userStore.addXP(amount, true); // Use userStore directly
                 return true;
@@ -166,7 +154,11 @@ class ArborModalGamePlayer extends HTMLElement {
 
         // Inject a <base> tag to fix relative asset paths (CSS, images, etc.)
         const baseTag = `<base href="${url.substring(0, url.lastIndexOf('/') + 1)}">`;
-        html = html.replace('<head>', `<head>${baseTag}`);
+        // NEW: Inject Puter.js script directly into the game's head
+        const puterScript = `<script src="https://js.puter.com/v2/"></script>`;
+        
+        // Replace head tag, adding both base and puter script
+        html = html.replace('<head>', `<head>${baseTag}${puterScript}`);
 
         const sdkScript = `
         <script>
@@ -185,9 +177,18 @@ class ArborModalGamePlayer extends HTMLElement {
                     },
                     ai: {
                         chat: async (messages) => {
-                            const result = await bridge.chat(messages);
-                            if (result.success) return result.text;
-                            throw new Error(result.error);
+                            // NEW: Use the iframe's own Puter.js instance
+                            if (!window.puter) {
+                                throw new Error("Puter.js is not loaded in the game context. Ensure the script tag is present.");
+                            }
+                            try {
+                                const response = await window.puter.ai.chat(messages);
+                                return response?.message?.content || response.toString();
+                            } catch (e) {
+                                console.error("Game AI Error:", e);
+                                // Provide a user-friendly error
+                                throw new Error("The AI assistant could not be reached. " + e.message);
+                            }
                         }
                     },
                     game: {
