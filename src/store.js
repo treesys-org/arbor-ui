@@ -12,10 +12,19 @@ class Store extends EventTarget {
     constructor() {
         super();
         
+        // --- NEW LOGIC FOR INITIAL LANGUAGE ---
+        let initialLang = localStorage.getItem('arbor-lang');
+        if (!initialLang) {
+            // 'en-US' -> 'en' -> 'EN'
+            const browserLang = navigator.language.split('-')[0].toUpperCase();
+            const supportedLang = AVAILABLE_LANGUAGES.find(l => l.code === browserLang);
+            initialLang = supportedLang ? supportedLang.code : 'EN'; // Default to English
+        }
+        
         // 2. Initial State (Moved up to fix initialization race condition)
         this.state = {
             theme: localStorage.getItem('arbor-theme') || 'light',
-            lang: localStorage.getItem('arbor-lang') || 'EN',
+            lang: initialLang, // USE THE DETECTED LANGUAGE
             i18nData: null, 
             
             // Source & Data State (Managed via SourceManager)

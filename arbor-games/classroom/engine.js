@@ -5,6 +5,67 @@
  */
 import { SpriteGen, Colors } from './assets.js';
 
+// --- I18N & INITIALIZATION ---
+const translations = {
+    EN: {
+        START_CLASS: "START CLASS",
+        START_DESC: "Evaluate your classmates.\nWrite your answers.\nWin the ranking.",
+        LOADING: "Loading New Curriculum from Arbor Bridge...",
+        NEW_TOPIC: "Alright class, new topic: ",
+        ASK_PLAYER: "You! {question} Answer me.",
+        CORRECT: "CORRECT!",
+        GOOD_JOB: `Exactly. "{answer}". Good job.`,
+        WRONG: "WRONG!",
+        INCORRECT: `Incorrect. I was looking for "{answer}".`,
+        ACCEPTED: "ACCEPTED!",
+        WELL_SPOTTED: "Well spotted. Correct.",
+        OBJECTION: "OBJECTION!",
+        STUDENT_WAS_CORRECT: `No! {name} was correct.`,
+        PAY_ATTENTION: `Pay attention! That was wrong.`,
+        DISMISSED: "CLASS DISMISSED",
+        FINAL_TALLY: `Final tally. You scored {score} points. We will review another topic next.`,
+        SYSTEM_FAILURE: "SYSTEM FAILURE. AI IS UNRESPONSIVE OR CONTENT IS MISSING.",
+        RANK: "CLASS RANK",
+        TOPICS: "CLASS TOPICS:",
+        TYPE_ANSWER: "TYPE ANSWER...",
+        SUBMIT: "SUBMIT",
+        JUDGE_CORRECT: "✅ CORRECT",
+        JUDGE_WRONG: "❌ WRONG",
+        UNKNOWN_SPEAKER: "???"
+    },
+    ES: {
+        START_CLASS: "EMPEZAR CLASE",
+        START_DESC: "Evalúa a tus compañeros.\nEscribe tus respuestas.\nGana el ranking.",
+        LOADING: "Cargando nuevo currículo desde Arbor...",
+        NEW_TOPIC: "Bien clase, nuevo tema: ",
+        ASK_PLAYER: "¡Tú! {question} Contesta.",
+        CORRECT: "¡CORRECTO!",
+        GOOD_JOB: `Exacto. "{answer}". Buen trabajo.`,
+        WRONG: "¡INCORRECTO!",
+        INCORRECT: `Incorrecto. La respuesta era "{answer}".`,
+        ACCEPTED: "¡ACEPTADO!",
+        WELL_SPOTTED: "Bien visto. Correcto.",
+        OBJECTION: "¡PROTESTO!",
+        STUDENT_WAS_CORRECT: `¡No! {name} tenía razón.`,
+        PAY_ATTENTION: `¡Presta atención! Eso era incorrecto.`,
+        DISMISSED: "CLASE TERMINADA",
+        FINAL_TALLY: `Recuento final. Tienes {score} puntos. Repasaremos otro tema la próxima vez.`,
+        SYSTEM_FAILURE: "FALLO DEL SISTEMA. LA IA NO RESPONDE O FALTA CONTENIDO.",
+        RANK: "RANKING",
+        TOPICS: "TEMAS DE CLASE:",
+        TYPE_ANSWER: "ESCRIBE RESPUESTA...",
+        SUBMIT: "ENVIAR",
+        JUDGE_CORRECT: "✅ CORRECTO",
+        JUDGE_WRONG: "❌ INCORRECTO",
+        UNKNOWN_SPEAKER: "???"
+    }
+};
+
+const lang = (window.Arbor && window.Arbor.user && translations[window.Arbor.user.lang.toUpperCase()]) ? window.Arbor.user.lang.toUpperCase() : 'EN';
+document.getElementById('btn-start').textContent = translations[lang].START_CLASS;
+document.getElementById('start-desc').innerHTML = translations[lang].START_DESC.replace(/\n/g, '<br>');
+
+
 class GameEngine {
     constructor(canvas) {
         this.canvas = canvas;
@@ -14,6 +75,7 @@ class GameEngine {
         this.canvas.width = this.width;
         this.canvas.height = this.height;
 
+        this.lang = lang;
         this.state = 'INIT'; 
         this.frame = 0;
         
@@ -66,10 +128,24 @@ class GameEngine {
             inputField: document.getElementById('player-input'),
             btnSubmit: document.getElementById('btn-submit')
         };
+        
+        this.ui.inputField.placeholder = this.getLine('TYPE_ANSWER');
+        this.ui.btnSubmit.textContent = this.getLine('SUBMIT');
+        this.ui.btnTrue.textContent = this.getLine('JUDGE_CORRECT');
+        this.ui.btnFalse.textContent = this.getLine('JUDGE_WRONG');
+        this.ui.speakerName.textContent = this.getLine('UNKNOWN_SPEAKER');
 
         this.inputResolver = null;
         this.textResolver = null;
         this.setupInput();
+    }
+
+    getLine(key, replacements = {}) {
+        let line = translations[this.lang][key] || translations['EN'][key] || `[${key}]`;
+        for(const [k, v] of Object.entries(replacements)) {
+            line = line.replace(`{${k}}`, v);
+        }
+        return line;
     }
 
     setupInput() {
@@ -179,7 +255,7 @@ class GameEngine {
         ctx.fillStyle = Colors.term_green;
         ctx.font = '20px VT323';
         ctx.textAlign = 'left';
-        ctx.fillText("CLASS TOPICS:", 180, 85);
+        ctx.fillText(this.getLine('TOPICS'), 180, 85);
         if (!this.lessonData.concepts) return;
         let y = 120;
         this.lessonData.concepts.forEach((c, i) => {
@@ -206,7 +282,7 @@ class GameEngine {
         ctx.fillStyle = '#fbbf24';
         ctx.font = '16px VT323';
         ctx.textAlign = 'left';
-        ctx.fillText("CLASS RANK", x + 10, y + 25);
+        ctx.fillText(this.getLine('RANK'), x + 10, y + 25);
         ctx.beginPath(); ctx.moveTo(x, y+35); ctx.lineTo(x+w, y+35); ctx.stroke();
         let rowY = y + 55;
         [...this.students].sort((a,b) => b.score - a.score).forEach(s => {
@@ -249,8 +325,9 @@ class GameEngine {
 
     async loadContent() {
         this.clearBoard();
+        this.state = 'DIALOGUE';
+        await this.showDialogue("SYSTEM", this.getLine('LOADING'), false);
         this.state = 'GENERATING';
-        await this.showDialogue("SYSTEM", "Loading New Curriculum from Arbor Bridge...", false);
         
         try {
             if (!window.Arbor || !window.Arbor.ai || !window.Arbor.content) {
@@ -262,12 +339,15 @@ class GameEngine {
                 throw new Error("No lesson content returned from bridge.");
             }
             
-            await this.showDialogue("PROFESSOR", `Alright class, new topic: ${lesson.title}`, true);
+            await this.showDialogue("PROFESSOR", `${this.getLine('NEW_TOPIC')} ${lesson.title}`, true);
 
+            const langName = this.lang === 'ES' ? 'Spanish' : 'English';
             const prompt = `
             Context: "${lesson.text.substring(0, 800)}".
-            Generate 3 distinct topics. For each topic, create a short question, a CORRECT answer (max 3 words), and a PLAUSIBLE WRONG answer (max 3 words).
-            Return ONLY valid JSON array:
+            The user's language is ${langName}.
+            Generate 3 distinct topics based on the context. For each topic, create a short question, a CORRECT answer (max 3 words), and a PLAUSIBLE WRONG answer (max 3 words).
+            ALL output (topics, questions, answers) MUST be in ${langName}.
+            Return ONLY a valid JSON array matching this schema, without any other text or markdown:
             [
                 { "topic": "Short Topic Name", "q": "Question text", "correct": "Correct Answer", "wrong": "Wrong Answer" }
             ]
@@ -302,7 +382,7 @@ class GameEngine {
 
         } catch(e) {
             console.error("Game AI/Content Error: " + e.message);
-            await this.showDialogue("SYSTEM", "SYSTEM FAILURE. AI IS UNRESPONSIVE OR CONTENT IS MISSING.", true);
+            await this.showDialogue("SYSTEM", this.getLine('SYSTEM_FAILURE'), true);
         }
     }
 
@@ -319,7 +399,7 @@ class GameEngine {
 
         if (this.answeringStudentIndex === 2) { // Player's turn
             this.state = 'PLAYER_TURN';
-            await this.showDialogue("PROFESSOR", `You! ${concept.q} Answer me.`);
+            await this.showDialogue("PROFESSOR", this.getLine('ASK_PLAYER', {question: concept.q}));
             this.state = 'INPUT_TEXT';
             const playerText = await this.waitForText(); 
             const cleanPlayer = playerText.toLowerCase();
@@ -327,20 +407,20 @@ class GameEngine {
             const isCorrect = cleanPlayer.includes(cleanCorrect) || cleanCorrect.includes(cleanPlayer);
 
             if (isCorrect) {
-                this.shout("CORRECT!");
+                this.shout(this.getLine('CORRECT'));
                 this.spawnParticles(student.x, student.y, '#4ade80');
                 this.addPlayerScore(20);
                 concept.status = 'correct';
-                await this.showDialogue("PROFESSOR", `Exactly. "${concept.correct}". Good job.`);
+                await this.showDialogue("PROFESSOR", this.getLine('GOOD_JOB', { answer: concept.correct }));
             } else {
-                this.shout("WRONG!");
+                this.shout(this.getLine('WRONG'));
                 this.shakeScreen();
                 concept.status = 'wrong';
-                await this.showDialogue("PROFESSOR", `Incorrect. I was looking for "${concept.correct}".`);
+                await this.showDialogue("PROFESSOR", this.getLine('INCORRECT', { answer: concept.correct }));
             }
         } else { // AI Student's turn
             this.state = 'DIALOGUE';
-            await this.showDialogue("PROFESSOR", `${concept.topic}: ${concept.q}`);
+            await this.showDialogue("PROFESSOR", `${concept.topic}: ${concept.q}`, true); // Auto-advance
             const isRight = Math.random() > 0.4;
             const answerText = isRight ? concept.correct : concept.wrong;
             this.state = 'DIALOGUE_STUDENT';
@@ -350,19 +430,19 @@ class GameEngine {
             const judgmentCorrect = (isRight && playerJudge) || (!isRight && !playerJudge);
 
             if (judgmentCorrect) {
-                this.shout("ACCEPTED!");
+                this.shout(this.getLine('ACCEPTED'));
                 this.spawnParticles(this.students[2].x, this.students[2].y, '#4ade80');
                 this.addPlayerScore(10);
                 concept.status = 'correct';
-                await this.showDialogue("PROFESSOR", "Well spotted. Correct.");
+                await this.showDialogue("PROFESSOR", this.getLine('WELL_SPOTTED'));
             } else {
-                this.shout("OBJECTION!");
+                this.shout(this.getLine('OBJECTION'));
                 this.shakeScreen();
                 if (isRight) {
                     student.score += 10;
-                    await this.showDialogue("PROFESSOR", `No! ${student.name} was correct.`);
+                    await this.showDialogue("PROFESSOR", this.getLine('STUDENT_WAS_CORRECT', { name: student.name }));
                 } else {
-                    await this.showDialogue("PROFESSOR", `Pay attention! That was wrong.`);
+                    await this.showDialogue("PROFESSOR", this.getLine('PAY_ATTENTION'));
                 }
                 concept.status = 'wrong';
             }
@@ -374,8 +454,8 @@ class GameEngine {
     victory() {
         this.state = 'VICTORY';
         const pScore = this.students[2].score;
-        this.shout("CLASS DISMISSED");
-        this.showDialogue("PROFESSOR", `Final tally. You scored ${pScore} points. We will review another topic next.`);
+        this.shout(this.getLine('DISMISSED'));
+        this.showDialogue("PROFESSOR", this.getLine('FINAL_TALLY', { score: pScore }));
         this.advanceCallback = () => this.loadContent(); // Loop to next lesson
     }
 

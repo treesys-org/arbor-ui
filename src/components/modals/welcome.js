@@ -1,4 +1,3 @@
-
 import { store } from '../../store.js';
 
 class ArborModalWelcome extends HTMLElement {
@@ -132,6 +131,23 @@ class ArborModalWelcome extends HTMLElement {
                         <div class="prose prose-slate dark:prose-invert prose-p:text-slate-600 dark:prose-p:text-slate-300 prose-lg max-w-md">
                             <p>${current.text}</p>
                         </div>
+                        
+                        ${this.activeStep === 0 ? `
+                            <div class="mt-8 text-center animate-in fade-in delay-300 duration-500">
+                                <div class="flex justify-center gap-3">
+                                    ${store.availableLanguages.map(l => `
+                                        <button class="btn-lang-sel p-3 border-2 rounded-xl font-bold transition-all flex flex-col items-center gap-2 w-24
+                                            ${store.value.lang === l.code 
+                                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
+                                                : 'border-slate-200 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500'}" 
+                                            data-code="${l.code}">
+                                            <span class="text-3xl">${l.flag}</span>
+                                            <span class="text-xs ${store.value.lang === l.code ? 'text-blue-600 dark:text-blue-300' : 'text-slate-600 dark:text-slate-300'}">${l.nativeName}</span>
+                                        </button>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
 
                         ${current.isAiPitch ? `
                             <div class="mt-6 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-100 dark:border-purple-800/50 flex items-center gap-3">
@@ -182,6 +198,15 @@ class ArborModalWelcome extends HTMLElement {
 
         const btnPrev = this.querySelector('#btn-prev');
         if (btnPrev) btnPrev.onclick = () => this.prev();
+
+        this.querySelectorAll('.btn-lang-sel').forEach(b => {
+             b.onclick = (e) => {
+                const code = e.currentTarget.dataset.code;
+                if (store.value.lang !== code) {
+                    store.setLanguage(code);
+                }
+             };
+        });
     }
 }
 customElements.define('arbor-modal-welcome', ArborModalWelcome);
