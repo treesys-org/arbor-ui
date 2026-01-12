@@ -71,15 +71,12 @@ class MemoryGame {
         await this.fx.initAudio();
 
         try {
-            // 2. Fetch Content
-            const content = await this.fetchContent();
+            // 2. Generate Cards via AI
+            const { title, pairs } = await this.generatePairs();
             
-            this.els.topic.innerText = content.title;
+            this.els.topic.innerText = title;
             this.els.topic.classList.remove('opacity-0');
 
-            // 3. Generate Cards via AI (with 60s safety timeout)
-            const pairs = await this.generatePairs(content.text);
-            
             if (pairs && pairs.length > 0) {
                 this.buildGrid(pairs);
                 this.startGame();
@@ -91,63 +88,46 @@ class MemoryGame {
         }
     }
 
-    async fetchContent() {
-        // Bridge to Arbor
-        if (window.Arbor && window.Arbor.content) {
-            try {
-                const lesson = await window.Arbor.content.getNext();
-                if (lesson) return { title: lesson.title, text: lesson.text };
-            } catch (e) { console.warn("Arbor Bridge Error", e); }
-        }
-        // No Fallback
-        throw new Error("No Context Source Found (Arbor Bridge Offline)");
-    }
-
-    async generatePairs(text) {
+    async generatePairs() {
         this.els.loadText.innerText = "Synthesizing Crystals...";
-        
+
+        if (!window.Arbor || !window.Arbor.ai || !window.Arbor.content) {
+            throw new Error("Arbor Bridge is not properly initialized.");
+        }
+
+        // 1. Get raw lesson content from the player
+        const lesson = await window.Arbor.content.getNext();
+        if (!lesson) {
+            throw new Error("No lesson content available from the curriculum.");
+        }
+
+        // 2. Build the game-specific prompt
         const prompt = `
-        Analyze this text: "${text.substring(0, 1000)}".
-        Create 6 pairs of "Term" vs "Definition".
-        Output ONLY valid JSON array: [{"t": "Term", "d": "Definition (max 6 words)"}, ...]
-        Do NOT wrap in markdown code blocks.
+Analyze this text: "${lesson.text.substring(0, 1000)}".
+Create 6 pairs of "Term" vs "Definition".
+Output ONLY valid JSON array: [{"t": "Term", "d": "Definition (max 6 words)"}, ...]
+Do NOT wrap in markdown code blocks.
         `;
-
-        // 1. The Actual AI Request
-        const aiRequest = async () => {
-            try {
-                if (window.Arbor && window.Arbor.ai) {
-                    console.log("Sending prompt to AI...");
-                    const response = await window.Arbor.ai.chat([{ role: "user", content: prompt }]);
-                    console.log("AI Raw Response:", response);
-                    
-                    if (!response) return null;
-
-                    // Robust JSON Extraction (Matching Classroom implementation)
-                    const cleanResponse = response.replace(/```json/g, '').replace(/```/g, '');
-                    const match = cleanResponse.match(/\[[\s\S]*\]/);
-                    
-                    if (match) {
-                        return JSON.parse(match[0]);
-                    }
-                    // Try parsing the whole thing if regex fails
-                    return JSON.parse(cleanResponse);
-                } 
-                return null;
-            } catch (e) {
-                console.error("AI Generation Error:", e);
-                return null;
+        
+        // 3. Send the prompt to the generic AI chat function
+        console.log("Sending prompt to AI via generic bridge...");
+        const aiResponse = await window.Arbor.ai.chat([{ role: 'user', content: prompt }]);
+        const jsonText = aiResponse.text;
+        
+        // 4. Parse the response
+        try {
+            const cleanResponse = jsonText.replace(/```json/g, '').replace(/```/g, '');
+            const match = cleanResponse.match(/\[[\s\S]*\]/);
+            if (match) {
+                const pairs = JSON.parse(match[0]);
+                return { title: lesson.title, pairs: pairs };
             }
-        };
-
-        // 2. The Safety Timeout (60 Seconds)
-        const timeout = new Promise((resolve) => setTimeout(() => {
-            console.warn("AI Response Timed Out (60s).");
-            resolve(null); 
-        }, 60000));
-
-        // 3. Race: Whichever finishes first wins
-        return Promise.race([aiRequest(), timeout]);
+            const pairs = JSON.parse(cleanResponse);
+            return { title: lesson.title, pairs: pairs };
+        } catch (e) {
+            console.error("Failed to parse AI JSON for Memory Game:", e, "Raw response:", jsonText);
+            throw new Error("AI returned invalid data format.");
+        }
     }
 
     handleError(msg) {

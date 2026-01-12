@@ -251,46 +251,45 @@ class GameEngine {
         this.clearBoard();
         this.state = 'GENERATING';
         await this.showDialogue("SYSTEM", "Loading New Curriculum from Arbor Bridge...", false);
-
-        let rawText = null;
-        if (window.Arbor && window.Arbor.content) {
-            try {
-                const lesson = await window.Arbor.content.getNext();
-                if (lesson && lesson.text) rawText = lesson.text;
-            } catch(e) { console.warn("Arbor offline.", e); }
-        }
         
-        if (!rawText) {
-             await this.showDialogue("SYSTEM", "CRITICAL ERROR: NO CONTENT FROM BRIDGE.", true);
-             return;
-        }
-
-        await this.showDialogue("PROFESSOR", "Alright class, new topic!", true);
-        
-        const prompt = `
-        Context: "${rawText.substring(0, 800)}".
-        Generate 3 distinct topics. For each topic, create a short question, a CORRECT answer (max 3 words), and a PLAUSIBLE WRONG answer (max 3 words).
-        Return ONLY valid JSON array:
-        [
-            { "topic": "Short Topic Name", "q": "Question text", "correct": "Correct Answer", "wrong": "Wrong Answer" }
-        ]
-        `;
-
         try {
-            if (!window.Arbor || !window.Arbor.ai) throw new Error("AI Bridge not found");
-            const aiRes = await window.Arbor.ai.chat([{role: "user", content: prompt}]);
-            const json = this.parseJSON(aiRes);
+            if (!window.Arbor || !window.Arbor.ai || !window.Arbor.content) {
+                throw new Error("Arbor Bridge is incomplete.");
+            }
 
-            if (json && Array.isArray(json)) {
+            const lesson = await window.Arbor.content.getNext();
+            if (!lesson || !lesson.text) {
+                throw new Error("No lesson content returned from bridge.");
+            }
+            
+            await this.showDialogue("PROFESSOR", `Alright class, new topic: ${lesson.title}`, true);
+
+            const prompt = `
+            Context: "${lesson.text.substring(0, 800)}".
+            Generate 3 distinct topics. For each topic, create a short question, a CORRECT answer (max 3 words), and a PLAUSIBLE WRONG answer (max 3 words).
+            Return ONLY valid JSON array:
+            [
+                { "topic": "Short Topic Name", "q": "Question text", "correct": "Correct Answer", "wrong": "Wrong Answer" }
+            ]
+            `;
+            
+            console.log("Requesting questions from Arbor bridge...");
+            const aiRes = await window.Arbor.ai.chat([{role: "user", content: prompt}]);
+            const jsonText = aiRes.text;
+            
+            const match = jsonText.match(/\[.*\]/s);
+            const json = match ? JSON.parse(match[0]) : JSON.parse(jsonText);
+
+            if (json && Array.isArray(json) && json.length > 0) {
                 this.lessonData.concepts = json.map(j => ({ ...j, status: 'pending' }));
                 await this.runRound();
             } else {
-                throw new Error("Invalid AI format");
+                throw new Error("Invalid or empty data from AI.");
             }
 
         } catch(e) {
-            console.error("AI Error: " + e.message);
-            await this.showDialogue("SYSTEM", "SYSTEM FAILURE. AI IS UNRESPONSIVE.", true);
+            console.error("Game AI/Content Error: " + e.message);
+            await this.showDialogue("SYSTEM", "SYSTEM FAILURE. AI IS UNRESPONSIVE OR CONTENT IS MISSING.", true);
         }
     }
 
@@ -365,15 +364,6 @@ class GameEngine {
         this.shout("CLASS DISMISSED");
         this.showDialogue("PROFESSOR", `Final tally. You scored ${pScore} points. We will review another topic next.`);
         this.advanceCallback = () => this.loadContent(); // Loop to next lesson
-    }
-
-    parseJSON(str) {
-        if (!str) return null;
-        try {
-            const match = str.match(/\[.*\]/s);
-            if (match) return JSON.parse(match[0]);
-            return JSON.parse(str);
-        } catch (e) { return null; }
     }
 
     waitForInput() {

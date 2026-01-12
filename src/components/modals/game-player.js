@@ -77,24 +77,41 @@ class ArborModalGamePlayer extends HTMLElement {
         const clean = raw.replace(/<[^>]*>?/gm, '').replace(/@\w+:.*?\n/g, '').replace(/\s+/g, ' ').trim(); 
         return { id: node.id, title: node.name, text: clean, raw: raw };
     }
-
+    
     setupBridge() {
         const gameId = store.value.modal.url;
         window.__ARBOR_GAME_BRIDGE__ = {
             addXP: (amount) => store.userStore.addXP(amount, true),
             getCurriculum: () => this.playlist.map(l => ({ id: l.id, title: l.name })),
+            
+            // The Playlist Manager function
             getNextLesson: async () => {
                 if (this.playlist.length === 0) return null;
-                if (this.cursorIndex >= this.playlist.length) this.cursorIndex = 0;
+                if (this.cursorIndex >= this.playlist.length) this.cursorIndex = 0; // Loop curriculum
                 const node = this.playlist[this.cursorIndex++];
                 return await this.fetchLessonContent(node);
             },
+            
             getLessonAt: async (index) => {
                 if (index < 0 || index >= this.playlist.length) return null;
                 return await this.fetchLessonContent(this.playlist[index]);
             },
+
+            // Generic AI passthrough
+            aiChat: async (promptMessages, contextNode) => {
+                try {
+                    return await aiService.chat(promptMessages, contextNode);
+                } catch(e) {
+                    console.error("AI Bridge Error:", e);
+                    throw e;
+                }
+            },
+            
+            // Storage
             save: (key, value) => store.userStore.saveGameData(gameId, key, value),
             load: (key) => store.userStore.loadGameData(gameId, key),
+            
+            // System
             close: () => this.close()
         };
     }
@@ -171,14 +188,8 @@ class ArborModalGamePlayer extends HTMLElement {
                 if (!bridge) { console.error("Arbor Bridge not found!"); return; }
                 window.Arbor = {
                     user: { username: '${store.value.gamification.username || 'Student'}', avatar: '${store.value.gamification.avatar || '👤'}', lang: '${store.value.lang || 'EN'}' },
-                    ai: {
-                        chat: async (messages) => {
-                            if (!window.puter) throw new Error("Puter.js not loaded in game context.");
-                            try {
-                                const response = await window.puter.ai.chat(messages);
-                                return response?.message?.content || response.toString();
-                            } catch (e) { console.error("Game AI Error:", e); throw new Error("AI assistant unreachable: " + e.message); }
-                        }
+                    ai: { 
+                        chat: (prompt, context) => bridge.aiChat(prompt, context) 
                     },
                     game: { addXP: (amount) => bridge.addXP(amount), exit: () => bridge.close() },
                     content: { getList: () => bridge.getCurriculum(), getNext: () => bridge.getNextLesson(), getAt: (idx) => bridge.getLessonAt(idx) },
@@ -190,10 +201,6 @@ class ArborModalGamePlayer extends HTMLElement {
             sdkScript.textContent = sdkScriptContent;
             doc.body.appendChild(sdkScript);
 
-            // No <base> tag is needed as all module imports are now absolute blob URLs.
-            // Other assets like images/css will be resolved relative to the iframe's src, which we are not setting.
-            // Using srcdoc means their base is about:srcdoc, so they MUST be absolute or inlined.
-            // To fix relative assets (CSS, images) in the game's HTML, we need to manually resolve them.
             const assetTags = doc.querySelectorAll('link[href], img[src], audio[src], video[src]');
             assetTags.forEach(tag => {
                 const attr = tag.hasAttribute('href') ? 'href' : 'src';
