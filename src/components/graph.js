@@ -263,7 +263,7 @@ class ArborGraph extends HTMLElement {
         
         const isMobile = this.width < 768;
         // Increased zoom scale for better visibility on small screens
-        const k = isMobile ? 1.06 : 1.0; 
+        const k = isMobile ? 1.15 : 1.0; 
         
         // Focus on bottom center (Root position)
         const tx = (this.width / 2) * (1 - k); 
@@ -352,10 +352,10 @@ class ArborGraph extends HTMLElement {
 
         // --- COUPLED EXTENT LOGIC (FIXED: Adaptive Padding) ---
         // Desktop: 30% padding (0.3).
-        // Mobile: Tight fit (almost 0% + fixed buffer) to prevent getting lost.
+        // Mobile: Increased padding to prevent "teleporting" on pan/zoom.
         
-        const widthPaddingRatio = isMobile ? 0.05 : 0.3;
-        const heightPaddingRatio = isMobile ? 0.05 : 0.3; 
+        const widthPaddingRatio = isMobile ? 0.2 : 0.3;
+        const heightPaddingRatio = isMobile ? 0.2 : 0.3; 
 
         // Use a minimum pixel buffer (especially important for mobile to cover node radius)
         const minBuffer = 50; 
@@ -548,7 +548,7 @@ class ArborGraph extends HTMLElement {
 
             const name = d.data.name;
             const words = name.split(/\s+/);
-            const maxWidth = isMobile ? 90 : 140;
+            const maxWidth = isMobile ? 100 : 150;
 
             let line1 = [];
             let line2 = [];
@@ -604,8 +604,8 @@ class ArborGraph extends HTMLElement {
             const textBBox = text.node().getBBox();
 
             rect.attr('height', numLines > 1 ? 40 : 24)
-                .attr('width', textBBox.width + 20)
-                .attr('x', -(textBBox.width / 2) - 10);
+                .attr('width', textBBox.width + 24)
+                .attr('x', -(textBBox.width / 2) - 12);
             
             if (numLines > 1) {
                 rect.attr('y', -8);
