@@ -263,7 +263,7 @@ class ArborGraph extends HTMLElement {
         
         const isMobile = this.width < 768;
         // Increased zoom scale for better visibility on small screens
-        const k = isMobile ? 0.95 : 1.0; 
+        const k = isMobile ? 0.85 : 1.0; 
         
         // Focus on bottom center (Root position)
         const tx = (this.width / 2) * (1 - k); 

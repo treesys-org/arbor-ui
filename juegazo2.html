@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -12,117 +11,189 @@
         .card { perspective: 1000px; }
         .card-inner { position: relative; width: 100%; height: 100%; text-align: center; transition: transform 0.6s; transform-style: preserve-3d; cursor: pointer; }
         .card.flipped .card-inner { transform: rotateY(180deg); }
-        .card-front, .card-back { position: absolute; width: 100%; height: 100%; -webkit-backface-visibility: hidden; backface-visibility: hidden; display: flex; align-items: center; justify-content: center; border-radius: 1rem; padding: 10px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
-        .card-front { background: linear-gradient(135deg, #10b981, #059669); color: white; font-size: 2rem; }
-        .card-back { background: white; color: #1f2937; transform: rotateY(180deg); border: 2px solid #e5e7eb; font-weight: bold; font-size: 0.8rem; overflow-y: auto; word-break: break-word; }
-        .card.matched .card-back { background: #d1fae5; border-color: #10b981; color: #065f46; }
+        .card-front, .card-back { position: absolute; width: 100%; height: 100%; -webkit-backface-visibility: hidden; backface-visibility: hidden; display: flex; align-items: center; justify-content: center; border-radius: 1rem; padding: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        .card-front { background: linear-gradient(135deg, #10b981, #059669); color: white; font-size: 2.5rem; }
+        
+        .card-back { 
+            background: #fff; 
+            color: #1f2937; 
+            transform: rotateY(180deg); 
+            border: 3px solid #e5e7eb; 
+            font-weight: 800; 
+            font-size: 0.95rem;
+            line-height: 1.1;
+            overflow-y: hidden; 
+            word-break: break-word;
+            text-align: center;
+        }
+        
+        .card.matched .card-back { background: #d1fae5; border-color: #10b981; color: #065f46; transform: rotateY(180deg) scale(0.95); transition: all 0.3s; }
         .card-back::-webkit-scrollbar { display: none; }
         
-        /* Loading Overlay */
-        #loader { position: fixed; inset:0; background: rgba(255,255,255,0.95); z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.5s; }
+        .overlay { position: fixed; inset:0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.5s; }
         .hidden-fade { opacity: 0; pointer-events: none; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 h-screen w-screen flex flex-col overflow-hidden">
 
-    <!-- LOADING SCREEN -->
-    <div id="loader">
+    <!-- OVERLAYS -->
+    <div id="start-menu" class="overlay bg-slate-50">
+        <div class="text-center p-8">
+            <div class="text-6xl mb-4">🧠</div>
+            <h1 class="text-5xl font-black text-slate-800 mb-2">Memory Garden</h1>
+            <p class="text-lg text-slate-500 mb-8 max-w-lg">Match the terms with their definitions to prove your knowledge and grow your garden!</p>
+            <button id="start-button" class="px-10 py-4 bg-green-600 text-white text-2xl font-bold rounded-2xl shadow-lg hover:bg-green-500 transition-transform active:scale-95">Play</button>
+        </div>
+    </div>
+
+    <div id="loader" class="overlay bg-white/95 hidden-fade">
         <div class="text-6xl mb-4 animate-bounce">🌱</div>
         <h2 class="text-2xl font-black text-slate-800">Growing Garden...</h2>
         <p id="loading-text" class="text-slate-500 mt-2 font-mono text-sm">Waiting for Arbor...</p>
     </div>
 
-    <!-- GAME HEADER -->
-    <div class="p-4 bg-white border-b border-slate-200 flex justify-between items-center shadow-sm z-10 shrink-0">
-        <div class="flex items-center gap-2">
-            <span class="text-2xl">🧠</span>
-            <div>
-                <h2 class="font-black text-lg leading-none">Memory</h2>
-                <p id="lesson-title" class="text-xs text-slate-400 font-bold uppercase truncate max-w-[150px]">Loading...</p>
-            </div>
-        </div>
-        <div class="flex gap-4 font-bold text-sm">
-            <div class="bg-slate-100 px-3 py-1 rounded-lg">Moves: <span id="moves">0</span></div>
-            <div class="bg-green-100 text-green-700 px-3 py-1 rounded-lg">Pairs: <span id="pairs">0/6</span></div>
+    <div id="win-screen" class="overlay bg-green-500/80 backdrop-blur-sm text-white hidden-fade">
+        <div class="text-center p-8">
+            <div class="text-8xl mb-4">🌻</div>
+            <h1 class="text-6xl font-black mb-2">Garden Grown!</h1>
+            <p class="text-xl mb-8">You successfully matched all the concepts.</p>
+            <button id="play-again-button" class="px-10 py-4 bg-white text-green-700 text-2xl font-bold rounded-2xl shadow-lg hover:bg-green-50 transition-transform active:scale-95">Play Again</button>
         </div>
     </div>
 
-    <!-- GAME BOARD -->
-    <div id="game-board" class="flex-1 p-4 grid grid-cols-3 md:grid-cols-4 gap-3 md:gap-4 max-w-5xl mx-auto w-full items-center justify-center content-center overflow-y-auto">
-        <!-- Cards injected here -->
+    <!-- GAME UI (Initially Hidden) -->
+    <div id="game-ui" class="flex flex-col h-full hidden">
+        <div class="p-4 bg-white border-b border-slate-200 flex justify-between items-center shadow-sm z-10 shrink-0">
+            <div class="flex items-center gap-2">
+                <span class="text-2xl">🧠</span>
+                <div>
+                    <h2 class="font-black text-lg leading-none">Memory</h2>
+                    <p id="lesson-title" class="text-xs text-slate-400 font-bold uppercase truncate max-w-[150px]">Loading...</p>
+                </div>
+            </div>
+            <div class="flex gap-4 font-bold text-sm">
+                <div class="bg-slate-100 px-3 py-1 rounded-lg">Moves: <span id="moves">0</span></div>
+                <div class="bg-green-100 text-green-700 px-3 py-1 rounded-lg">Pairs: <span id="pairs">0/6</span></div>
+            </div>
+        </div>
+
+        <div id="game-board" class="flex-1 p-4 grid grid-cols-3 md:grid-cols-4 gap-3 md:gap-4 max-w-5xl mx-auto w-full items-center justify-center content-center overflow-y-auto">
+            <!-- Cards injected here -->
+        </div>
     </div>
 
 <script>
-// --- CORE GAME LOGIC ---
 const App = {
-    state: {
-        cards: [],
-        flipped: [],
-        matched: [],
-        moves: 0,
-        locked: false
-    },
+    state: {},
     
     init: async () => {
-        // 1. Wait for Bridge
-        if (!window.Arbor) return; // Silent fail if standalone
-
-        // 2. Load Content via URL Params provided by Arbor context
-        App.setLoading("Reading Scroll...");
-        const content = await ContentHelper.fetchContent();
+        App.resetState();
+        document.getElementById('start-menu').classList.add('hidden-fade');
+        document.getElementById('win-screen').classList.add('hidden-fade');
+        document.getElementById('game-ui').classList.remove('hidden');
         
-        if (!content) {
-            alert("Could not load lesson content.");
+        const loader = document.getElementById('loader');
+        // Restore loader to its original state for retries
+        loader.innerHTML = `
+            <div class="text-6xl mb-4 animate-bounce">🌱</div>
+            <h2 class="text-2xl font-black text-slate-800">Growing Garden...</h2>
+            <p id="loading-text" class="text-slate-500 mt-2 font-mono text-sm">Waiting for Arbor...</p>
+        `;
+        loader.classList.remove('hidden-fade');
+
+        if (!window.Arbor) {
+            App.setLoading("Arbor SDK not found.");
+            return;
+        }
+
+        App.setLoading("Reading Scroll...");
+        const content = await App.fetchContent();
+        
+        if (!content || !content.text) {
+            loader.innerHTML = `<div class="text-center p-8"><div class="text-6xl mb-4">🍂</div><h2 class="text-xl font-bold text-slate-800">No Content</h2><p class="text-slate-500">The module seems empty or failed to load.</p></div>`;
             return;
         }
 
         document.getElementById('lesson-title').innerText = content.title;
 
-        // 3. Generate Game Data using Arbor AI
         App.setLoading("Asking the Sage...");
         const pairs = await App.generatePairs(content.text);
         
-        // 4. Start
+        if (!pairs) {
+            loader.innerHTML = `
+                <div class="text-center p-8">
+                    <div class="text-6xl mb-4">🦉</div>
+                    <h2 class="text-xl font-bold text-slate-800">AI Generation Failed</h2>
+                    <p class="text-slate-500 mb-6">The Sage could not generate a memory game from this lesson's content.</p>
+                    <button id="retry-button" class="px-6 py-2 bg-slate-200 text-slate-700 text-sm font-bold rounded-lg hover:bg-slate-300 active:scale-95 transition-transform">Try Again</button>
+                </div>`;
+            document.getElementById('retry-button').addEventListener('click', App.init);
+            return;
+        }
+        
         App.setupBoard(pairs);
-        document.getElementById('loader').classList.add('hidden-fade');
+        loader.classList.add('hidden-fade');
+    },
+
+    resetState: () => {
+        App.state = {
+            cards: [],
+            flipped: [],
+            matched: [],
+            moves: 0,
+            locked: false
+        };
+        document.getElementById('moves').innerText = '0';
+        document.getElementById('pairs').innerText = '0/6';
     },
 
     setLoading: (msg) => document.getElementById('loading-text').innerText = msg,
 
     generatePairs: async (text) => {
-        // We use the Arbor Bridge. We don't care if it's Puter or Ollama.
         const prompt = `
-        Analyze this text: "${text.substring(0, 2000)}".
-        Task: Extract 6 key terms and their short definitions (max 6 words).
-        Format: Strictly JSON Array of objects with 'term' and 'def'.
-        Example: [{"term": "CPU", "def": "Central Processing Unit"}, ...]
+        Analyze this text: "${text.substring(0, 1500)}".
+        Task: Extract 6 key concepts. For each, provide a 'term' and its corresponding 'definition'.
+        Your response must be a valid JSON array of 6 objects, and nothing else.
+        
+        CRITICAL CONSTRAINTS:
+        - The JSON must be an array of objects.
+        - Each object must have a "term" key and a "def" key.
+        - 'term' must be a noun or short concept (max 3 words).
+        - 'def' must be a concise, accurate definition of the term (max 5 words).
+        - The pairs MUST be directly related and derived from the text.
+        
+        JSON_FORMAT: [{"term": "string", "def": "string"}, ...]
         `;
 
+        let responseText = ""; // Keep it in scope for error logging
         try {
-            const responseText = await window.Arbor.ai.chat([{ role: "user", content: prompt }]);
+            responseText = await window.Arbor.ai.chat([{ role: "user", content: prompt }]);
             
-            // Clean Markdown code blocks if present
-            let cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-            const start = cleanJson.indexOf('[');
-            const end = cleanJson.lastIndexOf(']');
-            if(start !== -1 && end !== -1) {
-                cleanJson = cleanJson.substring(start, end + 1);
+            // Regex to find the first JSON array in the response string.
+            // It handles cases where there might be text before or after the array.
+            const jsonMatch = responseText.match(/(\[[\s\S]*\])/);
+
+            if (!jsonMatch) {
+                throw new Error("AI response did not contain a valid JSON array structure.");
+            }
+            
+            const jsonString = jsonMatch[0];
+            const data = JSON.parse(jsonString);
+            
+            if (Array.isArray(data) && data.length >= 6) {
+                // Sanitize content to prevent HTML injection
+                const sanitizedData = data.map(item => ({
+                    term: item.term ? String(item.term).replace(/<[^>]*>/g, '') : 'Error',
+                    def: item.def ? String(item.def).replace(/<[^>]*>/g, '') : 'Error'
+                }));
+                return sanitizedData.slice(0, 6);
             }
 
-            const data = JSON.parse(cleanJson);
-            if (Array.isArray(data) && data.length >= 3) return data.slice(0, 6);
-            throw new Error("Invalid AI response");
-
+            throw new Error("Parsed JSON is not a valid array of concepts.");
         } catch (e) {
-            console.error("AI Error, using fallback", e);
-            return [
-                {term: "Error", def: "AI Generation Failed"},
-                {term: "Retry", def: "Reload the game"},
-                {term: "Arbor", def: "Knowledge Tree"},
-                {term: "Game", def: "Memory Cards"},
-                {term: "Code", def: "JavaScript"},
-                {term: "Style", def: "Tailwind CSS"}
-            ];
+            console.error("AI Error in generatePairs:", e.message);
+            console.error("Raw AI response that caused error:", responseText);
+            return null;
         }
     },
 
@@ -140,18 +211,20 @@ const App = {
             <div class="card w-full h-24 md:h-32" onclick="App.flip(${idx})">
                 <div class="card-inner" id="card-${idx}">
                     <div class="card-front">🌿</div>
-                    <div class="card-back p-2 leading-tight flex items-center justify-center h-full w-full text-xs md:text-sm select-none">${c.content}</div>
+                    <div class="card-back select-none">
+                        <span class="${c.type==='term' ? 'text-green-700 text-lg' : 'text-slate-600'}">
+                            ${c.content}
+                        </span>
+                    </div>
                 </div>
             </div>
         `).join('');
     },
 
     flip: (idx) => {
-        if(App.state.locked) return;
-        if(App.state.flipped.includes(idx) || App.state.matched.includes(idx)) return;
+        if(App.state.locked || App.state.flipped.includes(idx) || App.state.matched.includes(idx)) return;
         
-        const cardEl = document.getElementById(`card-${idx}`);
-        cardEl.parentElement.classList.add('flipped');
+        document.getElementById(`card-${idx}`).parentElement.classList.add('flipped');
         App.state.flipped.push(idx);
         
         if(App.state.flipped.length === 2) {
@@ -168,7 +241,6 @@ const App = {
         const c2 = App.state.cards[idx2];
         
         if(c1.matchId === c2.matchId) {
-            // Match
             App.state.matched.push(idx1, idx2);
             App.state.flipped = [];
             App.state.locked = false;
@@ -176,17 +248,17 @@ const App = {
             document.getElementById(`card-${idx1}`).parentElement.classList.add('matched');
             document.getElementById(`card-${idx2}`).parentElement.classList.add('matched');
             
-            // BRIDGE: Send XP to Arbor
             if (window.Arbor.game) window.Arbor.game.addXP(10);
             
             document.getElementById('pairs').innerText = `${App.state.matched.length / 2}/6`;
             
             if(App.state.matched.length === App.state.cards.length) {
-                if (window.Arbor.game) window.Arbor.game.addXP(50); // Completion Bonus
-                setTimeout(() => alert("Garden Grown! 🌻"), 500);
+                if (window.Arbor.game) window.Arbor.game.addXP(50);
+                setTimeout(() => {
+                    document.getElementById('win-screen').classList.remove('hidden-fade');
+                }, 800);
             }
         } else {
-            // Fail
             setTimeout(() => {
                 document.getElementById(`card-${idx1}`).parentElement.classList.remove('flipped');
                 document.getElementById(`card-${idx2}`).parentElement.classList.remove('flipped');
@@ -194,51 +266,23 @@ const App = {
                 App.state.locked = false;
             }, 1000);
         }
-    }
-};
-
-// --- CONTENT HELPER ---
-const ContentHelper = {
-    async fetchContent() {
-        const params = window.Arbor.params || {};
-        // Default source if testing manually, otherwise use injected param
-        const sourceBase = params.source ? this.cleanUrl(params.source) : 'https://raw.githubusercontent.com/treesys-org/arbor-knowledge/main/data';
-        const modulePath = params.module || 'en/01-computing'; // Fallback
-
-        try {
-            // Logic to find a leaf node text
-            // 1. Try to get node info
-            const safePath = modulePath.replace(/^\//, '');
-            const nodeRes = await fetch(`${sourceBase}/nodes/${safePath}.json`);
-            if (!nodeRes.ok) throw new Error("Node not found");
-            
-            const nodes = await nodeRes.json();
-            const leaf = nodes.find(n => n.type === 'leaf');
-            
-            if (leaf) {
-                const contentRes = await fetch(`${sourceBase}/content/${leaf.contentPath}`);
-                const contentData = await contentRes.json();
-                return { 
-                    title: leaf.name, 
-                    text: contentData.content.replace(/<[^>]*>?/gm, '') 
-                };
-            }
-            throw new Error("No leaves found");
-        } catch (e) {
-            console.warn(e);
-            return { title: "Demo Mode", text: "HTML CSS JavaScript Web Internet Browser Code Data API Network Server Client" };
-        }
     },
-    
-    cleanUrl(url) {
-        if (url.endsWith('data.json')) return url.substring(0, url.lastIndexOf('/'));
-        if (url.endsWith('/data')) return url.substring(0, url.lastIndexOf('/'));
-        return url;
+
+    fetchContent: async () => {
+        if (window.Arbor && window.Arbor.content) {
+            try {
+                const lesson = await window.Arbor.content.getNext();
+                if (lesson) return { title: lesson.title, text: lesson.text };
+            } catch (e) { console.warn("Arbor Bridge Error:", e); }
+        }
+        return null;
     }
 };
 
-// Auto-start
-window.onload = App.init;
+window.onload = () => {
+    document.getElementById('start-button').addEventListener('click', App.init);
+    document.getElementById('play-again-button').addEventListener('click', App.init);
+};
 
 </script>
 </body>

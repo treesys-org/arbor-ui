@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arbor Classroom</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+    <style>
+        body { background-color: #202020; color: white; font-family: 'VT323', monospace; overflow: hidden; user-select: none; }
+        .game-container { position: relative; width: 1024px; height: 768px; margin: 20px auto; background-color: #353535; box-shadow: 0 0 20px rgba(0,0,0,0.5); border: 4px solid #555; image-rendering: pixelated; }
+        canvas { display: block; width: 100%; height: 100%; }
+        
+        .pixel-panel { background: #fff; border: 4px solid #000; box-shadow: 4px 4px 0px #000; color: #000; font-family: 'VT323', monospace; font-size: 1.5rem; line-height: 1.2; }
+        .dialogue-box { position: absolute; bottom: 20px; left: 20px; right: 20px; height: 180px; padding: 20px; display: none; z-index: 10; }
+        .dialogue-name { position: absolute; top: -20px; left: 20px; background: #000; color: #fff; padding: 5px 15px; font-family: 'Press Start 2P', cursive; font-size: 0.8rem; border: 2px solid #fff; }
+        #input-area { position: absolute; bottom: 25px; left: 30px; right: 30px; display: none; gap: 10px; z-index: 20; }
+        input[type="text"] { flex: 1; background: #000; color: #0f0; border: 2px solid #fff; padding: 10px; font-family: 'VT323', monospace; font-size: 1.5rem; outline: none; }
+        
+        #scoreboard { position: absolute; top: 20px; left: 20px; width: 180px; background: rgba(0,0,0,0.8); border: 2px solid #fff; padding: 10px; z-index: 5; font-size: 1.2rem; }
+        .score-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
+        .active-turn { color: #ffff00; text-shadow: 0 0 5px #ffff00; font-weight: bold; }
+
+        #thinking-indicator { display: none; }
+        #thinking-indicator .dot { animation: blink 1.4s infinite both; }
+        #thinking-indicator .dot:nth-child(2) { animation-delay: .2s; }
+        #thinking-indicator .dot:nth-child(3) { animation-delay: .4s; }
+        @keyframes blink { 0%, 80%, 100% { opacity: 0; } 40% { opacity: 1; } }
+
+        #start-menu { font-family: 'Press Start 2P', cursive; }
+    </style>
+</head>
+<body>
+    
+    <div id="start-menu" class="absolute inset-0 bg-[#202020] z-50 flex flex-col items-center justify-center p-8 text-center">
+        <h1 class="text-6xl text-white mb-4">Arbor Classroom</h1>
+        <p class="text-2xl text-slate-400 mb-12" style="font-family: 'VT323', monospace;">Answer the teacher's questions to prove your knowledge!</p>
+        <button id="start-button" class="px-8 py-4 bg-green-600 text-white text-3xl border-4 border-white" style="box-shadow: 8px 8px 0px #000;">START</button>
+    </div>
+
+    <div id="game-container" class="game-container hidden">
+        <canvas id="world"></canvas>
+        
+        <div id="scoreboard">
+            <div class="text-center border-b border-white mb-2 pb-1 font-bold text-yellow-400">CLASS RANK</div>
+            <div id="scores-list"></div>
+        </div>
+
+        <div id="dialogue-box" class="dialogue-box pixel-panel">
+            <div id="dialogue-name" class="dialogue-name">SISTEMA</div>
+            <div id="dialogue-text">
+                <span id="dialogue-text-span"></span>
+                <div id="thinking-indicator">
+                    <span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>
+                </div>
+            </div>
+            <div id="dialogue-hint" class="absolute bottom-2 right-4 text-xs text-gray-400 animate-pulse hidden">▼ SPACE</div>
+        </div>
+        
+        <div id="input-area">
+            <input type="text" id="player-input" placeholder="Tu respuesta..." autocomplete="off">
+            <button onclick="Game.submitPlayerAnswer()" class="bg-green-600 text-white px-6 border-2 border-white font-bold hover:bg-green-500">RESPONDER</button>
+        </div>
+    </div>
+
+<script>
+/**
+ * ARBOR CLASSROOM - TURN BASED
+ */
+
+const Game = {
+    canvas: null, ctx: null, state: 'INIT',
+    resolveWaitForInput: null,
+    
+    actors: {
+        prof: { x: 850, y: 220, frame: 0 },
+        students: [
+            { id: 'lola', name: 'Lola', x: 250, y: 450, color: '#e11d48', isPlayer: false, score: 0, accuracy: 0.9 },
+            { id: 'timmy', name: 'Timmy', x: 512, y: 450, color: '#2563eb', isPlayer: false, score: 0, accuracy: 0.6 },
+            { id: 'player', name: 'YOU', x: 774, y: 450, color: '#16a34a', isPlayer: true, score: 0 }
+        ],
+    },
+    
+    lesson: {
+        text: "",
+        concepts: [],
+        blackboard: {
+            lines: [],
+            revealedChars: 0,
+            isWriting: false,
+        }
+    },
+    
+    turn: {
+        conceptIndex: 0,
+        studentIndex: 0,
+    },
+
+    canAdvance: false,
+    typeInterval: null,
+    blackboardInterval: null,
+
+    init: async function() {
+        this.canvas = document.getElementById('world');
+        this.canvas.width = 1024; this.canvas.height = 768;
+        this.ctx = this.canvas.getContext('2d');
+        
+        const player = this.actors.students.find(s => s.isPlayer);
+        if (window.Arbor && window.Arbor.user && window.Arbor.user.username) {
+            player.name = window.Arbor.user.username.toUpperCase().substring(0, 10);
+        }
+        this.loadScores();
+        this.startRenderLoop();
+        await this.loadLevel();
+    },
+
+    async loadLevel() {
+        this.uiShowDialog("SISTEMA", "Downloading lesson from Arbor...");
+        
+        let rawText = "Welcome to the test class. Knowledge is power.";
+        if (window.Arbor && window.Arbor.content) {
+            try {
+                const lessonData = await window.Arbor.content.getNext();
+                if (lessonData) rawText = lessonData.text;
+            } catch(e) { rawText = "Error loading content: " + e.message; }
+        }
+        this.lesson.text = rawText;
+
+        this.uiShowDialog("PROFESSOR", "Preparing today's class...");
+        
+        const prompt = `
+        Text: "${this.lesson.text.substring(0, 2000)}".
+        Task: Extract 3 KEY distinct concepts.
+        For each, create a SPECIFIC question and a brief answer key.
+        JSON: {
+            "intro": "Summarize the class in 10 words.",
+            "concepts": [
+                { "topic": "Concept 1", "question": "Specific question about Concept 1", "key": "Brief correct answer" },
+                { "topic": "Concept 2", "question": "Specific question about Concept 2", "key": "Brief correct answer" },
+                { "topic": "Concept 3", "question": "Specific question about Concept 3", "key": "Brief correct answer" }
+            ]
+        }`;
+
+        try {
+            this.uiShowThinking("PROFESSOR");
+            const res = await window.Arbor.ai.chat([{role:"user", content: prompt}]);
+            const json = this.parseJSON(res);
+            
+            this.lesson.concepts = (json?.concepts?.length >= 3) ? json.concepts.slice(0, 3) : [
+                { topic: "General", question: "What is the text about?", key: "The main topic" },
+                { topic: "Detail", question: "Mention a detail.", key: "Any valid detail" },
+                { topic: "Conclusion", question: "What is the conclusion?", key: "The ending" }
+            ];
+            // Add result state to each concept
+            this.lesson.concepts.forEach(c => c.result = 'pending');
+
+            this.animateBlackboardWriting();
+            this.uiShowDialog("PROFESSOR", json?.intro || "Let's begin.", false);
+            this.state = 'WAIT_INTRO';
+            
+        } catch(e) {
+            this.uiShowDialog("SYSTEM", "AI Error: " + e.message, false);
+        }
+    },
+    
+    async nextLesson() {
+        this.uiShowDialog("PROFESSOR", "Class is over! Preparing the next lesson...");
+        this.turn = { conceptIndex: 0, studentIndex: 0 };
+        this.lesson.concepts = [];
+        this.lesson.blackboard.lines = [];
+        this.lesson.blackboard.revealedChars = 0;
+        await this.wait(2000);
+        await this.loadLevel();
+    },
+
+    async startTurn() {
+        if (this.turn.studentIndex >= this.actors.students.length) {
+            await this.nextLesson();
+            return;
+        }
+
+        const student = this.actors.students[this.turn.studentIndex];
+        const concept = this.lesson.concepts[this.turn.studentIndex];
+        
+        this.updateScoreboard();
+
+        this.state = 'ASKING';
+        this.uiShowDialog("PROFESSOR", `${student.name}, ${concept.question}`, false);
+        await this.waitForInput();
+
+        if (!student.isPlayer) {
+            this.state = 'NPC_THINKING';
+            this.uiShowThinking(student.name);
+            
+            const shouldFail = Math.random() > student.accuracy;
+            const contextPrompt = `
+            Question: "${concept.question}". 
+            Correct Answer Key: "${concept.key}".
+            Role: A student giving a ${shouldFail ? "confused/wrong" : "correct"} answer.
+            Task: Generate a very short answer (max 8 words). Do not use HTML tags.`;
+            
+            let ansText = (await window.Arbor.ai.chat([{role:"user", content:contextPrompt}]));
+            ansText = ansText.replace(/"/g, '').replace(/<[^>]*>/g, '');
+            
+            this.uiShowDialog(student.name, ansText, false);
+            await this.waitForInput();
+            
+            this.evaluate(student, concept, !shouldFail);
+
+        } else {
+            this.state = 'PLAYER_INPUT';
+            document.getElementById('input-area').style.display = 'flex';
+            document.getElementById('player-input').focus();
+            this.uiShowDialog(student.name, "(It's my turn...)", false);
+        }
+    },
+
+    async submitPlayerAnswer() {
+        const input = document.getElementById('player-input');
+        const ans = input.value.trim();
+        if (!ans || this.state !== 'PLAYER_INPUT') return;
+        
+        input.value = '';
+        document.getElementById('input-area').style.display = 'none';
+        
+        const student = this.actors.students[this.turn.studentIndex];
+        const concept = this.lesson.concepts[this.turn.studentIndex];
+        
+        this.uiShowThinking("PROFESSOR");
+        
+        const prompt = `
+        Question: "${concept.question}".
+        Student's Answer: "${ans}".
+        Correct Answer Key: "${concept.key}".
+        Text Context: "${this.lesson.text.substring(0, 500)}".
+        Task: Evaluate if the student's answer is correct. Be lenient.
+        JSON: {"correct": true/false, "feedback": "very brief feedback for the student"}
+        `;
+        
+        const res = await window.Arbor.ai.chat([{role:"user", content:prompt}]);
+        const json = this.parseJSON(res);
+        this.evaluate(student, concept, json?.correct || false, json?.feedback);
+    },
+
+    async evaluate(student, concept, isCorrect, aiFeedback = null) {
+        let feedback = aiFeedback || (isCorrect ? "Correct!" : "Incorrect.");
+        
+        concept.result = isCorrect ? 'correct' : 'wrong';
+
+        this.uiShowDialog("PROFESSOR", feedback, false);
+        
+        if (isCorrect) {
+            student.score++;
+            if (student.isPlayer && window.Arbor.game) window.Arbor.game.addXP(20);
+        }
+        
+        this.saveScores();
+        this.updateScoreboard();
+        await this.waitForInput();
+        
+        this.turn.studentIndex++;
+        this.startTurn();
+    },
+
+    // --- RENDER & UI ---
+    startRenderLoop() { const loop = () => { this.draw(); requestAnimationFrame(loop); }; loop(); },
+
+    draw() {
+        const ctx = this.ctx; const w = 1024; const h = 768;
+        
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = '#5d4037'; ctx.fillRect(0, 300, w, h-300);
+        ctx.fillStyle = '#d4d4d4'; ctx.fillRect(0, 0, w, 300);
+        
+        ctx.fillStyle = '#2e3b28'; ctx.fillRect(200, 20, 624, 200);
+        ctx.strokeStyle = '#8d6e63'; ctx.lineWidth = 8; ctx.strokeRect(200, 20, 624, 200);
+        
+        ctx.font = '20px VT323';
+        if (this.lesson.blackboard.lines.length > 0) {
+            let charsDrawn = 0;
+            for(let i = 0; i < this.lesson.blackboard.lines.length; i++) {
+                const line = this.lesson.blackboard.lines[i];
+                const charsToShow = Math.max(0, this.lesson.blackboard.revealedChars - charsDrawn);
+                const isTopicLine = i > 0;
+                
+                // Draw line text
+                ctx.fillStyle = 'rgba(255,255,255,0.8)';
+                ctx.fillText(line.substring(0, charsToShow), 220, 60 + (i * 40));
+                charsDrawn += line.length;
+
+                // Draw result mark if it's a topic and has a result
+                if (isTopicLine) {
+                    const concept = this.lesson.concepts[i-1];
+                    if (concept && concept.result !== 'pending') {
+                        const mark = concept.result === 'correct' ? '✓' : '✗';
+                        ctx.fillStyle = concept.result === 'correct' ? '#4ade80' : '#f87171';
+                        ctx.font = 'bold 24px VT323';
+                        ctx.fillText(mark, 200, 60 + (i * 40));
+                        ctx.font = '20px VT323'; // Reset font
+                    }
+                }
+            }
+        } else {
+            ctx.fillStyle = 'rgba(255,255,255,0.8)';
+            ctx.fillText("Loading class...", 450, 120);
+        }
+
+        const drawCharacter = (char, x, y, color) => {
+            ctx.fillStyle = color; ctx.fillRect(x - 25, y - 50, 50, 60); // Body
+            ctx.fillStyle = '#ffccaa'; ctx.fillRect(x - 20, y - 85, 40, 40); // Head
+            ctx.fillStyle = '#000'; // Eyes
+            ctx.fillRect(x - 10, y - 75, 5, 5); ctx.fillRect(x + 5, y - 75, 5, 5);
+        };
+
+        drawCharacter(null, this.actors.prof.x, this.actors.prof.y, '#1e293b');
+
+        this.actors.students.forEach((s, i) => {
+            ctx.fillStyle = '#8d6e63'; ctx.fillRect(s.x - 60, s.y, 120, 80); // Desk
+            drawCharacter(s, s.x, s.y, s.color);
+            if (i === this.turn.studentIndex && this.state !== 'INIT' && this.state !== 'WAIT_INTRO') {
+                ctx.fillStyle = 'yellow'; ctx.beginPath(); ctx.moveTo(s.x, s.y - 110); ctx.lineTo(s.x - 10, s.y - 125); ctx.lineTo(s.x + 10, s.y - 125); ctx.fill();
+            }
+        });
+    },
+
+    animateBlackboardWriting() {
+        this.lesson.blackboard.lines = ["CLASS TOPICS:", ...this.lesson.concepts.map(c => `- ${c.topic}`)];
+        this.lesson.blackboard.revealedChars = 0;
+        const totalChars = this.lesson.blackboard.lines.join('').length;
+        if (this.blackboardInterval) clearInterval(this.blackboardInterval);
+        
+        this.blackboardInterval = setInterval(() => {
+            this.lesson.blackboard.revealedChars++;
+            if (this.lesson.blackboard.revealedChars >= totalChars) {
+                clearInterval(this.blackboardInterval);
+            }
+        }, 50);
+    },
+
+    updateScoreboard() {
+        document.getElementById('scores-list').innerHTML = this.actors.students.map((s, i) => `
+            <div class="score-row ${i === this.turn.studentIndex ? 'active-turn' : ''}">
+                <span>${s.name}</span>
+                <span>${s.score} ★</span>
+            </div>
+        `).join('');
+    },
+
+    uiShowDialog(name, text, isThinking = false) {
+        clearInterval(this.typeInterval);
+        this.canAdvance = false;
+        
+        const box = document.getElementById('dialogue-box');
+        const txtSpan = document.getElementById('dialogue-text-span');
+        const hint = document.getElementById('dialogue-hint');
+        const think = document.getElementById('thinking-indicator');
+        
+        box.style.display = 'block';
+        document.getElementById('dialogue-name').innerText = name;
+        
+        hint.style.display = 'none';
+        txtSpan.textContent = '';
+        think.style.display = isThinking ? 'block' : 'none';
+
+        if(isThinking) return;
+
+        let i = 0;
+        this.typeInterval = setInterval(() => {
+            if (i < text.length) {
+                txtSpan.textContent += text.charAt(i);
+                i++;
+            } else {
+                clearInterval(this.typeInterval);
+                this.canAdvance = true;
+                hint.style.display = 'block';
+            }
+        }, 30);
+    },
+
+    uiShowThinking(name) { this.uiShowDialog(name, '', true); },
+    
+    waitForInput: function() {
+        return new Promise(resolve => {
+            this.resolveWaitForInput = resolve;
+        });
+    },
+
+    loadScores() {
+        try {
+            const saved = localStorage.getItem('arbor-classroom-scores');
+            if (saved) {
+                const scores = JSON.parse(saved);
+                this.actors.students.forEach(s => {
+                    if (scores[s.id]) s.score = scores[s.id];
+                });
+            }
+        } catch(e) { console.error("Could not load scores", e); }
+    },
+    saveScores() {
+        const scores = {};
+        this.actors.students.forEach(s => { scores[s.id] = s.score; });
+        localStorage.setItem('arbor-classroom-scores', JSON.stringify(scores));
+    },
+
+    wait(ms) { return new Promise(r => setTimeout(r, ms)); },
+    parseJSON(str) { try { return JSON.parse(str.substring(str.indexOf('{'), str.lastIndexOf('}')+1)); } catch(e){return null;} }
+};
+
+window.onload = () => {
+    document.getElementById('start-button').addEventListener('click', () => {
+        document.getElementById('start-menu').style.display = 'none';
+        document.getElementById('game-container').classList.remove('hidden');
+        Game.init();
+    });
+
+    window.addEventListener('keydown', async (e) => {
+        if (e.code === 'Enter' && Game.state === 'PLAYER_INPUT') {
+            Game.submitPlayerAnswer();
+            return;
+        }
+    
+        if (e.code === 'Space' && Game.canAdvance) {
+            e.preventDefault();
+            Game.canAdvance = false;
+            document.getElementById('dialogue-hint').style.display = 'none';
+    
+            if (Game.state === 'WAIT_INTRO') {
+                Game.state = 'GAMEPLAY';
+                Game.startTurn();
+            } else {
+                if (Game.resolveWaitForInput) {
+                    const resolver = Game.resolveWaitForInput;
+                    Game.resolveWaitForInput = null;
+                    resolver();
+                }
+            }
+        }
+    });
+
+};
+</script>
+</body>
+</html>
