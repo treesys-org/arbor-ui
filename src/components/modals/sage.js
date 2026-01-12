@@ -413,6 +413,13 @@ class ArborSage extends HTMLElement {
                      ${getMessagesHTML()}
                 </div>
                 
+                <!-- Puter Badge -->
+                ${!isOllama ? `
+                <div class="px-4 py-1 text-center bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0">
+                    <p class="text-[9px] text-slate-400 uppercase font-bold tracking-widest opacity-60">Powered by Puter.com</p>
+                </div>
+                ` : ''}
+
                 <div class="px-3 py-2 flex gap-2 overflow-x-auto custom-scrollbar bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0">
                     <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-100 dark:border-blue-800" data-action="summarize">📝 ${ui.sageBtnSummarize}</button>
                     <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-100 dark:border-blue-800" data-action="explain">🎓 ${ui.sageBtnExplain}</button>

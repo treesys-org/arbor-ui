@@ -219,7 +219,7 @@ class HybridAIService {
 
                 const data = await response.json();
                 const footer = "<br><br><span class='text-[10px] text-orange-600 dark:text-orange-400 font-bold opacity-75'>⚡ Local Intelligence (Ollama)</span>";
-                return { raw: data, text: data.message.content + footer };
+                return { text: data.message.content + footer };
 
             } catch (e) {
                 this.currentController = null;
@@ -241,12 +241,19 @@ class HybridAIService {
             ];
 
             const response = await window.puter.ai.chat(messagesFormat);
+            const txt = response?.message?.content || response.toString();
             
-            return { raw: response, text: response?.message?.content || response.toString() };
+            // Interactive Footer for Cloud
+            const footer = `<br><br><div class='pt-2 mt-1 border-t border-slate-200 dark:border-slate-700/50 flex items-center justify-between text-[10px] text-slate-400'>
+                <span class='font-bold opacity-75'>Powered by Puter.com</span>
+                <button class='btn-sage-privacy hover:text-blue-500 hover:underline transition-colors'>Disclaimer</button>
+            </div>`;
+            
+            return { text: txt + footer };
 
         } catch (e) {
             console.error("Puter Error:", e);
-            return { text: "🦉 Error Puter Cloud: " + (e.message || "Connection failed"), raw: null };
+            return { text: "🦉 Error Puter Cloud: " + (e.message || "Connection failed") };
         }
     }
 }

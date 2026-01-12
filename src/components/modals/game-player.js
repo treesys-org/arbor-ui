@@ -1,4 +1,3 @@
-
 import { store } from '../../store.js';
 import { aiService } from '../../services/ai.js';
 
@@ -107,15 +106,18 @@ class ArborModalGamePlayer extends HTMLElement {
         const gameId = store.value.modal.url; // Use URL as a unique ID for data sandboxing
         
         window.__ARBOR_GAME_BRIDGE__ = {
-            chat: async (messages) => {
-                try {
-                    const response = await aiService.chat(messages, null); 
-                    // The bridge should pass the raw response for flexibility
-                    return { success: true, data: response.raw };
-                } catch (e) {
-                    console.error("Arbor Bridge AI Error:", e);
-                    return { success: false, error: e.message };
-                }
+            chat: (messages) => {
+                return new Promise((resolve) => {
+                    setTimeout(async () => {
+                        try {
+                            const response = await aiService.chat(messages, null);
+                            resolve({ success: true, text: response.text });
+                        } catch (e) {
+                            console.error("Arbor Bridge AI Error:", e);
+                            resolve({ success: false, error: e.message });
+                        }
+                    }, 0);
+                });
             },
             addXP: (amount) => {
                 store.userStore.addXP(amount, true); // Use userStore directly
@@ -175,37 +177,6 @@ class ArborModalGamePlayer extends HTMLElement {
                     return;
                 }
                 
-                // NEW: Create a proxied window.puter object
-                window.puter = {
-                    ai: {
-                        chat: async (messages) => {
-                            const result = await bridge.chat(messages);
-                            if (result.success) {
-                                return result.data; // This is the raw Puter response object
-                            } else {
-                                throw new Error(result.error);
-                            }
-                        }
-                    },
-                    kv: {
-                        set: (key, value) => bridge.save(key, value),
-                        get: (key) => bridge.load(key)
-                    },
-                    auth: {
-                        // Games might need user info, but let's not expose the full user object.
-                        // We can provide a getter for the display name.
-                        getUser: async () => {
-                            return {
-                                success: true,
-                                user: {
-                                    username: '${store.value.gamification.username || 'player'}'
-                                }
-                            };
-                        }
-                    }
-                };
-
-                // The existing Arbor SDK is still useful for Arbor-specific content fetching
                 window.Arbor = {
                     user: {
                         username: '${store.value.gamification.username || 'Student'}',
@@ -213,10 +184,10 @@ class ArborModalGamePlayer extends HTMLElement {
                         lang: '${store.value.lang || 'EN'}'
                     },
                     ai: {
-                        // For backward compatibility, this can return just the text
                         chat: async (messages) => {
-                            const response = await window.puter.ai.chat(messages);
-                            return response?.message?.content || response.toString();
+                            const result = await bridge.chat(messages);
+                            if (result.success) return result.text;
+                            throw new Error(result.error);
                         }
                     },
                     game: {
@@ -228,11 +199,12 @@ class ArborModalGamePlayer extends HTMLElement {
                         getNext: () => bridge.getNextLesson(),
                         getAt: (idx) => bridge.getLessonAt(idx)
                     },
-                    // The Arbor storage API can be a wrapper around the proxied puter.kv
-                    storage: window.puter.kv
+                    storage: {
+                        save: (key, value) => bridge.save(key, value),
+                        load: (key) => bridge.load(key)
+                    }
                 };
-
-                console.log("Arbor SDK & Puter Proxy Injected & Ready", window.Arbor, window.puter);
+                console.log("Arbor SDK Injected & Ready", window.Arbor);
             })();
         <\/script>
         `;
