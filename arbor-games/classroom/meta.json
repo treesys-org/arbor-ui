@@ -1,0 +1,7 @@
+{
+  "name": "Classroom Simulator",
+  "description": "Simulador de aula RPG. Interactúa con el profesor y alumnos usando IA local.",
+  "icon": "👨‍🏫",
+  "version": "1.0.0",
+  "author": "Arbor Official"
+}

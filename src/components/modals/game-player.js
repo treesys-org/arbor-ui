@@ -4,22 +4,21 @@ import { aiService } from '../../services/ai.js';
 class ArborModalGamePlayer extends HTMLElement {
     constructor() {
         super();
-        // State for part-by-part iterator
         this.cursorIndex = 0;
         this.activeNodeId = null;
         this.playlist = []; 
         this.isPreparing = true;
         this.error = null;
+        this.scriptCache = new Map();
     }
 
     async connectedCallback() {
-        this.render(); // Render loader state immediately
-        
+        this.render();
         try {
             await this.prepareCurriculum();
             this.setupBridge();
             this.isPreparing = false;
-            this.render(); // Re-render to show iframe container
+            this.render();
             this.loadGame();
         } catch (e) {
             console.error("Failed to prepare game context", e);
@@ -30,12 +29,12 @@ class ArborModalGamePlayer extends HTMLElement {
     }
 
     disconnectedCallback() {
-        // Clean up the global bridge when the component is removed
         delete window.__ARBOR_GAME_BRIDGE__;
+        this.scriptCache.forEach(url => URL.revokeObjectURL(url));
+        this.scriptCache.clear();
     }
 
     close() {
-        // Return to the arcade, not the main map
         store.setModal('arcade'); 
     }
 
@@ -49,7 +48,6 @@ class ArborModalGamePlayer extends HTMLElement {
         if (!rootNode) throw new Error("Could not find the selected module in memory.");
 
         this.playlist = [];
-
         const collectLeaves = async (node) => {
             if (node.type === 'leaf') {
                 this.playlist.push(node);
@@ -58,24 +56,15 @@ class ArborModalGamePlayer extends HTMLElement {
             if (node.type === 'exam') return;
 
             if (node.type === 'branch' || node.type === 'root') {
-                if (node.hasUnloadedChildren) {
-                    await store.loadNodeChildren(node);
-                }
-                
-                if (node.children && node.children.length > 0) {
-                    // Use a standard for-loop for sequential awaiting
-                    for (const child of node.children) {
-                        await collectLeaves(child);
-                    }
+                if (node.hasUnloadedChildren) await store.loadNodeChildren(node);
+                if (node.children) {
+                    for (const child of node.children) await collectLeaves(child);
                 }
             }
         };
 
         await collectLeaves(rootNode);
-        
         this.cursorIndex = 0;
-        console.log(`[Arbor Game Bridge] Prepared ${this.playlist.length} items from node: ${rootNode.name}`);
-        
         if (this.playlist.length === 0) {
             throw new Error("This module contains no playable lessons (Exams are excluded). Please select a different module.");
         }
@@ -83,63 +72,68 @@ class ArborModalGamePlayer extends HTMLElement {
 
     async fetchLessonContent(node) {
         if (!node) return null;
-        if (!node.content && node.contentPath) {
-            await store.loadNodeContent(node);
-        }
+        if (!node.content && node.contentPath) await store.loadNodeContent(node);
         const raw = node.content || "";
-        // Clean HTML tags and metadata lines
-        const clean = raw
-            .replace(/<[^>]*>?/gm, '')
-            .replace(/@\w+:.*?\n/g, '')
-            .replace(/\s+/g, ' ')
-            .trim(); 
-
-        return { 
-            id: node.id,
-            title: node.name,
-            text: clean,
-            raw: raw // Keep raw for games that might want to parse it differently
-        };
+        const clean = raw.replace(/<[^>]*>?/gm, '').replace(/@\w+:.*?\n/g, '').replace(/\s+/g, ' ').trim(); 
+        return { id: node.id, title: node.name, text: clean, raw: raw };
     }
 
     setupBridge() {
-        const gameId = store.value.modal.url; // Use URL as a unique ID for data sandboxing
-        
+        const gameId = store.value.modal.url;
         window.__ARBOR_GAME_BRIDGE__ = {
-            // AI chat is now handled directly inside the iframe via its own Puter.js instance.
-            addXP: (amount) => {
-                store.userStore.addXP(amount, true); // Use userStore directly
-                return true;
-            },
-            getCurriculum: () => {
-                return this.playlist.map(l => ({ id: l.id, title: l.name }));
-            },
+            addXP: (amount) => store.userStore.addXP(amount, true),
+            getCurriculum: () => this.playlist.map(l => ({ id: l.id, title: l.name })),
             getNextLesson: async () => {
                 if (this.playlist.length === 0) return null;
-                if (this.cursorIndex >= this.playlist.length) {
-                    this.cursorIndex = 0; // Loop for endless play
-                }
-                const node = this.playlist[this.cursorIndex];
-                this.cursorIndex++;
+                if (this.cursorIndex >= this.playlist.length) this.cursorIndex = 0;
+                const node = this.playlist[this.cursorIndex++];
                 return await this.fetchLessonContent(node);
             },
             getLessonAt: async (index) => {
                 if (index < 0 || index >= this.playlist.length) return null;
                 return await this.fetchLessonContent(this.playlist[index]);
             },
-            // NEW: Generic Storage API
-            save: (key, value) => {
-                store.userStore.saveGameData(gameId, key, value);
-                return true;
-            },
-            load: (key) => {
-                return store.userStore.loadGameData(gameId, key);
-            },
-            close: () => {
-                this.close();
-            }
+            save: (key, value) => store.userStore.saveGameData(gameId, key, value),
+            load: (key) => store.userStore.loadGameData(gameId, key),
+            close: () => this.close()
         };
     }
+    
+    async resolveScript(url) {
+        if (this.scriptCache.has(url)) return this.scriptCache.get(url);
+
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Failed to fetch script: ${url}`);
+        let scriptContent = await response.text();
+
+        const importRegex = /(import\s+.*?\s+from\s+)(['"])(.+?)\2/g;
+        const promises = [];
+        
+        const matches = [...scriptContent.matchAll(importRegex)];
+
+        for(const match of matches) {
+            const pre = match[1];
+            const quote = match[2];
+            const path = match[3];
+
+            if (path.startsWith('./') || path.startsWith('../')) {
+                const nestedUrl = new URL(path, url).href;
+                promises.push(
+                    this.resolveScript(nestedUrl).then(blobUrl => {
+                        scriptContent = scriptContent.replace(match[0], `${pre}${quote}${blobUrl}${quote}`);
+                    })
+                );
+            }
+        }
+        
+        await Promise.all(promises);
+
+        const blob = new Blob([scriptContent], { type: 'application/javascript' });
+        const blobUrl = URL.createObjectURL(blob);
+        this.scriptCache.set(url, blobUrl);
+        return blobUrl;
+    }
+
 
     async loadGame() {
         const { url } = store.value.modal || {};
@@ -148,109 +142,80 @@ class ArborModalGamePlayer extends HTMLElement {
         const iframe = this.querySelector('iframe');
         if (!iframe) return;
 
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`Could not load game from ${url} (Status: ${response.status})`);
-        let html = await response.text();
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`Could not load game from ${url} (Status: ${response.status})`);
+            let html = await response.text();
+            const baseHref = url.substring(0, url.lastIndexOf('/') + 1);
 
-        // --- NEW: INLINE MODULE SCRIPTS TO FIX MIME TYPE ERROR ---
-        const moduleScriptRegex = /<script\s+([^>]*type="module"[^>]*)src="([^"]+)"([^>]*)><\/script>/gi;
-        const moduleMatches = [...html.matchAll(moduleScriptRegex)];
-        const baseHref = url.substring(0, url.lastIndexOf('/') + 1);
+            this.scriptCache.clear();
 
-        for (const match of moduleMatches) {
-            const originalTag = match[0];
-            const scriptSrc = match[2];
-            const scriptUrl = new URL(scriptSrc, baseHref).href;
-            
-            try {
-                const scriptResponse = await fetch(scriptUrl);
-                if (scriptResponse.ok) {
-                    const scriptContent = await scriptResponse.text();
-                    // Reconstruct script tag without src, but keeping other attributes
-                    const otherAttributes = `${match[1]} ${match[3]}`.replace(/src="[^"]+"/, '').trim();
-                    const inlineScriptTag = `<script ${otherAttributes}>\n//<![CDATA[\n${scriptContent}\n//]]>\n</script>`;
-                    html = html.replace(originalTag, inlineScriptTag);
-                } else {
-                    console.warn(`[Arbor Game Loader] Failed to fetch module script: ${scriptUrl}`);
-                }
-            } catch (e) {
-                console.error(`[Arbor Game Loader] Error inlining module script ${scriptUrl}:`, e);
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+
+            const scripts = doc.querySelectorAll('script[type="module"][src]');
+            for (const script of scripts) {
+                const src = script.getAttribute('src');
+                const scriptUrl = new URL(src, baseHref).href;
+                const blobUrl = await this.resolveScript(scriptUrl);
+                script.setAttribute('src', blobUrl);
             }
-        }
-        // --- END OF NEW LOGIC ---
 
-        // Inject a <base> tag to fix relative asset paths (CSS, images, etc.)
-        const baseTag = `<base href="${baseHref}">`;
-        // Inject Puter.js script directly into the game's head
-        const puterScript = `<script src="https://js.puter.com/v2/"></script>`;
-        
-        // Replace head tag, adding both base and puter script
-        if (html.includes('<head>')) {
-            html = html.replace('<head>', `<head>${baseTag}${puterScript}`);
-        } else {
-            html = `<head>${baseTag}${puterScript}</head>` + html;
-        }
+            const puterScript = doc.createElement('script');
+            puterScript.src = "https://js.puter.com/v2/";
+            doc.head.prepend(puterScript);
 
-        const sdkScript = `
-        <script>
+            const sdkScriptContent = `
             (function() {
                 const bridge = window.parent.__ARBOR_GAME_BRIDGE__;
-                if (!bridge) {
-                    console.error("Arbor Bridge not found! Game cannot run.");
-                    return;
-                }
-                
+                if (!bridge) { console.error("Arbor Bridge not found!"); return; }
                 window.Arbor = {
-                    user: {
-                        username: '${store.value.gamification.username || 'Student'}',
-                        avatar: '${store.value.gamification.avatar || '👤'}',
-                        lang: '${store.value.lang || 'EN'}'
-                    },
+                    user: { username: '${store.value.gamification.username || 'Student'}', avatar: '${store.value.gamification.avatar || '👤'}', lang: '${store.value.lang || 'EN'}' },
                     ai: {
                         chat: async (messages) => {
-                            if (!window.puter) {
-                                throw new Error("Puter.js is not loaded in the game context. Ensure the script tag is present.");
-                            }
+                            if (!window.puter) throw new Error("Puter.js not loaded in game context.");
                             try {
                                 const response = await window.puter.ai.chat(messages);
                                 return response?.message?.content || response.toString();
-                            } catch (e) {
-                                console.error("Game AI Error:", e);
-                                throw new Error("The AI assistant could not be reached. " + e.message);
-                            }
+                            } catch (e) { console.error("Game AI Error:", e); throw new Error("AI assistant unreachable: " + e.message); }
                         }
                     },
-                    game: {
-                        addXP: (amount) => bridge.addXP(amount),
-                        exit: () => bridge.close(),
-                    },
-                    content: {
-                        getList: () => bridge.getCurriculum(),
-                        getNext: () => bridge.getNextLesson(),
-                        getAt: (idx) => bridge.getLessonAt(idx)
-                    },
-                    storage: {
-                        save: (key, value) => bridge.save(key, value),
-                        load: (key) => bridge.load(key)
-                    }
+                    game: { addXP: (amount) => bridge.addXP(amount), exit: () => bridge.close() },
+                    content: { getList: () => bridge.getCurriculum(), getNext: () => bridge.getNextLesson(), getAt: (idx) => bridge.getLessonAt(idx) },
+                    storage: { save: (key, value) => bridge.save(key, value), load: (key) => bridge.load(key) }
                 };
-                console.log("Arbor SDK Injected & Ready", window.Arbor);
-            })();
-        <\/script>
-        `;
+            })();`;
+            
+            const sdkScript = doc.createElement('script');
+            sdkScript.textContent = sdkScriptContent;
+            doc.body.appendChild(sdkScript);
 
-        // Inject SDK script just before closing body tag
-        if (html.includes('</body>')) {
-            html = html.replace('</body>', `${sdkScript}</body>`);
-        } else {
-            html += sdkScript;
+            // No <base> tag is needed as all module imports are now absolute blob URLs.
+            // Other assets like images/css will be resolved relative to the iframe's src, which we are not setting.
+            // Using srcdoc means their base is about:srcdoc, so they MUST be absolute or inlined.
+            // To fix relative assets (CSS, images) in the game's HTML, we need to manually resolve them.
+            const assetTags = doc.querySelectorAll('link[href], img[src], audio[src], video[src]');
+            assetTags.forEach(tag => {
+                const attr = tag.hasAttribute('href') ? 'href' : 'src';
+                const path = tag.getAttribute(attr);
+                if (path && !path.startsWith('http') && !path.startsWith('data:') && !path.startsWith('blob:')) {
+                    const absolutePath = new URL(path, baseHref).href;
+                    tag.setAttribute(attr, absolutePath);
+                }
+            });
+
+
+            const finalHtml = doc.documentElement.outerHTML;
+            iframe.srcdoc = finalHtml;
+            iframe.onload = () => {
+                this.querySelector('#loader').classList.add('hidden');
+                iframe.classList.remove('opacity-0');
+            };
+        } catch (e) {
+            this.error = e.message;
+            this.isPreparing = false;
+            this.render();
         }
-        
-        iframe.srcdoc = html;
-        iframe.onload = () => {
-            this.querySelector('#loader').classList.add('hidden');
-            iframe.classList.remove('opacity-0');
-        };
     }
 
     render() {
