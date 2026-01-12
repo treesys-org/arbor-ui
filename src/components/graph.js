@@ -263,7 +263,7 @@ class ArborGraph extends HTMLElement {
         
         const isMobile = this.width < 768;
         // Increased zoom scale for better visibility on small screens
-        const k = isMobile ? 0.85 : 1.0; 
+        const k = isMobile ? 1.06 : 1.0; 
         
         // Focus on bottom center (Root position)
         const tx = (this.width / 2) * (1 - k); 
@@ -542,17 +542,77 @@ class ArborGraph extends HTMLElement {
 
         nodeMerged.select(".label-text").attr("text-anchor", "middle");
 
-        nodeMerged.select(".label-group text")
-            .text(d => {
-                if (isMobile && d.data.name.length > 15) return d.data.name.substring(0, 12) + '...';
-                return d.data.name;
-            })
-            .each(function(d) {
-                const rectNode = d3.select(this.parentNode).select("rect");
-                const computed = this.getComputedTextLength();
-                const w = Math.max(40, computed + 20);
-                rectNode.attr("width", w).attr("x", -w/2);
-            });
+        nodeMerged.select(".label-group text").each(function(d) {
+            const text = d3.select(this);
+            text.text(null); // Clear previous content
+
+            const name = d.data.name;
+            const words = name.split(/\s+/);
+            const maxWidth = isMobile ? 90 : 140;
+
+            let line1 = [];
+            let line2 = [];
+            let onLine2 = false;
+
+            const tempTspan = text.append('tspan').text(' '); // For measurement
+
+            for(const word of words) {
+                if(onLine2) {
+                    line2.push(word);
+                } else {
+                    const testLine = [...line1, word];
+                    tempTspan.text(testLine.join(' '));
+                    if (tempTspan.node().getComputedTextLength() > maxWidth && line1.length > 0) {
+                        onLine2 = true;
+                        line2.push(word);
+                    } else {
+                        line1.push(word);
+                    }
+                }
+            }
+            tempTspan.remove();
+
+            text.append('tspan')
+                .attr('x', 0)
+                .text(line1.join(' '));
+
+            if (line2.length > 0) {
+                const tspan2 = text.append('tspan')
+                    .attr('x', 0)
+                    .attr('dy', '1.2em')
+                    .text(line2.join(' '));
+                
+                while (tspan2.node().getComputedTextLength() > maxWidth && tspan2.text().length > 3) {
+                    tspan2.text(tspan2.text().slice(0, -4) + '...');
+                }
+            }
+        });
+
+        // After setting text, adjust rects and positioning
+        nodeMerged.select(".label-group").each(function() {
+            const group = d3.select(this);
+            const text = group.select("text");
+            const rect = group.select("rect");
+            const numLines = text.selectAll("tspan").size();
+
+            if (numLines > 1) {
+                text.attr('dy', 10);
+            } else {
+                text.attr('dy', 17);
+            }
+
+            const textBBox = text.node().getBBox();
+
+            rect.attr('height', numLines > 1 ? 40 : 24)
+                .attr('width', textBBox.width + 20)
+                .attr('x', -(textBBox.width / 2) - 10);
+            
+            if (numLines > 1) {
+                rect.attr('y', -8);
+            } else {
+                rect.attr('y', 0);
+            }
+        });
 
         nodeUpdate.select(".badge-group")
             .style("display", d => (d.data.type === 'leaf' || d.data.type === 'exam') ? 'none' : 'block')
