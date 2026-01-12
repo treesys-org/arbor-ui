@@ -1,4 +1,5 @@
 
+
 import { BLOCKS } from './editor-engine.js';
 
 export const ContentRenderer = {
@@ -51,7 +52,7 @@ export const ContentRenderer = {
 
                  const icon = didPass ? '🏆' : '😔';
                  const bgColor = didPass ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600';
-                 const masteryMessage = isExam && didPass ? `<p class="text-green-600 font-bold mt-2">${ui.congrats} ¡RAMA DOMINADA!</p>` : '';
+                 const masteryMessage = isExam && didPass ? `<p class="text-green-600 font-bold mt-2">${ui.congrats} ${ui.branchMastered || 'BRANCH MASTERED!'}</p>` : '';
                  
                  let actionButtons = '';
                  if (isExam && didPass) {

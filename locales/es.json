@@ -346,5 +346,6 @@
   "arcadeAddBtn": "Instalar",
   "arcadePlaceholder": "https://.../juego/index.html",
   "arcadeDeveloperNote": "Nota para Desarrolladores: Los juegos reciben el contexto vía parámetros URL (?source=...&module=...). ¡Crea tu propio motor!",
-  "arcadeContext": "Contexto Actual"
+  "arcadeContext": "Contexto Actual",
+  "branchMastered": "¡RAMA DOMINADA!"
 }

@@ -43,6 +43,7 @@
             <h1 class="text-5xl font-black text-slate-800 mb-2">Memory Garden</h1>
             <p class="text-lg text-slate-500 mb-8 max-w-lg">Match the terms with their definitions to prove your knowledge and grow your garden!</p>
             <button id="start-button" class="px-10 py-4 bg-green-600 text-white text-2xl font-bold rounded-2xl shadow-lg hover:bg-green-500 transition-transform active:scale-95">Play</button>
+            <div id="best-score-display" class="mt-6 text-sm text-slate-400 font-bold hidden"></div>
         </div>
     </div>
 
@@ -57,6 +58,7 @@
             <div class="text-8xl mb-4">🌻</div>
             <h1 class="text-6xl font-black mb-2">Garden Grown!</h1>
             <p class="text-xl mb-8">You successfully matched all the concepts.</p>
+            <p id="win-score-info" class="font-bold mb-6"></p>
             <button id="play-again-button" class="px-10 py-4 bg-white text-green-700 text-2xl font-bold rounded-2xl shadow-lg hover:bg-green-50 transition-transform active:scale-95">Play Again</button>
         </div>
     </div>
@@ -93,7 +95,6 @@ const App = {
         document.getElementById('game-ui').classList.remove('hidden');
         
         const loader = document.getElementById('loader');
-        // Restore loader to its original state for retries
         loader.innerHTML = `
             <div class="text-6xl mb-4 animate-bounce">🌱</div>
             <h2 class="text-2xl font-black text-slate-800">Growing Garden...</h2>
@@ -101,13 +102,13 @@ const App = {
         `;
         loader.classList.remove('hidden-fade');
 
-        if (!window.Arbor) {
+        if (!window.Arbor || !window.Arbor.content || !window.Arbor.ai || !window.Arbor.storage) {
             App.setLoading("Arbor SDK not found.");
             return;
         }
 
-        App.setLoading("Reading Scroll...");
-        const content = await App.fetchContent();
+        App.setLoading("Reading next lesson...");
+        const content = await window.Arbor.content.getNext();
         
         if (!content || !content.text) {
             loader.innerHTML = `<div class="text-center p-8"><div class="text-6xl mb-4">🍂</div><h2 class="text-xl font-bold text-slate-800">No Content</h2><p class="text-slate-500">The module seems empty or failed to load.</p></div>`;
@@ -116,7 +117,7 @@ const App = {
 
         document.getElementById('lesson-title').innerText = content.title;
 
-        App.setLoading("Asking the Sage...");
+        App.setLoading("Asking the Sage to create cards...");
         const pairs = await App.generatePairs(content.text);
         
         if (!pairs) {
@@ -165,14 +166,11 @@ const App = {
         JSON_FORMAT: [{"term": "string", "def": "string"}, ...]
         `;
 
-        let responseText = ""; // Keep it in scope for error logging
+        let responseText = ""; 
         try {
             responseText = await window.Arbor.ai.chat([{ role: "user", content: prompt }]);
             
-            // Regex to find the first JSON array in the response string.
-            // It handles cases where there might be text before or after the array.
             const jsonMatch = responseText.match(/(\[[\s\S]*\])/);
-
             if (!jsonMatch) {
                 throw new Error("AI response did not contain a valid JSON array structure.");
             }
@@ -181,7 +179,6 @@ const App = {
             const data = JSON.parse(jsonString);
             
             if (Array.isArray(data) && data.length >= 6) {
-                // Sanitize content to prevent HTML injection
                 const sanitizedData = data.map(item => ({
                     term: item.term ? String(item.term).replace(/<[^>]*>/g, '') : 'Error',
                     def: item.def ? String(item.def).replace(/<[^>]*>/g, '') : 'Error'
@@ -234,7 +231,7 @@ const App = {
         }
     },
 
-    checkMatch: () => {
+    checkMatch: async () => {
         App.state.locked = true;
         const [idx1, idx2] = App.state.flipped;
         const c1 = App.state.cards[idx1];
@@ -254,6 +251,17 @@ const App = {
             
             if(App.state.matched.length === App.state.cards.length) {
                 if (window.Arbor.game) window.Arbor.game.addXP(50);
+                
+                // --- NEW: Save Score using Arbor Storage ---
+                const bestScore = await window.Arbor.storage.load('best_score');
+                let scoreInfo = `Finished in ${App.state.moves} moves.`;
+                if (!bestScore || App.state.moves < bestScore) {
+                    window.Arbor.storage.save('best_score', App.state.moves);
+                    scoreInfo += " That's a new record!";
+                }
+                document.getElementById('win-score-info').innerText = scoreInfo;
+                // --- END NEW ---
+
                 setTimeout(() => {
                     document.getElementById('win-screen').classList.remove('hidden-fade');
                 }, 800);
@@ -267,21 +275,26 @@ const App = {
             }, 1000);
         }
     },
-
-    fetchContent: async () => {
-        if (window.Arbor && window.Arbor.content) {
-            try {
-                const lesson = await window.Arbor.content.getNext();
-                if (lesson) return { title: lesson.title, text: lesson.text };
-            } catch (e) { console.warn("Arbor Bridge Error:", e); }
+    
+    showBestScore: async () => {
+        if (!window.Arbor || !window.Arbor.storage) return;
+        const best = await window.Arbor.storage.load('best_score');
+        const display = document.getElementById('best-score-display');
+        if (best) {
+            display.innerText = `🏆 Best Score: ${best} moves`;
+            display.classList.remove('hidden');
+        } else {
+            display.classList.add('hidden');
         }
-        return null;
     }
 };
 
 window.onload = () => {
     document.getElementById('start-button').addEventListener('click', App.init);
     document.getElementById('play-again-button').addEventListener('click', App.init);
+    
+    // Wait for Arbor SDK to be injected, then show best score
+    setTimeout(App.showBestScore, 500);
 };
 
 </script>

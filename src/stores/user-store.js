@@ -1,4 +1,3 @@
-
 // BOTANICAL SEEDS: More universal concept for knowledge trees
 const SEED_TYPES = ['🌲', '🌰', '🌾', '🍁', '🥥', '🥜', '🌰', '🫘', '🍄', '🌱'];
 
@@ -11,6 +10,7 @@ export class UserStore {
             bookmarks: {},
             installedGames: [], // Single games added manually
             gameRepos: [], // Repositories (manifests) of games
+            gameData: {}, // NEW: Generic key-value store for games { [gameId]: { [key]: value } }
             gamification: {
                 username: '',
                 avatar: '👤',
@@ -53,6 +53,7 @@ export class UserStore {
                     }
                     if (parsed.installedGames) this.state.installedGames = parsed.installedGames;
                     if (parsed.gameRepos) this.state.gameRepos = parsed.gameRepos;
+                    if (parsed.gameData) this.state.gameData = parsed.gameData; // NEW: Load game data
                 }
             }
             
@@ -80,6 +81,7 @@ export class UserStore {
             bookmarks: this.state.bookmarks, // Add bookmarks to cloud sync
             installedGames: this.state.installedGames,
             gameRepos: this.state.gameRepos,
+            gameData: this.state.gameData, // NEW: Add game data to persistence
             timestamp: Date.now()
         };
     }
@@ -102,7 +104,8 @@ export class UserStore {
             g: this.state.gamification,
             b: this.state.bookmarks,
             games: this.state.installedGames,
-            repos: this.state.gameRepos
+            repos: this.state.gameRepos,
+            d: this.state.gameData // NEW: 'd' for data
         };
         return JSON.stringify(data, null, 2);
     }
@@ -243,6 +246,20 @@ export class UserStore {
     isCompleted(id) {
         return this.state.completedNodes.has(id);
     }
+    
+    // --- GAME DATA STORAGE ---
+    saveGameData(gameId, key, value) {
+        if (!this.state.gameData[gameId]) {
+            this.state.gameData[gameId] = {};
+        }
+        this.state.gameData[gameId][key] = value;
+        this.persist();
+    }
+
+    loadGameData(gameId, key) {
+        return this.state.gameData[gameId]?.[key] || null;
+    }
+
 
     // --- Arcade / Games ---
     addGame(name, url, icon) {

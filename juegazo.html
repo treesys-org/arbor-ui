@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -47,7 +47,7 @@
         </div>
 
         <div id="dialogue-box" class="dialogue-box pixel-panel">
-            <div id="dialogue-name" class="dialogue-name">SISTEMA</div>
+            <div id="dialogue-name" class="dialogue-name">SYSTEM</div>
             <div id="dialogue-text">
                 <span id="dialogue-text-span"></span>
                 <div id="thinking-indicator">
@@ -58,8 +58,8 @@
         </div>
         
         <div id="input-area">
-            <input type="text" id="player-input" placeholder="Tu respuesta..." autocomplete="off">
-            <button onclick="Game.submitPlayerAnswer()" class="bg-green-600 text-white px-6 border-2 border-white font-bold hover:bg-green-500">RESPONDER</button>
+            <input type="text" id="player-input" placeholder="Your answer..." autocomplete="off">
+            <button onclick="Game.submitPlayerAnswer()" class="bg-green-600 text-white px-6 border-2 border-white font-bold hover:bg-green-500">ANSWER</button>
         </div>
     </div>
 
@@ -115,7 +115,7 @@ const Game = {
     },
 
     async loadLevel() {
-        this.uiShowDialog("SISTEMA", "Downloading lesson from Arbor...");
+        this.uiShowDialog("SYSTEM", "Downloading lesson from Arbor...");
         
         let rawText = "Welcome to the test class. Knowledge is power.";
         if (window.Arbor && window.Arbor.content) {
@@ -126,7 +126,7 @@ const Game = {
         }
         this.lesson.text = rawText;
 
-        this.uiShowDialog("PROFESSOR", "Preparing today's class...");
+        this.uiShowDialog("TEACHER", "Preparing today's class...");
         
         const prompt = `
         Text: "${this.lesson.text.substring(0, 2000)}".
@@ -142,7 +142,7 @@ const Game = {
         }`;
 
         try {
-            this.uiShowThinking("PROFESSOR");
+            this.uiShowThinking("TEACHER");
             const res = await window.Arbor.ai.chat([{role:"user", content: prompt}]);
             const json = this.parseJSON(res);
             
@@ -155,7 +155,7 @@ const Game = {
             this.lesson.concepts.forEach(c => c.result = 'pending');
 
             this.animateBlackboardWriting();
-            this.uiShowDialog("PROFESSOR", json?.intro || "Let's begin.", false);
+            this.uiShowDialog("TEACHER", json?.intro || "Let's begin.", false);
             this.state = 'WAIT_INTRO';
             
         } catch(e) {
@@ -164,7 +164,7 @@ const Game = {
     },
     
     async nextLesson() {
-        this.uiShowDialog("PROFESSOR", "Class is over! Preparing the next lesson...");
+        this.uiShowDialog("TEACHER", "Class is over! Preparing the next lesson...");
         this.turn = { conceptIndex: 0, studentIndex: 0 };
         this.lesson.concepts = [];
         this.lesson.blackboard.lines = [];
@@ -185,7 +185,7 @@ const Game = {
         this.updateScoreboard();
 
         this.state = 'ASKING';
-        this.uiShowDialog("PROFESSOR", `${student.name}, ${concept.question}`, false);
+        this.uiShowDialog("TEACHER", `${student.name}, ${concept.question}`, false);
         await this.waitForInput();
 
         if (!student.isPlayer) {
@@ -226,7 +226,7 @@ const Game = {
         const student = this.actors.students[this.turn.studentIndex];
         const concept = this.lesson.concepts[this.turn.studentIndex];
         
-        this.uiShowThinking("PROFESSOR");
+        this.uiShowThinking("TEACHER");
         
         const prompt = `
         Question: "${concept.question}".
@@ -247,7 +247,7 @@ const Game = {
         
         concept.result = isCorrect ? 'correct' : 'wrong';
 
-        this.uiShowDialog("PROFESSOR", feedback, false);
+        this.uiShowDialog("TEACHER", feedback, false);
         
         if (isCorrect) {
             student.score++;

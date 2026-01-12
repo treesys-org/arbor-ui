@@ -494,7 +494,7 @@ class Store extends EventTarget {
             const responseObj = await aiService.chat(currentMsgs, contextNode);
             let finalText = responseObj.text;
             if (responseObj.sources && responseObj.sources.length > 0) {
-                finalText += `\n\n**Fuentes:**\n` + responseObj.sources.map(s => `• [${s.title}](${s.url})`).join('\n');
+                finalText += `\n\n**Sources:**\n` + responseObj.sources.map(s => `• [${s.title}](${s.url})`).join('\n');
             }
             const newMsgs = [...currentMsgs, { role: 'assistant', content: finalText }];
             this.update({ ai: { ...this.state.ai, status: 'ready', messages: newMsgs } });
@@ -657,6 +657,11 @@ class Store extends EventTarget {
             if (data.b || data.bookmarks) {
                 this.userStore.state.bookmarks = { ...this.userStore.state.bookmarks, ...(data.b || data.bookmarks) };
                 localStorage.setItem('arbor-bookmarks', JSON.stringify(this.state.bookmarks));
+            }
+            
+            // NEW: Import game data
+            if (data.d || data.gameData) {
+                this.userStore.state.gameData = { ...this.userStore.state.gameData, ...(data.d || data.gameData) };
             }
 
             if (!Array.isArray(newProgress)) throw new Error("Invalid Format");

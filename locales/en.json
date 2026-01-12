@@ -232,7 +232,7 @@
   "sageError": "The Sage is confused.",
   "sageDisclaimer": "Powered by Cloud AI.",
   "sageUnsupported": "Connection failed.",
-  "sageMenuTitle": "¿Cómo puedo ayudar?",
+  "sageMenuTitle": "How can I help?",
   "sageMenuHelp": "Explain Arbor",
   "sageMenuHelpDesc": "The Sage will guide you.",
   "sageMenuAi": "AI Configuration",
@@ -286,5 +286,6 @@
   "arcadeAddBtn": "Install",
   "arcadePlaceholder": "https://.../game/index.html",
   "arcadeDeveloperNote": "Developer Note: Games receive context via URL parameters (?source=...&module=...). Create your own engine!",
-  "arcadeContext": "Current Context"
+  "arcadeContext": "Current Context",
+  "branchMastered": "BRANCH MASTERED!"
 }

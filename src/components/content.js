@@ -282,18 +282,18 @@ class ArborContent extends HTMLElement {
             return;
         }
 
-        const title = `Sugerencia de Cambio: ${this.currentNode.name}`;
+        const title = `Change Suggestion: ${this.currentNode.name}`;
         const bodyTemplate = `
-### 📝 Descripción del Cambio
-<!-- Por favor, describe aquí el cambio que propones. Sé lo más específico posible. -->
+### 📝 Description of Change
+<!-- Please describe the change you are proposing here. Be as specific as possible. -->
 
 
-### 📍 Ubicación
-- **Archivo:** \`${this.currentNode.sourcePath}\`
-- **Lección:** ${this.currentNode.name}
+### 📍 Location
+- **File:** \`${this.currentNode.sourcePath}\`
+- **Lesson:** ${this.currentNode.name}
 
 ---
-*Este issue fue generado automáticamente desde la interfaz de Arbor.*
+*This issue was generated automatically from the Arbor interface.*
         `;
 
         const encodedTitle = encodeURIComponent(title);
