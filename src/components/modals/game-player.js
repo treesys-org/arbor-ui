@@ -152,13 +152,44 @@ class ArborModalGamePlayer extends HTMLElement {
         if (!response.ok) throw new Error(`Could not load game from ${url} (Status: ${response.status})`);
         let html = await response.text();
 
+        // --- NEW: INLINE MODULE SCRIPTS TO FIX MIME TYPE ERROR ---
+        const moduleScriptRegex = /<script\s+([^>]*type="module"[^>]*)src="([^"]+)"([^>]*)><\/script>/gi;
+        const moduleMatches = [...html.matchAll(moduleScriptRegex)];
+        const baseHref = url.substring(0, url.lastIndexOf('/') + 1);
+
+        for (const match of moduleMatches) {
+            const originalTag = match[0];
+            const scriptSrc = match[2];
+            const scriptUrl = new URL(scriptSrc, baseHref).href;
+            
+            try {
+                const scriptResponse = await fetch(scriptUrl);
+                if (scriptResponse.ok) {
+                    const scriptContent = await scriptResponse.text();
+                    // Reconstruct script tag without src, but keeping other attributes
+                    const otherAttributes = `${match[1]} ${match[3]}`.replace(/src="[^"]+"/, '').trim();
+                    const inlineScriptTag = `<script ${otherAttributes}>\n//<![CDATA[\n${scriptContent}\n//]]>\n</script>`;
+                    html = html.replace(originalTag, inlineScriptTag);
+                } else {
+                    console.warn(`[Arbor Game Loader] Failed to fetch module script: ${scriptUrl}`);
+                }
+            } catch (e) {
+                console.error(`[Arbor Game Loader] Error inlining module script ${scriptUrl}:`, e);
+            }
+        }
+        // --- END OF NEW LOGIC ---
+
         // Inject a <base> tag to fix relative asset paths (CSS, images, etc.)
-        const baseTag = `<base href="${url.substring(0, url.lastIndexOf('/') + 1)}">`;
-        // NEW: Inject Puter.js script directly into the game's head
+        const baseTag = `<base href="${baseHref}">`;
+        // Inject Puter.js script directly into the game's head
         const puterScript = `<script src="https://js.puter.com/v2/"></script>`;
         
         // Replace head tag, adding both base and puter script
-        html = html.replace('<head>', `<head>${baseTag}${puterScript}`);
+        if (html.includes('<head>')) {
+            html = html.replace('<head>', `<head>${baseTag}${puterScript}`);
+        } else {
+            html = `<head>${baseTag}${puterScript}</head>` + html;
+        }
 
         const sdkScript = `
         <script>
@@ -177,7 +208,6 @@ class ArborModalGamePlayer extends HTMLElement {
                     },
                     ai: {
                         chat: async (messages) => {
-                            // NEW: Use the iframe's own Puter.js instance
                             if (!window.puter) {
                                 throw new Error("Puter.js is not loaded in the game context. Ensure the script tag is present.");
                             }
@@ -186,7 +216,6 @@ class ArborModalGamePlayer extends HTMLElement {
                                 return response?.message?.content || response.toString();
                             } catch (e) {
                                 console.error("Game AI Error:", e);
-                                // Provide a user-friendly error
                                 throw new Error("The AI assistant could not be reached. " + e.message);
                             }
                         }
@@ -211,7 +240,11 @@ class ArborModalGamePlayer extends HTMLElement {
         `;
 
         // Inject SDK script just before closing body tag
-        html = html.replace('</body>', `${sdkScript}</body>`);
+        if (html.includes('</body>')) {
+            html = html.replace('</body>', `${sdkScript}</body>`);
+        } else {
+            html += sdkScript;
+        }
         
         iframe.srcdoc = html;
         iframe.onload = () => {
