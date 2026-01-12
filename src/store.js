@@ -12,13 +12,7 @@ class Store extends EventTarget {
     constructor() {
         super();
         
-        // 1. User Persistence Sub-Store
-        this.userStore = new UserStore(
-            () => this.ui,
-            (data) => this.handleAutoSync(data) 
-        );
-
-        // 2. Initial State
+        // 2. Initial State (Moved up to fix initialization race condition)
         this.state = {
             theme: localStorage.getItem('arbor-theme') || 'light',
             lang: localStorage.getItem('arbor-lang') || 'EN',
@@ -55,6 +49,12 @@ class Store extends EventTarget {
             lastActionMessage: null,
             githubUser: null
         };
+
+        // 1. User Persistence Sub-Store
+        this.userStore = new UserStore(
+            () => this.ui,
+            (data) => this.handleAutoSync(data) 
+        );
 
         // 3. Source Manager (Networking & Manifests)
         this.sourceManager = new SourceManager(
