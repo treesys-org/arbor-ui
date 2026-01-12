@@ -218,8 +218,21 @@ class HybridAIService {
                 }
 
                 const data = await response.json();
+                const txt = data.message.content;
+
+                const trimmedTxt = txt.trim();
+                // Check if the AI's response is likely JSON. If so, don't add a footer.
+                if ((trimmedTxt.startsWith('{') && trimmedTxt.endsWith('}')) || (trimmedTxt.startsWith('[') && trimmedTxt.endsWith(']'))) {
+                    try {
+                        JSON.parse(trimmedTxt); // Verify it's valid JSON
+                        return { text: txt }; // It's JSON, return as-is
+                    } catch (e) {
+                        // Not valid JSON, fall through to add footer
+                    }
+                }
+                
                 const footer = "<br><br><span class='text-[10px] text-orange-600 dark:text-orange-400 font-bold opacity-75'>⚡ Local Intelligence (Ollama)</span>";
-                return { text: data.message.content + footer };
+                return { text: txt + footer };
 
             } catch (e) {
                 this.currentController = null;
@@ -242,6 +255,17 @@ class HybridAIService {
 
             const response = await window.puter.ai.chat(messagesFormat);
             const txt = response?.message?.content || response.toString();
+            
+            const trimmedTxt = txt.trim();
+            // Check if the AI's response is likely JSON. If so, don't add a footer.
+            if ((trimmedTxt.startsWith('{') && trimmedTxt.endsWith('}')) || (trimmedTxt.startsWith('[') && trimmedTxt.endsWith(']'))) {
+                try {
+                    JSON.parse(trimmedTxt); // Verify it's valid JSON
+                    return { text: txt }; // It's JSON, return as-is
+                } catch (e) {
+                    // Not valid JSON, fall through to add footer
+                }
+            }
             
             // Interactive Footer for Cloud
             const footer = `<br><br><div class='pt-2 mt-1 border-t border-slate-200 dark:border-slate-700/50 flex items-center justify-between text-[10px] text-slate-400'>
