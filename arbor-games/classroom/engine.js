@@ -277,8 +277,21 @@ class GameEngine {
             const aiRes = await window.Arbor.ai.chat([{role: "user", content: prompt}]);
             const jsonText = aiRes.text;
             
-            const match = jsonText.match(/\[.*\]/s);
-            const json = match ? JSON.parse(match[0]) : JSON.parse(jsonText);
+            // ROBUST PARSING LOGIC (from Memory Garden)
+            let json = null;
+            try {
+                const cleanResponse = jsonText.replace(/```json/g, '').replace(/```/g, '');
+                const match = cleanResponse.match(/\[[\s\S]*\]/);
+                if (match) {
+                    json = JSON.parse(match[0]);
+                } else {
+                    json = JSON.parse(cleanResponse);
+                }
+            } catch (e) {
+                console.error("Failed to parse AI JSON for Classroom Sim:", e, "Raw response:", jsonText);
+                throw new Error("AI returned invalid data format.");
+            }
+
 
             if (json && Array.isArray(json) && json.length > 0) {
                 this.lessonData.concepts = json.map(j => ({ ...j, status: 'pending' }));
