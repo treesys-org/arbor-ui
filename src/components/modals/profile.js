@@ -74,9 +74,6 @@ class ArborModalProfile extends HTMLElement {
         const lang = store.value.lang;
         const theme = store.value.theme;
         
-        // GET STORAGE STATS (Just Core)
-        const stats = store.storage.getStats();
-
         // Anti-Flicker Key
         const renderKey = JSON.stringify({
             lang, theme,
@@ -87,7 +84,6 @@ class ArborModalProfile extends HTMLElement {
             seeds: collectedItems.length,
             puterUser: puterUser ? puterUser.username : null,
             isSyncing,
-            storageUsedCore: stats.core.usedBytes,
             localAvatar: this.state.tempAvatar,
         });
 
@@ -103,143 +99,130 @@ class ArborModalProfile extends HTMLElement {
             <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full relative overflow-hidden flex flex-col max-h-[90dvh] border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
                 <button class="btn-close absolute top-5 right-5 w-10 h-10 flex items-center justify-center rounded-full bg-slate-100/50 dark:bg-slate-800/50 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 transition-colors z-50 backdrop-blur-sm">✕</button>
                 
-                <div class="p-6 md:p-8 text-center h-full overflow-y-auto custom-scrollbar relative">
-                    <div class="relative inline-block">
-                        <button id="btn-avatar-picker" class="w-24 h-24 bg-slate-100 dark:bg-slate-800 rounded-full mx-auto flex items-center justify-center text-5xl mb-4 relative group transition-transform hover:scale-105 shadow-inner border border-slate-200 dark:border-slate-700">
-                            <span id="avatar-display">${this.state.tempAvatar}</span>
-                            <div class="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center text-white text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-[2px]">
-                                ✏️
-                            </div>
-                        </button>
-                        <!-- Picker -->
-                        <div id="emoji-picker" class="hidden absolute top-full mt-2 left-1/2 -translate-x-1/2 w-64 md:w-80 bg-white dark:bg-slate-800 shadow-2xl rounded-xl border border-slate-200 dark:border-slate-700 z-50 p-0 h-72 overflow-y-auto custom-scrollbar animate-in zoom-in-95 duration-200">
-                            ${Object.entries(EMOJI_DATA).map(([cat, emojis]) => `
-                                <div class="text-xs font-bold text-slate-400 px-3 py-2 uppercase tracking-wider text-left sticky top-0 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm border-b border-slate-100 dark:border-slate-700 z-10">${cat}</div>
-                                <div class="grid grid-cols-6 gap-1 p-2">
-                                    ${emojis.map(e => `<button class="emoji-btn hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg p-2 text-xl transition-colors">${e}</button>`).join('')}
+                <div class="p-6 md:p-8 text-center h-full overflow-y-auto custom-scrollbar relative flex flex-col">
+                    
+                    <!-- IDENTITY SECTION -->
+                    <div class="mb-8">
+                        <div class="relative inline-block mb-4">
+                            <button id="btn-avatar-picker" class="w-24 h-24 bg-slate-50 dark:bg-slate-800 rounded-full mx-auto flex items-center justify-center text-5xl relative group transition-transform hover:scale-105 shadow-sm border-2 border-slate-100 dark:border-slate-700">
+                                <span id="avatar-display">${this.state.tempAvatar}</span>
+                                <div class="absolute inset-0 bg-black/10 dark:bg-black/40 rounded-full flex items-center justify-center text-white text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-[1px]">
+                                    ✏️
                                 </div>
-                            `).join('')}
+                            </button>
+                            <!-- Picker -->
+                            <div id="emoji-picker" class="hidden absolute top-full mt-2 left-1/2 -translate-x-1/2 w-64 md:w-80 bg-white dark:bg-slate-800 shadow-2xl rounded-xl border border-slate-200 dark:border-slate-700 z-50 p-0 h-72 overflow-y-auto custom-scrollbar animate-in zoom-in-95 duration-200 text-left">
+                                ${Object.entries(EMOJI_DATA).map(([cat, emojis]) => `
+                                    <div class="text-xs font-bold text-slate-400 px-3 py-2 uppercase tracking-wider text-left sticky top-0 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm border-b border-slate-100 dark:border-slate-700 z-10">${cat}</div>
+                                    <div class="grid grid-cols-6 gap-1 p-2">
+                                        ${emojis.map(e => `<button class="emoji-btn hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg p-2 text-xl transition-colors">${e}</button>`).join('')}
+                                    </div>
+                                `).join('')}
+                            </div>
                         </div>
-                    </div>
-                    
-                    <input id="inp-username" value="${this.state.tempUsername}" placeholder="${ui.usernamePlaceholder}" class="text-2xl font-black mb-1 dark:text-white bg-transparent text-center w-full max-w-xs mx-auto outline-none focus:ring-2 focus:ring-sky-500 rounded-lg p-1 transition-all border-b border-transparent focus:border-sky-500 focus:bg-slate-50 dark:focus:bg-slate-800/50">
-                    <p class="text-slate-500 dark:text-slate-400 mb-6 font-medium">${g.xp} <span class="text-xs uppercase">${ui.xpUnit}</span> • ${ui.streak}: ${g.streak} ${ui.days}</p>
-
-                    <button id="btn-save-profile" class="mb-8 w-full max-w-xs mx-auto py-3 bg-sky-600 text-white font-bold rounded-xl shadow-lg hover:bg-sky-500 active:scale-95 transition-transform flex items-center justify-center gap-2">
-                        <span>💾</span> ${ui.saveProfile}
-                    </button>
-                    
-                    <!-- CLOUD SYNC SECTION -->
-                    <div class="bg-indigo-50 dark:bg-indigo-900/10 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800/30 mb-6 text-left relative overflow-hidden">
                         
+                        <input id="inp-username" value="${this.state.tempUsername}" placeholder="${ui.usernamePlaceholder}" class="text-2xl font-black text-slate-800 dark:text-white bg-transparent text-center w-full max-w-xs mx-auto outline-none focus:ring-0 border-b-2 border-transparent focus:border-sky-500 transition-all placeholder:text-slate-300 dark:placeholder:text-slate-600">
+                        
+                        <div class="flex items-center justify-center gap-2 mt-3">
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-xs font-bold">
+                                💧 ${g.streak} ${ui.days}
+                            </span>
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 text-xs font-bold">
+                                ☀️ ${g.xp} XP
+                            </span>
+                        </div>
+
+                        <button id="btn-save-profile" class="mt-4 text-xs font-bold text-sky-600 dark:text-sky-400 hover:underline opacity-80 hover:opacity-100">
+                            ${ui.saveProfile}
+                        </button>
+                    </div>
+
+                    <!-- CLOUD SYNC CARD -->
+                    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 rounded-2xl mb-6 relative overflow-hidden shadow-sm text-left">
+                        
+                        <!-- Login Warning Overlay -->
                         <div id="login-warning-overlay" class="hidden absolute inset-0 z-20 bg-white/95 dark:bg-slate-900/95 flex flex-col items-center justify-center p-6 text-center animate-in fade-in">
-                            <h4 class="font-black text-indigo-900 dark:text-white mb-2 text-sm uppercase tracking-wide">${ui.syncLoginWarningTitle || "Cloud Sync Disclaimer"}</h4>
-                            <p class="text-xs text-slate-600 dark:text-slate-300 mb-4 leading-relaxed">${ui.syncLoginWarningBody || "By connecting, your local progress will be replaced by the cloud backup."}</p>
+                            <h4 class="font-black text-slate-800 dark:text-white mb-2 text-sm">${ui.syncLoginWarningTitle || "Cloud Sync"}</h4>
+                            <p class="text-xs text-slate-500 mb-4 leading-relaxed">${ui.syncLoginWarningBody || "Your local progress will be synced."}</p>
                             <div class="flex gap-2 w-full">
-                                <button id="btn-cancel-login" class="flex-1 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">${ui.cancel}</button>
+                                <button id="btn-cancel-login" class="flex-1 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">${ui.cancel}</button>
                                 <button id="btn-confirm-login" class="flex-1 py-2 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-500 transition-colors shadow-md">${ui.syncLoginConfirm || "Log In"}</button>
                             </div>
                         </div>
 
-                        <div class="flex items-center gap-2 mb-2">
-                            <span class="text-xl">☁️</span>
-                            <h3 class="font-bold text-indigo-900 dark:text-indigo-300 text-sm uppercase tracking-wide">Cloud Sync</h3>
-                            ${isSyncing ? '<span class="ml-auto text-xs text-indigo-500 animate-pulse">Syncing...</span>' : ''}
-                        </div>
-                        
-                        ${puterUser ? `
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-xs font-bold text-indigo-700 dark:text-indigo-400">Connected as @${puterUser.username}</p>
-                                    <p class="text-[10px] text-indigo-400 dark:text-indigo-500/70">Progress is backed up automatically.</p>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xl">
+                                    ☁️
                                 </div>
-                                <div class="flex gap-2">
-                                    <button id="btn-disconnect-puter" class="p-2 bg-indigo-100 dark:bg-indigo-800 hover:bg-red-100 dark:hover:bg-red-900/30 text-indigo-700 hover:text-red-600 rounded-lg text-xs font-bold transition-colors" title="Sign Out">
-                                        Sign Out ✕
-                                    </button>
+                                <div>
+                                    <h3 class="font-bold text-slate-800 dark:text-white text-sm">Cloud Sync</h3>
+                                    ${puterUser 
+                                        ? `<p class="text-xs text-indigo-500 font-medium">@${puterUser.username}</p>` 
+                                        : `<p class="text-xs text-slate-400">Offline</p>`
+                                    }
                                 </div>
                             </div>
-                        ` : `
-                            <div class="flex items-center justify-between gap-4">
-                                <div>
-                                    <p class="text-xs text-indigo-600 dark:text-indigo-400/80 leading-tight">Sign in with Puter to sync your progress across devices.</p>
-                                </div>
-                                <button id="btn-show-login-warning" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg shadow-md active:scale-95 transition-transform whitespace-nowrap">
+
+                            ${puterUser ? `
+                                <button id="btn-disconnect-puter" class="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-600 dark:text-slate-300 hover:text-red-500 rounded-lg text-xs font-bold transition-colors">
+                                    Sign Out
+                                </button>
+                            ` : `
+                                <button id="btn-show-login-warning" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg shadow-md active:scale-95 transition-transform">
                                     Connect
                                 </button>
-                            </div>
-                            <div class="mt-2 text-center">
-                                <button id="btn-open-privacy" class="text-[9px] text-indigo-400/60 hover:text-indigo-500 underline italic">${ui.syncPrivacyNote}</button>
-                            </div>
-                        `}
+                            `}
+                        </div>
+                        ${isSyncing ? '<div class="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 animate-pulse"></div>' : ''}
                     </div>
 
-                    <!-- SYSTEM DATA STATS (Simplified) -->
-                    <div class="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700 mb-6 text-left">
-                        <div class="flex justify-between items-center mb-1">
-                            <span class="text-xs font-bold text-slate-600 dark:text-slate-400">System Data (Progress)</span>
-                            <span class="text-xs font-mono text-slate-500 dark:text-slate-400">${stats.core.usedFmt}</span>
-                        </div>
-                        <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
-                            <div class="bg-blue-500 h-1.5 rounded-full transition-all" style="width: ${Math.max(2, stats.core.percent)}%"></div>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-4 mb-8">
-                        <div class="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-xl border border-orange-100 dark:border-orange-800/30">
-                            <div class="text-2xl mb-1">🌰</div>
-                            <div class="font-bold text-orange-800 dark:text-orange-400">${collectedItems.length} ${ui.seedsTitle || 'Seeds'}</div>
-                        </div>
-                         <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800/30">
-                            <div class="text-2xl mb-1">💧</div>
-                            <div class="font-bold text-blue-800 dark:text-blue-400">${g.streak} ${ui.days}</div>
-                        </div>
-                    </div>
-
-                    <!-- BACKPACK SECTION -->
-                    <div class="bg-slate-50 dark:bg-slate-800/50 p-4 md:p-6 rounded-2xl border border-slate-100 dark:border-slate-700 text-left mb-6 relative overflow-hidden">
-                        <div class="absolute -right-6 -top-6 text-9xl opacity-5 pointer-events-none select-none">🎒</div>
-                        
-                        <h3 class="font-black text-slate-700 dark:text-slate-200 text-lg mb-2 relative z-10 flex items-center gap-2">
-                            <span>🎒</span> ${ui.backpackTitle || 'BACKPACK'}
-                        </h3>
-                        <p class="text-sm text-slate-500 dark:text-slate-400 mb-6 relative z-10 leading-relaxed">
-                            ${ui.backpackDesc || 'Your progress lives in this browser.'}
-                        </p>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 relative z-10">
-                            <button id="btn-export-progress" class="py-3 px-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold rounded-xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2">
-                                <span>📤</span> <span>${ui.backupBtn || 'Export File'}</span>
+                    <!-- DATA MANAGEMENT (Backpack) -->
+                    <div class="mb-8">
+                        <div class="grid grid-cols-2 gap-3">
+                            <button id="btn-export-progress" class="py-3 px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-600 dark:text-slate-300 font-bold rounded-xl active:scale-95 transition-all flex flex-col items-center gap-1 group">
+                                <span class="text-xl group-hover:-translate-y-0.5 transition-transform">📤</span> 
+                                <span class="text-xs">${ui.backupBtn || 'Export'}</span>
                             </button>
                             
-                            <button id="btn-show-restore" class="py-3 px-4 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-95 transition-all">
-                                <span>📥</span> <span>${ui.restoreBtn || 'Import File'}</span>
+                            <button id="btn-show-restore" class="py-3 px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-600 dark:text-slate-300 font-bold rounded-xl active:scale-95 transition-all flex flex-col items-center gap-1 group">
+                                <span class="text-xl group-hover:-translate-y-0.5 transition-transform">📥</span> 
+                                <span class="text-xs">${ui.restoreBtn || 'Import'}</span>
                             </button>
                         </div>
 
                         <!-- Hidden Restore Input -->
-                        <div id="restore-area" class="hidden mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                        <div id="restore-area" class="hidden mt-3">
                             <input type="file" id="file-importer" class="hidden" accept=".json,application/json">
-                            <button id="btn-select-file" class="w-full flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 hover:border-sky-500 hover:text-sky-400 transition-colors">
-                                <span>📂</span>
-                                <span>${ui.selectFilePrompt || 'Select file...'}</span>
+                            <button id="btn-select-file" class="w-full flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 text-slate-500 hover:border-sky-500 hover:text-sky-500 transition-colors text-xs font-bold">
+                                <span>📂</span> ${ui.selectFilePrompt || 'Select file...'}
                             </button>
                         </div>
                     </div>
 
                     <!-- SEEDS GRID -->
-                    <div class="text-left">
-                        <h3 class="font-bold text-xs uppercase text-slate-400 mb-4 tracking-widest">${ui.gardenTitle || 'My Seed Collection'}</h3>
+                    <div class="text-left flex-1">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-bold text-xs uppercase text-slate-400 tracking-widest flex items-center gap-2">
+                                🌰 ${ui.gardenTitle || 'Seeds'}
+                            </h3>
+                            <span class="text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded-full">${collectedItems.length}</span>
+                        </div>
+                        
                         ${collectedItems.length === 0 
-                            ? `<div class="p-8 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl text-center text-slate-400 text-sm italic">${ui.gardenEmpty}</div>`
-                            : `<div class="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-3">
+                            ? `<div class="p-6 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-xl text-center text-slate-400 text-xs italic">${ui.gardenEmpty}</div>`
+                            : `<div class="grid grid-cols-5 sm:grid-cols-6 gap-2">
                                 ${collectedItems.map(s => `
-                                    <div class="aspect-square bg-white dark:bg-slate-800 rounded-xl flex items-center justify-center text-2xl shadow-sm border border-slate-100 dark:border-slate-700 hover:scale-110 transition-transform cursor-help" title="${s.id}">
+                                    <div class="aspect-square bg-slate-50 dark:bg-slate-800 rounded-lg flex items-center justify-center text-xl shadow-sm border border-slate-100 dark:border-slate-700 hover:scale-110 transition-transform cursor-help" title="${s.id}">
                                         ${s.icon}
                                     </div>
                                 `).join('')}
                                </div>`
                         }
+                    </div>
+                    
+                    <div class="mt-8 text-center">
+                        <button id="btn-open-privacy" class="text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 underline transition-colors">${ui.syncPrivacyNote}</button>
                     </div>
                 </div>
             </div>
@@ -262,7 +245,6 @@ class ArborModalProfile extends HTMLElement {
     bindEvents() {
         this.querySelector('.btn-close').onclick = () => this.close();
         
-        // ... (Existing Bindings for Login, Avatar, Export etc) ...
         const btnShowWarning = this.querySelector('#btn-show-login-warning');
         if (btnShowWarning) {
             btnShowWarning.onclick = () => {
