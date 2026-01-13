@@ -383,8 +383,9 @@ class ArborContent extends HTMLElement {
                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.76 9.76 0 01-2.53-.388m-5.383-.948a.75.75 0 00.017.027l.005.003.003.002l.002.001l.001.001L3 21l2.905-2.719A9.75 9.75 0 0112 3c4.97 0 9 3.694 9 8.25z" /></svg>
            </button>
 
-           <button id="btn-export-pdf" class="flex w-9 h-9 items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors flex-shrink-0" title="${ui.exportTitle}">
+           <button id="btn-export-pdf" class="flex px-3 py-1.5 items-center justify-center gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white transition-colors flex-shrink-0" title="${ui.exportTitle}">
                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                <span class="font-bold text-xs hidden sm:inline">PDF</span>
            </button>
 
            <div class="block w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
@@ -473,13 +474,14 @@ class ArborContent extends HTMLElement {
                                         ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'
                                         : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}"
                                     data-idx="${toc.findIndex(t => t.id === item.id)}" style="padding-left: ${12 + (item.level - 1) * 16}px">
-                                    <div class="mt-0.5 flex-shrink-0 w-5 h-5 flex items-center justify-center">
+                                    
+                                    <div class="js-toc-tick mt-0.5 flex-shrink-0 w-6 h-6 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors">
                                         ${this.visitedSections.has(toc.findIndex(t => t.id === item.id)) 
                                             ? '<span class="text-green-500 font-bold">✓</span>' 
                                             : `<span class="w-2 h-2 rounded-full ${this.activeSectionIndex === toc.findIndex(t => t.id === item.id) ? 'bg-sky-500' : 'border border-slate-300'}"></span>` 
                                          }
                                     </div>
-                                    <span class="leading-tight break-words">${item.text}</span>
+                                    <span class="leading-tight break-words pt-0.5">${item.text}</span>
                                 </button>
                              `).join('')}
                         </nav>
@@ -591,9 +593,40 @@ class ArborContent extends HTMLElement {
             };
         }
 
+        // New Logic: Handle TOC Click separately for Tick vs Text
         this.querySelectorAll('.btn-toc').forEach(b => {
             b.onclick = (e) => {
-                this.scrollToSection(parseInt(e.currentTarget.dataset.idx));
+                const idx = parseInt(e.currentTarget.dataset.idx);
+
+                // 1. Tick Interaction (Toggle Status)
+                if (e.target.closest('.js-toc-tick')) {
+                    e.stopPropagation(); // Don't scroll/navigate
+
+                    if (this.visitedSections.has(idx)) {
+                        this.visitedSections.delete(idx);
+                        // If current node was marked complete, unmark it globally
+                        if (this.currentNode && store.isCompleted(this.currentNode.id)) {
+                            store.markComplete(this.currentNode.id, false);
+                        }
+                    } else {
+                        this.visitedSections.add(idx);
+                    }
+
+                    // Save state without moving cursor
+                    if (this.currentNode) {
+                        store.saveBookmark(
+                            this.currentNode.id,
+                            this.currentNode.content,
+                            this.activeSectionIndex,
+                            this.visitedSections
+                        );
+                    }
+                    this.render();
+                    return;
+                }
+
+                // 2. Normal Navigation
+                this.scrollToSection(idx);
                 if (window.innerWidth < 768) this.isTocVisible = false;
             };
         });

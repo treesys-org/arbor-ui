@@ -1,4 +1,5 @@
 
+
 import { store } from '../../store.js';
 
 class ArborModalArcade extends HTMLElement {
@@ -226,13 +227,32 @@ class ArborModalArcade extends HTMLElement {
         if (renderKey === this.lastRenderKey) return;
         this.lastRenderKey = renderKey;
         
+        // Preserve Focus & Selection State
+        const activeId = document.activeElement ? document.activeElement.id : null;
+        const selectionStart = document.activeElement ? document.activeElement.selectionStart : null;
+        const selectionEnd = document.activeElement ? document.activeElement.selectionEnd : null;
+
         // 1. SETUP VIEW (Pre-Launch)
         if (this.selectedGame) {
             this.renderSetup(ui);
-            return;
+        } else {
+            // 2. MAIN ARCADE VIEW
+            this.renderMain(ui);
         }
 
-        // 2. MAIN ARCADE VIEW
+        // Restore Focus
+        if (activeId) {
+            const el = document.getElementById(activeId);
+            if (el) {
+                el.focus();
+                if (selectionStart !== null && selectionEnd !== null && el.setSelectionRange) {
+                    el.setSelectionRange(selectionStart, selectionEnd);
+                }
+            }
+        }
+    }
+
+    renderMain(ui) {
         const manualGames = store.userStore.state.installedGames.map(g => ({
             ...g, repoName: 'Manual Install', isManual: true, path: g.url 
         }));
@@ -460,17 +480,9 @@ class ArborModalArcade extends HTMLElement {
         
         const filterInp = this.querySelector('#inp-filter-context');
         if(filterInp) {
-            filterInp.focus();
             filterInp.oninput = (e) => {
                 this.filterText = e.target.value;
                 this.render(); // Re-render list
-                setTimeout(() => {
-                    const el = this.querySelector('#inp-filter-context');
-                    if(el) {
-                        el.focus(); 
-                        el.selectionStart = el.selectionEnd = el.value.length;
-                    }
-                }, 0);
             };
         }
 

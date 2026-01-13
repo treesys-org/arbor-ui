@@ -73,8 +73,11 @@ class ArborModalProfile extends HTMLElement {
         const isSyncing = store.value.isSyncing;
         const lang = store.value.lang;
         const theme = store.value.theme;
+        
+        // GET STORAGE STATS (Arcade + Core)
+        const stats = store.storage.getStats();
 
-        // Anti-Flicker Key: Only re-render if meaningful data changes
+        // Anti-Flicker Key
         const renderKey = JSON.stringify({
             lang, theme,
             username: g.username,
@@ -84,14 +87,14 @@ class ArborModalProfile extends HTMLElement {
             seeds: collectedItems.length,
             puterUser: puterUser ? puterUser.username : null,
             isSyncing,
+            storageUsedArcade: stats.arcade.usedBytes,
+            storageUsedCore: stats.core.usedBytes,
             localAvatar: this.state.tempAvatar,
-            // Don't include tempUsername to avoid re-render on every keystroke if we handled it locally
         });
 
         if (renderKey === this.lastRenderKey) return;
         this.lastRenderKey = renderKey;
 
-        // Preserve focus
         const focusedId = document.activeElement ? document.activeElement.id : null;
         const selectionStart = document.activeElement ? document.activeElement.selectionStart : null;
         const selectionEnd = document.activeElement ? document.activeElement.selectionEnd : null;
@@ -172,6 +175,54 @@ class ArborModalProfile extends HTMLElement {
                         `}
                     </div>
 
+                    <!-- STORAGE STATS -->
+                    <div class="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700 mb-6 text-left">
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="font-bold text-slate-700 dark:text-slate-200 text-sm uppercase tracking-wide">Storage Manager</h3>
+                            ${stats.arcade.games.length > 0 ? `
+                                <button id="btn-clear-all-arcade" class="text-[10px] bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-2 py-1 rounded hover:bg-red-200 font-bold transition-colors">
+                                    FORMAT ARCADE
+                                </button>
+                            ` : ''}
+                        </div>
+
+                        <!-- CORE APP -->
+                        <div class="mb-3">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-xs font-bold text-blue-600 dark:text-blue-400">System Data (Progress)</span>
+                                <span class="text-xs font-mono text-slate-500 dark:text-slate-400">${stats.core.usedFmt}</span>
+                            </div>
+                            <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                                <div class="bg-blue-500 h-1.5 rounded-full transition-all" style="width: ${Math.max(2, stats.core.percent)}%"></div>
+                            </div>
+                        </div>
+
+                        <!-- ARCADE GAMES -->
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-xs font-bold text-purple-600 dark:text-purple-400">Arcade Data (Save Games)</span>
+                                <span class="text-xs font-mono text-slate-500 dark:text-slate-400">${stats.arcade.usedFmt} / 4 MB</span>
+                            </div>
+                            <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 mb-2 overflow-hidden">
+                                <div class="bg-purple-500 h-1.5 rounded-full transition-all" style="width: ${stats.arcade.percent}%"></div>
+                            </div>
+                            
+                            ${stats.arcade.games.length > 0 ? `
+                                <div class="mt-2 space-y-1 pl-2 border-l-2 border-slate-200 dark:border-slate-700">
+                                    ${stats.arcade.games.map(g => `
+                                        <div class="flex justify-between items-center text-[10px] text-slate-500 dark:text-slate-400 pt-1">
+                                            <span class="truncate pr-2">${g.id}</span>
+                                            <div class="flex gap-2 items-center flex-shrink-0">
+                                                <span class="font-mono opacity-70">${g.sizeFmt}</span>
+                                                <button class="text-slate-400 hover:text-red-500 font-bold btn-clear-game px-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded" data-id="${g.id}">✕</button>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            ` : '<p class="text-[10px] text-slate-400 italic">No games installed.</p>'}
+                        </div>
+                    </div>
+
                     <div class="grid grid-cols-2 gap-4 mb-8">
                         <div class="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-xl border border-orange-100 dark:border-orange-800/30">
                             <div class="text-2xl mb-1">🌰</div>
@@ -233,9 +284,8 @@ class ArborModalProfile extends HTMLElement {
         </div>`;
         
         this.bindEvents();
-        this.updateView(); // Ensure local toggles are respected after render
+        this.updateView();
 
-        // Restore Focus if needed
         if (focusedId) {
             const el = document.getElementById(focusedId);
             if (el) {
@@ -250,6 +300,7 @@ class ArborModalProfile extends HTMLElement {
     bindEvents() {
         this.querySelector('.btn-close').onclick = () => this.close();
         
+        // ... (Existing Bindings for Login, Avatar, Export etc) ...
         const btnShowWarning = this.querySelector('#btn-show-login-warning');
         if (btnShowWarning) {
             btnShowWarning.onclick = () => {
@@ -293,7 +344,7 @@ class ArborModalProfile extends HTMLElement {
                 this.state.tempAvatar = e.currentTarget.textContent;
                 this.state.showEmojiPicker = false;
                 this.updateView();
-                this.render(); // Force re-render to update main button avatar
+                this.render(); 
             };
         });
         
@@ -341,6 +392,27 @@ class ArborModalProfile extends HTMLElement {
                     }
                 };
                 reader.readAsText(file);
+            };
+        }
+
+        // NEW: Clear Game Data Handlers
+        this.querySelectorAll('.btn-clear-game').forEach(btn => {
+            btn.onclick = (e) => {
+                const id = e.target.dataset.id;
+                if (confirm(`Delete save data for ${id}?`)) {
+                    store.storage.clearGameData(id);
+                    this.render(); // Re-render to update stats
+                }
+            };
+        });
+        
+        const btnClearAll = this.querySelector('#btn-clear-all-arcade');
+        if (btnClearAll) {
+            btnClearAll.onclick = () => {
+                if (confirm('Warning: This will delete ALL progress in EVERY game in the Arcade.\n\nYour main Arbor progress (lessons, seeds) will NOT be affected.\n\nContinue?')) {
+                    store.storage.clearAll();
+                    this.render();
+                }
             };
         }
     }

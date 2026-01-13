@@ -1,5 +1,4 @@
 
-
 import { AVAILABLE_LANGUAGES } from './i18n.js';
 import { github } from './services/github.js';
 import { aiService } from './services/ai.js';
@@ -7,6 +6,7 @@ import { puterSync } from './services/puter-sync.js';
 import { UserStore } from './stores/user-store.js';
 import { SourceManager } from './stores/source-manager.js';
 import { TreeUtils } from './utils/tree-utils.js';
+import { storageManager } from './stores/storage-manager.js'; // NEW
 
 class Store extends EventTarget {
     constructor() {
@@ -142,6 +142,9 @@ class Store extends EventTarget {
     get availableLanguages() { return AVAILABLE_LANGUAGES; }
     get currentLangInfo() { return AVAILABLE_LANGUAGES.find(l => l.code === this.state.lang); }
     get dailyXpGoal() { return this.userStore.dailyXpGoal; }
+    
+    // EXPOSE STORAGE MANAGER
+    get storage() { return storageManager; }
 
     // --- STATE MANAGEMENT ---
 
@@ -205,6 +208,9 @@ class Store extends EventTarget {
                 };
                 traverse(langData);
             }
+            
+            // SMART HYDRATION: Expand completed branches into leaves in memory
+            this.hydrateCompletionState(langData);
 
             this.update({ 
                 data: langData, 
@@ -219,6 +225,48 @@ class Store extends EventTarget {
         } catch (e) {
             console.error("Data Processing Error", e);
             this.update({ loading: false, error: "Failed to process data structure." });
+        }
+    }
+    
+    // --- SMART HYDRATION (THE COMPRESSION HACK) ---
+    // If a branch ID is in `completedNodes`, automatically add all its children to the Set in memory.
+    // This allows us to store just 1 ID in localStorage for an entire finished course.
+    hydrateCompletionState(rootNode) {
+        const completedSet = this.userStore.state.completedNodes;
+        let hydratedCount = 0;
+
+        const traverse = (node) => {
+            // If parent is complete, ensure children are complete in memory
+            if (completedSet.has(node.id)) {
+                // If it has loaded children, mark them
+                if (node.children) {
+                    node.children.forEach(child => {
+                        if (!completedSet.has(child.id)) {
+                            completedSet.add(child.id);
+                            hydratedCount++;
+                        }
+                        // Recurse down to ensure deep leaves are marked
+                        traverse(child);
+                    });
+                } 
+                // If children are unloaded but we have leafIds metadata
+                else if (node.leafIds && Array.isArray(node.leafIds)) {
+                    node.leafIds.forEach(id => {
+                        if (!completedSet.has(id)) {
+                            completedSet.add(id);
+                            hydratedCount++;
+                        }
+                    });
+                }
+            } else {
+                // Continue searching down
+                if (node.children) node.children.forEach(traverse);
+            }
+        };
+        
+        traverse(rootNode);
+        if (hydratedCount > 0) {
+            console.log(`Arbor Hydration: Expanded ${hydratedCount} implicit completions from compressed save.`);
         }
     }
 
@@ -421,6 +469,10 @@ class Store extends EventTarget {
                     }
                 }
                 node.hasUnloadedChildren = false;
+                
+                // HYDRATION CHECK: Since we just loaded children, check if they should be implicitly marked
+                this.hydrateCompletionState(node);
+                
             } else {
                 throw new Error(`Failed to load children: ${node.apiPath}.json`);
             }
@@ -617,19 +669,35 @@ class Store extends EventTarget {
         this.checkForModuleCompletion(nodeId);
     }
 
+    // COMPRESSION OPTIMIZATION:
+    // When marking a branch complete, we add the branch ID to the set
+    // BUT we remove all children IDs from the set to save storage space.
+    // The `hydrateCompletionState` function will re-add them in memory upon reload.
     markBranchComplete(branchId) {
         if (!branchId) return;
-        const branchNode = this.findNode(branchId);
+        constbranchNode = this.findNode(branchId);
+        
         if (branchNode) {
-            const markRecursive = (node) => {
-                this.userStore.state.completedNodes.add(node.id);
-                if (node.children) node.children.forEach(markRecursive);
+            // 1. Mark Parent
+            this.userStore.state.completedNodes.add(branchNode.id);
+            
+            // 2. Optimization: Remove children from disk storage (Implied Completion)
+            const removeRecursive = (node) => {
+                if (node.id !== branchId) {
+                    this.userStore.state.completedNodes.delete(node.id);
+                }
+                if (node.children) node.children.forEach(removeRecursive);
             };
-            markRecursive(branchNode);
+            removeRecursive(branchNode);
+            
             if (branchNode.leafIds && Array.isArray(branchNode.leafIds)) {
-                branchNode.leafIds.forEach(id => this.userStore.state.completedNodes.add(id));
+                branchNode.leafIds.forEach(id => this.userStore.state.completedNodes.delete(id));
             }
+            
+            // 3. Ensure memory state is consistent immediately (Hydrate just this branch)
+            this.hydrateCompletionState(branchNode);
         }
+        
         this.userStore.persist();
         this.update({});
         this.dispatchEvent(new CustomEvent('graph-update'));
@@ -639,9 +707,10 @@ class Store extends EventTarget {
         const modules = this.getModulesStatus();
         modules.forEach(m => {
             if (m.isComplete) {
+                // If the module is newly complete, mark it explicitly
+                // This triggers the compression logic inside markBranchComplete
                 if (!this.userStore.state.completedNodes.has(m.id)) {
-                     this.userStore.state.completedNodes.add(m.id);
-                     this.userStore.persist();
+                     this.markBranchComplete(m.id);
                 }
                 this.harvestSeed(m.id);
             }
@@ -698,6 +767,10 @@ class Store extends EventTarget {
             const merged = new Set([...this.userStore.state.completedNodes, ...newProgress]);
             this.userStore.state.completedNodes = merged;
             this.userStore.persist();
+            
+            // Re-hydrate to ensure UI reflects implicit completions
+            if (this.state.data) this.hydrateCompletionState(this.state.data);
+            
             this.update({});
             return true;
         } catch (e) {

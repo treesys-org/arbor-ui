@@ -1,10 +1,12 @@
 
+
 import { store } from '../../store.js';
 
 class ArborModalWelcome extends HTMLElement {
     constructor() {
         super();
         this.activeStep = 0;
+        this.lastRenderKey = null;
         // Bind the render method for event listeners
         this.handleStateChange = () => this.render();
     }
@@ -38,6 +40,7 @@ class ArborModalWelcome extends HTMLElement {
         const steps = store.ui.welcomeSteps || [];
         if (this.activeStep < steps.length - 1) {
             this.activeStep++;
+            this.lastRenderKey = null; // Force re-render
             this.render();
         } else {
             this.close();
@@ -47,18 +50,27 @@ class ArborModalWelcome extends HTMLElement {
     prev() {
         if (this.activeStep > 0) {
             this.activeStep--;
+            this.lastRenderKey = null; // Force re-render
             this.render();
         }
     }
 
     goTo(index) {
         this.activeStep = index;
+        this.lastRenderKey = null; // Force re-render
         this.render();
     }
 
     render() {
         const ui = store.ui;
         const steps = ui.welcomeSteps || [];
+        const lang = store.value.lang;
+        const theme = store.value.theme;
+        
+        // Key for preventing flickering
+        const renderKey = `${lang}-${theme}-${this.activeStep}`;
+        if (renderKey === this.lastRenderKey) return;
+        this.lastRenderKey = renderKey;
         
         // Safety check if steps haven't loaded or language switch causes index out of bounds
         if (this.activeStep >= steps.length) this.activeStep = 0;

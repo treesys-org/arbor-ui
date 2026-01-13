@@ -1,6 +1,7 @@
 
 import { store } from '../../store.js';
 import { aiService } from '../../services/ai.js';
+import { storageManager } from '../../stores/storage-manager.js';
 
 class ArborModalGamePlayer extends HTMLElement {
     constructor() {
@@ -98,14 +99,26 @@ class ArborModalGamePlayer extends HTMLElement {
     
     setupBridge() {
         const gameId = store.value.modal.url;
+        // Generate a clean ID from the URL to use as storage key
+        // e.g. "https://.../firstjob/index.html" -> "firstjob"
+        let storageId = "unknown_game";
+        try {
+            const urlObj = new URL(gameId);
+            const pathParts = urlObj.pathname.split('/');
+            // Usually the folder name before index.html is a good ID
+            // .../arbor-games/firstjob/index.html
+            if (pathParts.length >= 2) {
+                storageId = pathParts[pathParts.length - 2];
+            }
+        } catch(e) { storageId = gameId; }
+
         window.__ARBOR_GAME_BRIDGE__ = {
             addXP: (amount) => store.userStore.addXP(amount, true),
             getCurriculum: () => this.playlist.map(l => ({ id: l.id, title: l.name })),
             
-            // The Playlist Manager function
             getNextLesson: async () => {
                 if (this.playlist.length === 0) return null;
-                if (this.cursorIndex >= this.playlist.length) this.cursorIndex = 0; // Loop curriculum
+                if (this.cursorIndex >= this.playlist.length) this.cursorIndex = 0; 
                 const node = this.playlist[this.cursorIndex++];
                 return await this.fetchLessonContent(node);
             },
@@ -115,7 +128,6 @@ class ArborModalGamePlayer extends HTMLElement {
                 return await this.fetchLessonContent(this.playlist[index]);
             },
 
-            // Generic AI passthrough
             aiChat: async (promptMessages, contextNode) => {
                 try {
                     return await aiService.chat(promptMessages, contextNode);
@@ -125,11 +137,17 @@ class ArborModalGamePlayer extends HTMLElement {
                 }
             },
             
-            // Storage
-            save: (key, value) => store.userStore.saveGameData(gameId, key, value),
-            load: (key) => store.userStore.loadGameData(gameId, key),
+            // CONNECT TO STORAGE MANAGER
+            save: (key, value) => {
+                try {
+                    return storageManager.saveGameData(storageId, key, value);
+                } catch(e) {
+                    console.error("Game Save Failed:", e);
+                    return false;
+                }
+            },
+            load: (key) => storageManager.loadGameData(storageId, key),
             
-            // System
             close: () => this.close()
         };
     }
@@ -200,14 +218,51 @@ class ArborModalGamePlayer extends HTMLElement {
             puterScript.src = "https://js.puter.com/v2/";
             doc.head.prepend(puterScript);
 
+            // INJECTED SDK WITH TIMEOUT PROTECTION
             const sdkScriptContent = `
             (function() {
                 const bridge = window.parent.__ARBOR_GAME_BRIDGE__;
                 if (!bridge) { console.error("Arbor Bridge not found!"); return; }
+                
                 window.Arbor = {
                     user: { username: '${store.value.gamification.username || 'Student'}', avatar: '${store.value.gamification.avatar || '👤'}', lang: '${store.value.lang || 'EN'}' },
                     ai: { 
-                        chat: (prompt, context) => bridge.aiChat(prompt, context) 
+                        chat: (prompt, context) => bridge.aiChat(prompt, context),
+                        
+                        askJSON: async (promptText, onComplete = null) => {
+                             const TIMEOUT_MS = 60000; 
+                             
+                             const timeoutPromise = new Promise((_, reject) => {
+                                 const id = setTimeout(() => {
+                                     clearTimeout(id);
+                                     reject(new Error("AI_TIMEOUT: The Guardian is thinking too slowly."));
+                                 }, TIMEOUT_MS);
+                             });
+
+                             try {
+                                 const res = await Promise.race([
+                                     bridge.aiChat([{role: 'user', content: promptText + "\\n\\nIMPORTANT: Return ONLY valid JSON. Do not include markdown code blocks."}]),
+                                     timeoutPromise
+                                 ]);
+
+                                 const txt = res.text;
+                                 const match = txt.match(/(\\{[\\s\\S]*\\}|\\[[\\s\\S]*\\])/);
+                                 if (!match) {
+                                     console.error("AI Response was not JSON:", txt);
+                                     throw new Error("AI did not return a valid JSON object or array.");
+                                 }
+                                 
+                                 const result = JSON.parse(match[0]);
+                                 
+                                 if (onComplete && typeof onComplete === 'function') {
+                                     onComplete(result);
+                                 }
+                                 return result;
+                             } catch(e) {
+                                console.error("Arbor Bridge Error:", e);
+                                throw e;
+                             }
+                        }
                     },
                     game: { addXP: (amount) => bridge.addXP(amount), exit: () => bridge.close() },
                     content: { getList: () => bridge.getCurriculum(), getNext: () => bridge.getNextLesson(), getAt: (idx) => bridge.getLessonAt(idx) },
@@ -249,7 +304,6 @@ class ArborModalGamePlayer extends HTMLElement {
         const ui = store.ui;
         if (!url) { this.close(); return; }
 
-        // --- CONSENT SCREEN ---
         if (this.needsConsent) {
             const isOllama = aiService.config.provider === 'ollama';
             

@@ -802,16 +802,19 @@ class ArborGraph extends HTMLElement {
         const currentY = t.applyY(d.y);
         const currentX = t.applyX(d.x);
         
-        const isMobile = this.width < 768;
-        
-        // Target Y Position on screen
-        // Move clicked node to ~60% height (so children appear above/below comfortably)
-        // Since children appear UP, we want node relatively low (80%)
+        // Target Y Position logic (Bottom-Up Tree)
         let targetY;
-        if (!d.data.expanded) {
-             targetY = this.height * 0.6; // Expanding -> Node moves down a bit to show children up
+        
+        // Note: d.data.expanded represents the NEW state because store.toggleNode ran before this.
+        if (d.data.expanded) {
+             // Expanded (Open): We want to see children which are ABOVE (lower Y in SVG).
+             // To see things "above", we push the current node DOWN on the screen.
+             // 85% of screen height puts the node near the bottom, leaving room above for the tree.
+             targetY = this.height * 0.85; 
         } else {
-             targetY = this.height * 0.8; // Collapsing -> Node moves lower
+             // Collapsed (Closed): We want to center the node again as children are hidden.
+             // 50% puts it in the middle.
+             targetY = this.height * 0.5;
         }
         
         const targetX = this.width / 2; // Always center horizontally
