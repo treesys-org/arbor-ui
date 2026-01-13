@@ -1,4 +1,3 @@
-
 # 🌳 Arbor UI
 
 **The Visual Browser for Decentralized Knowledge.**
