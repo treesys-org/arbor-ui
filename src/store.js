@@ -236,13 +236,19 @@ class Store extends EventTarget {
 
     async setLanguage(lang) { 
         if (this.state.lang === lang) return;
+
+        const isWelcomeOpen = this.state.modal === 'welcome' || this.state.modal === 'tutorial';
+
         this.update({ loading: true, error: null });
         try {
             await this.loadLanguage(lang); 
             this.update({ lang, searchCache: {} });
             if (this.state.activeSource) await this.loadData(this.state.activeSource, false); 
             else this.update({ loading: false });
-            this.goHome();
+            
+            if (!isWelcomeOpen) {
+                this.goHome();
+            }
         } catch (e) {
             this.update({ loading: false, error: `Language error: ${e.message}` });
             if (lang !== 'EN') this.setLanguage('EN');

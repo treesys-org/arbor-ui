@@ -149,16 +149,21 @@ class GameEngine {
     }
 
     setupInput() {
+        const dialogueStates = ['DIALOGUE', 'DIALOGUE_STUDENT', 'VICTORY'];
+        
         document.addEventListener('keydown', (e) => {
-            if (e.key === ' ' && this.state === 'DIALOGUE') this.advanceDialogue();
-            if (e.key === 'Enter') {
-                if (this.state === 'DIALOGUE') this.advanceDialogue();
-                if (this.state === 'INPUT_TEXT') this.submitText();
+            if ((e.key === ' ' || e.key === 'Enter') && dialogueStates.includes(this.state)) {
+                this.advanceDialogue();
+            }
+            if (e.key === 'Enter' && this.state === 'INPUT_TEXT') {
+                this.submitText();
             }
         });
 
         this.ui.dialogueBox.addEventListener('click', () => {
-             if (this.state === 'DIALOGUE') this.advanceDialogue();
+             if (dialogueStates.includes(this.state)) {
+                 this.advanceDialogue();
+             }
         });
 
         this.ui.btnTrue.addEventListener('click', () => this.resolveInput(true));
@@ -226,6 +231,30 @@ class GameEngine {
 
         ctx.save();
         ctx.translate(this.professor.x, this.professor.yDraw);
+
+        if (this.state === 'GENERATING') {
+            ctx.fillStyle = '#fff';
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 4;
+            
+            const bubbleX = -80;
+            const bubbleY = -100;
+            
+            ctx.beginPath();
+            ctx.moveTo(bubbleX + 20, bubbleY + 40);
+            ctx.quadraticCurveTo(bubbleX, bubbleY + 20, bubbleX + 20, bubbleY);
+            ctx.quadraticCurveTo(bubbleX + 40, bubbleY - 20, bubbleX + 60, bubbleY);
+            ctx.quadraticCurveTo(bubbleX + 80, bubbleY + 20, bubbleX + 60, bubbleY + 40);
+            ctx.quadraticCurveTo(bubbleX + 40, bubbleY + 60, bubbleX + 20, bubbleY + 40);
+            ctx.stroke();
+            ctx.fill();
+
+            ctx.fillStyle = '#000';
+            ctx.font = '30px VT323';
+            const dots = '.'.repeat((Math.floor(this.frame / 20) % 3) + 1);
+            ctx.fillText(dots, bubbleX + 25, bubbleY + 30);
+        }
+
         ctx.scale(2, 2);
         ctx.drawImage(this.assets.prof, -32, -64);
         ctx.restore();
@@ -326,7 +355,7 @@ class GameEngine {
     async loadContent() {
         this.clearBoard();
         this.state = 'DIALOGUE';
-        await this.showDialogue("SYSTEM", this.getLine('LOADING'), false);
+        await this.showDialogue("SYSTEM", this.getLine('LOADING'), true);
         this.state = 'GENERATING';
         
         try {
