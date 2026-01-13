@@ -1,3 +1,4 @@
+
 /**
  * ENGINE.JS
  * The core logic for Arbor Classroom.
@@ -585,6 +586,7 @@ function resize() {
 }
 
 window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 100));
 resize();
 
 // Start Game

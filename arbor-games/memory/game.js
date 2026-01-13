@@ -1,3 +1,4 @@
+
 /**
  * GAME.JS
  * Core Logic for Memory Garden: Overgrowth
@@ -102,11 +103,25 @@ class MemoryGame {
         }
 
         // 2. Build the game-specific prompt
+        // UPDATED: More specific instructions for coherence
         const prompt = `
-Analyze this text: "${lesson.text.substring(0, 1000)}".
-Create 6 pairs of "Term" vs "Definition".
-Output ONLY valid JSON array: [{"t": "Term", "d": "Definition (max 6 words)"}, ...]
-Do NOT wrap in markdown code blocks.
+CONTEXT: You are the Game Master for a "Memory Matching Game".
+GOAL: Create pairs of cards that the player must match. One card contains a TERM, the other contains its DEFINITION.
+SOURCE TEXT: "${lesson.text.substring(0, 1500)}".
+
+INSTRUCTIONS:
+1. Extract exactly 6 distinct pairs of concepts from the source text.
+2. The pairs must make logical sense when matched.
+3. "t" (Term): Keep it short (1-4 words).
+4. "d" (Definition): Keep it concise (max 12 words) but descriptive enough to identify the term uniquely.
+5. Do NOT include the term inside the definition.
+
+OUTPUT FORMAT:
+Return ONLY a valid raw JSON array. Do not use Markdown code blocks.
+[
+  {"t": "Term 1", "d": "Definition of term 1"},
+  {"t": "Term 2", "d": "Definition of term 2"}
+]
         `;
         
         // 3. Send the prompt to the generic AI chat function

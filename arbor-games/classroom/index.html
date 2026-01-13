@@ -2,17 +2,17 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Arbor Classroom: Ace Logic</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
     <style>
         :root { --bg-color: #1a1a1a; --term-green: #4ade80; }
-        body { background-color: var(--bg-color); margin: 0; overflow: hidden; font-family: 'VT323', monospace; user-select: none; }
+        html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background-color: var(--bg-color); font-family: 'VT323', monospace; user-select: none; touch-action: none; }
         
-        /* CRT EFFECT - Z-Index lowered to 5 (Above canvas, below UI) */
+        /* CRT EFFECT */
         .crt-overlay {
-            position: fixed; inset: 0; pointer-events: none; z-index: 5;
+            position: fixed; inset: 0; pointer-events: none; z-index: 10;
             background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
             background-size: 100% 2px, 3px 100%;
             animation: flicker 0.15s infinite;
@@ -20,32 +20,43 @@
         @keyframes flicker { 0% { opacity: 0.97; } 100% { opacity: 1; } }
 
         /* UI CONTAINERS */
-        #game-wrapper { position: relative; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; background: #000; }
-        canvas { image-rendering: pixelated; box-shadow: 0 0 50px rgba(0,0,0,0.8); z-index: 1; }
+        #game-wrapper { position: relative; width: 100%; height: 100dvh; display: flex; align-items: center; justify-content: center; background: #000; overflow: hidden; }
+        canvas { image-rendering: pixelated; box-shadow: 0 0 50px rgba(0,0,0,0.8); z-index: 1; max-width: 100%; max-height: 100%; }
 
-        /* DIALOGUE SYSTEM - Make clickable for mobile */
+        /* DIALOGUE SYSTEM */
         .dialogue-box {
-            position: absolute; bottom: 5%; width: 90%; max-width: 800px; min-height: 160px;
+            position: absolute; bottom: 5%; width: 90%; max-width: 800px; min-height: 120px;
             background: #fff; border: 4px solid #000; box-shadow: 8px 8px 0 #000;
-            padding: 25px; z-index: 20; display: none; color: #000; font-size: 1.8rem; line-height: 1.2;
-            cursor: pointer; /* Indication that it is clickable */
+            padding: 20px; z-index: 20; display: none; color: #000; font-size: 1.8rem; line-height: 1.1;
+            cursor: pointer;
         }
         .speaker-name {
-            position: absolute; top: -25px; left: 0; background: #000; color: #fff;
+            position: absolute; top: -20px; left: 0; background: #000; color: #fff;
             padding: 5px 15px; font-family: 'Press Start 2P', cursive; font-size: 0.8rem; border: 4px solid #000;
         }
         .next-arrow { position: absolute; bottom: 10px; right: 20px; animation: bounce 1s infinite; font-size: 1.5rem; color: #000; }
         @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
 
-        /* JUDGE OVERLAY (Buttons) */
+        /* JUDGE OVERLAY */
         #input-overlay {
-            position: absolute; bottom: 240px; width: 100%; z-index: 30;
+            position: absolute; bottom: 20%; width: 100%; z-index: 30;
             display: none; flex-direction: row; align-items: center; justify-content: center; gap: 20px;
+            pointer-events: none; /* Let clicks pass through gaps */
         }
+        .judge-btn {
+            pointer-events: auto;
+            font-family: 'Press Start 2P'; font-size: 1rem; padding: 1.5rem 2rem;
+            border: 4px solid #fff; box-shadow: 6px 6px 0 rgba(0,0,0,0.5);
+            cursor: pointer; transition: transform 0.1s; text-transform: uppercase;
+            touch-action: manipulation;
+        }
+        .judge-btn:active { transform: translate(4px, 4px); box-shadow: none; }
+        .btn-correct { background: #16a34a; color: white; }
+        .btn-wrong { background: #dc2626; color: white; }
         
-        /* TEXT INPUT OVERLAY (Player Answer) */
+        /* TEXT INPUT OVERLAY */
         #text-overlay {
-            position: absolute; bottom: 240px; width: 90%; max-width: 600px; z-index: 30;
+            position: absolute; bottom: 20%; width: 90%; max-width: 600px; z-index: 30;
             display: none; flex-direction: row; align-items: center; justify-content: center; gap: 10px;
         }
 
@@ -53,46 +64,45 @@
             flex: 1; background: #000; color: #4ade80; border: 4px solid #fff;
             font-family: 'VT323', monospace; font-size: 2rem; padding: 0.5rem 1rem;
             text-transform: uppercase; outline: none; box-shadow: 6px 6px 0 rgba(0,0,0,0.5);
+            border-radius: 0; -webkit-appearance: none;
         }
         #btn-submit {
             background: #4ade80; color: #000; border: 4px solid #fff;
             font-family: 'Press Start 2P'; font-size: 1rem; padding: 1rem;
             cursor: pointer; box-shadow: 6px 6px 0 rgba(0,0,0,0.5);
+            touch-action: manipulation;
         }
         #btn-submit:active { transform: translate(4px, 4px); box-shadow: none; }
-        
-        .judge-btn {
-            font-family: 'Press Start 2P'; font-size: 1rem; padding: 1.5rem 2rem;
-            border: 4px solid #fff; box-shadow: 6px 6px 0 rgba(0,0,0,0.5);
-            cursor: pointer; transition: transform 0.1s; text-transform: uppercase;
-        }
-        .judge-btn:active { transform: translate(4px, 4px); box-shadow: none; }
-        
-        .btn-correct { background: #16a34a; color: white; }
-        .btn-wrong { background: #dc2626; color: white; }
         
         /* DRAMATIC TEXT */
         .shout-bubble {
             position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%) rotate(-5deg);
             background: #fff; color: #b91c1c; font-family: 'Press Start 2P'; font-size: 3rem;
             padding: 2rem; border: 8px solid #000; box-shadow: 15px 15px 0 rgba(0,0,0,0.5);
-            z-index: 40; display: none; text-transform: uppercase;
+            z-index: 40; display: none; text-transform: uppercase; text-align: center;
         }
         .shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
         @keyframes shake { 10%, 90% { transform: translate(-51%, -51%) rotate(-5deg); } 20%, 80% { transform: translate(-49%, -49%) rotate(-5deg); } 30%, 50%, 70% { transform: translate(-52%, -50%) rotate(-5deg); } 40%, 60% { transform: translate(-48%, -50%) rotate(-5deg); } }
 
         /* START MENU */
-        #start-screen { position: absolute; inset: 0; background: #111; z-index: 60; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+        #start-screen { 
+            position: absolute; inset: 0; background: #111; z-index: 50; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; 
+        }
         .logo-text { font-family: 'Press Start 2P'; color: #4ade80; text-shadow: 4px 4px 0 #166534; margin-bottom: 2rem; text-align: center; line-height: 1.5; }
 
         /* MOBILE RESPONSIVE OVERRIDES */
         @media (max-width: 768px) {
-            .dialogue-box { font-size: 1.3rem; height: auto; bottom: 10px; padding: 15px; }
-            .judge-btn { font-size: 0.8rem; padding: 1rem; }
-            #input-overlay { bottom: 180px; }
-            #text-overlay { bottom: 180px; flex-direction: column; }
-            #player-input { width: 100%; }
-            #btn-submit { width: 100%; }
+            .dialogue-box { font-size: 1.4rem; width: 95%; bottom: 10px; padding: 15px; min-height: 100px; }
+            .judge-btn { font-size: 0.8rem; padding: 1.2rem; flex: 1; }
+            
+            /* Move inputs UP on mobile to avoid keyboard overlap */
+            #text-overlay { bottom: auto; top: 10%; flex-direction: column; width: 95%; }
+            #player-input { width: 100%; font-size: 1.5rem; padding: 1rem; }
+            #btn-submit { width: 100%; margin-top: 10px; padding: 1rem; }
+            
+            #input-overlay { bottom: 160px; width: 95%; }
+            .shout-bubble { font-size: 2rem; padding: 1rem; width: 90%; }
         }
     </style>
 </head>
@@ -121,15 +131,16 @@
 
         <!-- UI: Text Input (For Player) -->
         <div id="text-overlay">
-            <input type="text" id="player-input" placeholder="TYPE ANSWER..." maxlength="20" autocomplete="off">
+            <input type="text" id="player-input" placeholder="TYPE ANSWER..." maxlength="50" autocomplete="off" enterkeyhint="go">
             <button id="btn-submit">SUBMIT</button>
         </div>
 
         <!-- UI: Start Screen -->
         <div id="start-screen">
-            <h1 class="logo-text text-4xl md:text-6xl">CLASSROOM<br><span class="text-white text-2xl md:text-4xl">SIMULATOR</span></h1>
-            <p id="start-desc" class="text-gray-400 mb-8 font-mono text-center text-sm md:text-base"></p>
-            <button id="btn-start" class="px-8 py-4 bg-green-600 hover:bg-green-500 text-white font-bold font-mono text-xl md:text-2xl border-4 border-white shadow-[6px_6px_0px_#000] active:translate-y-1 active:shadow-none transition-all">
+            <h1 class="logo-text text-3xl md:text-6xl">CLASSROOM<br><span class="text-white text-xl md:text-4xl">SIMULATOR</span></h1>
+            <p id="start-desc" class="text-gray-400 mb-8 font-mono text-center text-xs md:text-base leading-relaxed max-w-md"></p>
+            <button id="btn-start" class="px-6 py-4 md:px-8 md:py-4 bg-green-600 hover:bg-green-500 text-white font-bold font-mono text-lg md:text-2xl border-4 border-white shadow-[6px_6px_0px_#000] active:translate-y-1 active:shadow-none transition-all w-full md:w-auto">
+                START
             </button>
         </div>
     </div>
