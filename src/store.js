@@ -630,6 +630,7 @@ class Store extends EventTarget {
     computeHash(str) { return this.userStore.computeHash(str); }
     loadBookmarks() { this.userStore.loadBookmarks(); }
     saveBookmark(nodeId, contentRaw, index, visitedSet) { this.userStore.saveBookmark(nodeId, contentRaw, index, visitedSet); }
+    removeBookmark(nodeId) { this.userStore.removeBookmark(nodeId); this.update({}); }
     getBookmark(nodeId, contentRaw) { return this.userStore.getBookmark(nodeId, contentRaw); }
     loadProgress() { this.userStore.loadProgress(); }
     

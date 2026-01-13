@@ -26,6 +26,9 @@ class ArborModalSearch extends HTMLElement {
                 if(inp) inp.focus();
             }
         });
+        
+        // Initial State: Show Bookmarks if query is empty
+        this.updateResultsDOM();
     }
 
     disconnectedCallback() {
@@ -54,7 +57,7 @@ class ArborModalSearch extends HTMLElement {
                     <span class="absolute right-4 top-4 text-[10px] font-bold text-slate-500 border border-slate-600 px-1.5 py-1 rounded bg-[#0f172a] select-none hidden md:inline">ESC</span>
                 </div>
                 
-                <div id="search-msg-area" class="text-center text-slate-400 py-4 font-medium text-sm transition-opacity duration-300 ${this.state.query.length > 0 ? 'opacity-100' : 'opacity-0'}">
+                <div id="search-msg-area" class="text-center text-slate-400 py-4 font-medium text-sm transition-opacity duration-300 hidden">
                     ${ui.searchKeepTyping}
                 </div>
 
@@ -65,7 +68,7 @@ class ArborModalSearch extends HTMLElement {
         </div>`;
     }
 
-    getResultsHTML(ui) {
+    getResultsHTML(results, ui, isBookmarks = false) {
          if (this.state.isSearching) {
              return `
              <div class="text-center text-slate-400 py-8 flex flex-col items-center gap-2">
@@ -74,14 +77,24 @@ class ArborModalSearch extends HTMLElement {
              </div>`;
          }
 
-         if (this.state.results.length === 0) {
+         if (results.length === 0) {
+             if (isBookmarks) {
+                 // Empty state for bookmarks
+                 return `<div class="text-center text-slate-500 py-12 flex flex-col items-center gap-2">
+                    <span class="text-3xl opacity-50">📖</span>
+                    <span>Start reading to save your place here.</span>
+                 </div>`;
+             }
              return `<div class="text-center text-slate-400 py-8 flex flex-col items-center gap-2"><span class="text-2xl opacity-50">🍃</span><span>${ui.noResults}</span></div>`;
          }
          
          // Priority Logic: Modules (branch) > Exams > Lessons (leaf)
          const priority = { 'branch': 0, 'root': 0, 'exam': 1, 'leaf': 2 };
 
-         const sortedResults = [...this.state.results].sort((a, b) => {
+         const sortedResults = [...results].sort((a, b) => {
+             // If bookmark view, keep chronological order (provided by input), don't resort by type
+             if (isBookmarks) return 0;
+             
              const pA = priority[a.type] !== undefined ? priority[a.type] : 99;
              const pB = priority[b.type] !== undefined ? priority[b.type] : 99;
              
@@ -89,7 +102,9 @@ class ArborModalSearch extends HTMLElement {
              return a.name.localeCompare(b.name);
          });
          
-         return sortedResults.map(res => {
+         const header = isBookmarks ? `<div class="px-4 py-2 bg-slate-800/50 text-[10px] font-bold text-sky-400 uppercase tracking-widest border-b border-slate-700">In Progress (Bookmarks)</div>` : '';
+
+         return header + sortedResults.map(res => {
             let tag = ui.tagModule || 'MODULE';
             let tagClass = 'border-blue-500 text-blue-400 bg-blue-500/10';
             
@@ -103,6 +118,12 @@ class ArborModalSearch extends HTMLElement {
             }
 
             const pathDisplay = (res.path || '').replace(/ \/ /g, ' › ');
+            
+            // Percentage for bookmarks
+            let progressIndicator = '';
+            if (isBookmarks && res.progress !== undefined) {
+                progressIndicator = `<span class="text-[10px] text-green-400 font-mono ml-2">${res.progress}% Read</span>`;
+            }
 
             return `
             <button class="btn-search-result w-full text-left p-4 border-b border-slate-700/50 hover:bg-white/5 transition-colors flex items-start gap-4 group" data-json="${encodeURIComponent(JSON.stringify(res))}">
@@ -113,6 +134,7 @@ class ArborModalSearch extends HTMLElement {
                     <div class="flex items-center gap-3 mb-1">
                         <h4 class="font-bold text-slate-100 truncate text-base">${res.name}</h4>
                         <span class="text-[10px] uppercase font-bold px-1.5 py-0.5 border rounded ${tagClass}">${tag}</span>
+                        ${progressIndicator}
                     </div>
                     <p class="text-xs text-slate-400 truncate font-medium">${pathDisplay}</p>
                 </div>
@@ -128,16 +150,18 @@ class ArborModalSearch extends HTMLElement {
         
         if (!list || !msgArea) return;
 
+        // MODE 1: Searching (Spinner)
         if (this.state.isSearching) {
-            list.innerHTML = this.getResultsHTML(ui);
+            list.innerHTML = this.getResultsHTML([], ui);
             list.classList.remove('hidden');
             msgArea.classList.add('hidden');
             return;
         }
 
+        // MODE 2: Results Found
         if (this.state.query.length > 0) {
             if (this.state.results.length > 0 || (this.state.query.length >= 2)) {
-                list.innerHTML = this.getResultsHTML(ui);
+                list.innerHTML = this.getResultsHTML(this.state.results, ui);
                 list.classList.remove('hidden');
                 msgArea.classList.add('hidden');
             } else if (this.state.query.length === 1) {
@@ -145,13 +169,48 @@ class ArborModalSearch extends HTMLElement {
                 msgArea.classList.remove('hidden');
                 msgArea.textContent = ui.searchKeepTyping;
             } else {
-                list.innerHTML = this.getResultsHTML(ui);
+                list.innerHTML = this.getResultsHTML([], ui);
                 list.classList.remove('hidden');
                 msgArea.classList.add('hidden');
             }
-        } else {
-            list.classList.add('hidden');
-            msgArea.classList.add('hidden');
+        } 
+        // MODE 3: Empty Query -> Show Bookmarks
+        else {
+            const recentBookmarks = store.userStore.getRecentBookmarks();
+            const bookmarkedNodes = [];
+            
+            recentBookmarks.forEach(bm => {
+                const node = store.findNode(bm.id);
+                // Ensure node exists in current tree context
+                if (node) {
+                    // Calculate quick progress estimate if possible
+                    let progress = 0;
+                    if (bm.visited && bm.visited.length > 0) {
+                        // Assuming 5 sections on average if parsing is expensive, 
+                        // or just show tick count. 
+                        // Let's just pass visited count for now or hardcode visual.
+                        // Ideally we'd parse content but that's heavy.
+                        // We'll trust the stored 'index' as rough progress
+                        progress = 10; // Placeholder visual
+                    }
+                    
+                    bookmarkedNodes.push({
+                        ...node,
+                        progress: Math.min(99, (bm.visited ? bm.visited.length : 0) * 10) // Rough Estimate
+                    });
+                }
+            });
+
+            if (bookmarkedNodes.length > 0) {
+                list.innerHTML = this.getResultsHTML(bookmarkedNodes, ui, true);
+                list.classList.remove('hidden');
+                msgArea.classList.add('hidden');
+            } else {
+                // Show default msg or empty bookmarks state
+                list.classList.add('hidden');
+                msgArea.classList.remove('hidden');
+                msgArea.textContent = ui.searchKeepTyping;
+            }
         }
 
         list.querySelectorAll('.btn-search-result').forEach(btn => {

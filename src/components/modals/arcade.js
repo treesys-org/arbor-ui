@@ -1,11 +1,10 @@
 
-
 import { store } from '../../store.js';
 
 class ArborModalArcade extends HTMLElement {
     constructor() {
         super();
-        this.activeTab = 'games'; // 'games' | 'sources'
+        this.activeTab = 'games'; // 'games' | 'sources' | 'storage'
         this.discoveredGames = [];
         this.isLoading = false;
         this.isPreparingContext = false;
@@ -209,6 +208,9 @@ class ArborModalArcade extends HTMLElement {
         const theme = store.value.theme;
         const installedGamesCount = store.userStore.state.installedGames.length;
         const reposCount = store.userStore.state.gameRepos.length;
+        
+        // Storage Stats
+        const stats = store.storage.getStats();
 
         // Anti-Flicker Key
         const renderKey = JSON.stringify({
@@ -221,7 +223,8 @@ class ArborModalArcade extends HTMLElement {
             repos: reposCount,
             selGameId: this.selectedGame ? this.selectedGame.id : null,
             selNode: this.selectedNodeId,
-            filter: this.filterText
+            filter: this.filterText,
+            storageUsed: stats.arcade.usedBytes
         });
 
         if (renderKey === this.lastRenderKey) return;
@@ -237,7 +240,7 @@ class ArborModalArcade extends HTMLElement {
             this.renderSetup(ui);
         } else {
             // 2. MAIN ARCADE VIEW
-            this.renderMain(ui);
+            this.renderMain(ui, stats);
         }
 
         // Restore Focus
@@ -252,7 +255,7 @@ class ArborModalArcade extends HTMLElement {
         }
     }
 
-    renderMain(ui) {
+    renderMain(ui, stats) {
         const manualGames = store.userStore.state.installedGames.map(g => ({
             ...g, repoName: 'Manual Install', isManual: true, path: g.url 
         }));
@@ -269,10 +272,13 @@ class ArborModalArcade extends HTMLElement {
                 <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${this.activeTab === 'sources' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-sources">
                     📡 ${ui.navSources || "Sources"}
                 </button>
+                <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${this.activeTab === 'storage' ? 'border-red-500 text-red-600 dark:text-red-400' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-storage">
+                    💾 Data
+                </button>
             </div>
         `;
 
-        // --- LIST VIEW (GAMES) ---
+        // --- CONTENT ---
         let contentHtml = '';
         
         if (this.activeTab === 'games') {
@@ -351,6 +357,43 @@ class ArborModalArcade extends HTMLElement {
                         Add
                     </button>
                 </div>
+            </div>
+            `;
+        }
+        else if (this.activeTab === 'storage') {
+            const usagePercent = stats.arcade.percent;
+            const barColor = usagePercent > 90 ? 'bg-red-500' : (usagePercent > 70 ? 'bg-orange-500' : 'bg-purple-500');
+            
+            contentHtml = `
+            <div class="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase">Total Usage</span>
+                    <span class="text-xs font-mono text-slate-500">${stats.arcade.usedFmt} / 3.5 MB</span>
+                </div>
+                <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden mb-1">
+                    <div class="${barColor} h-2 rounded-full transition-all duration-500" style="width: ${usagePercent}%"></div>
+                </div>
+                ${usagePercent > 90 ? '<p class="text-[10px] text-red-500 font-bold mt-1 text-center">⚠️ Storage Full. Delete some saves to play new games.</p>' : ''}
+            </div>
+            
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Saved Games</h3>
+                ${stats.arcade.games.length > 0 ? `<button id="btn-delete-all-saves" class="text-[10px] text-red-500 hover:text-red-700 font-bold border border-red-200 dark:border-red-900/30 px-2 py-1 rounded bg-red-50 dark:bg-red-900/10">Delete All</button>` : ''}
+            </div>
+
+            <div class="space-y-2">
+                ${stats.arcade.games.length === 0 ? `<div class="p-8 text-center text-slate-400 italic text-sm">No game data saved.</div>` : 
+                  stats.arcade.games.map(g => `
+                    <div class="flex items-center justify-between p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl group hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
+                        <div class="min-w-0 pr-4">
+                            <h4 class="font-bold text-sm text-slate-800 dark:text-white truncate">${g.id}</h4>
+                            <p class="text-[10px] text-slate-400 font-mono">${g.sizeFmt} • Updated: ${new Date(g.updated).toLocaleDateString()}</p>
+                        </div>
+                        <button class="btn-delete-save px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-500 hover:text-red-600 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 transition-colors" data-id="${g.id}">
+                            Delete
+                        </button>
+                    </div>
+                `).join('')}
             </div>
             `;
         }
@@ -501,6 +544,7 @@ class ArborModalArcade extends HTMLElement {
         this.querySelector('.btn-close').onclick = () => this.close();
         this.querySelector('#tab-games').onclick = () => { this.activeTab = 'games'; this.render(); };
         this.querySelector('#tab-sources').onclick = () => { this.activeTab = 'sources'; this.render(); };
+        this.querySelector('#tab-storage').onclick = () => { this.activeTab = 'storage'; this.render(); };
         
         const btnAddCustom = this.querySelector('#btn-add-custom');
         if(btnAddCustom) btnAddCustom.onclick = () => this.addCustomGame();
@@ -528,6 +572,26 @@ class ArborModalArcade extends HTMLElement {
         this.querySelectorAll('.btn-remove-repo').forEach(b => {
             b.onclick = (e) => this.removeRepo(e.currentTarget.dataset.id);
         });
+        
+        // STORAGE TAB HANDLERS
+        this.querySelectorAll('.btn-delete-save').forEach(b => {
+            b.onclick = (e) => {
+                if(confirm('Delete save data for this game?')) {
+                    store.storage.clearGameData(e.currentTarget.dataset.id);
+                    this.render();
+                }
+            };
+        });
+        
+        const btnDelAll = this.querySelector('#btn-delete-all-saves');
+        if(btnDelAll) {
+            btnDelAll.onclick = () => {
+                if(confirm('Delete ALL Arcade save data? This cannot be undone.')) {
+                    store.storage.clearAll();
+                    this.render();
+                }
+            };
+        }
     }
 }
 customElements.define('arbor-modal-arcade', ArborModalArcade);

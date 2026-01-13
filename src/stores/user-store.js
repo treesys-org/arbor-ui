@@ -1,5 +1,9 @@
+
 // BOTANICAL SEEDS: More universal concept for knowledge trees
 const SEED_TYPES = ['🌲', '🌰', '🌾', '🍁', '🥥', '🥜', '🌰', '🫘', '🍄', '🌱'];
+
+// CONSTANTS
+const MAX_BOOKMARKS = 50; // Hard limit to prevent storage creep. 50 active lessons is plenty.
 
 export class UserStore {
     constructor(uiStringsGetter, onPersistCallback = null) {
@@ -10,7 +14,7 @@ export class UserStore {
             bookmarks: {},
             installedGames: [], // Single games added manually
             gameRepos: [], // Repositories (manifests) of games
-            gameData: {}, // NEW: Generic key-value store for games { [gameId]: { [key]: value } }
+            gameData: {}, // Generic key-value store for games { [gameId]: { [key]: value } }
             gamification: {
                 username: '',
                 avatar: '👤',
@@ -53,20 +57,16 @@ export class UserStore {
                     }
                     if (parsed.installedGames) this.state.installedGames = parsed.installedGames;
                     if (parsed.gameRepos) this.state.gameRepos = parsed.gameRepos;
-                    if (parsed.gameData) this.state.gameData = parsed.gameData; // NEW: Load game data
+                    if (parsed.gameData) this.state.gameData = parsed.gameData; // Load game data
                 }
             }
             
-            // FIX: Always reset/update the Official Repo to ensure it points to the Cloud, not local folder
-            // 1. Remove old/local official entry that might be cached in localStorage
+            // FIX: Always reset/update the Official Repo to ensure it points to the Cloud
             this.state.gameRepos = this.state.gameRepos.filter(r => r.id !== 'official');
             
-            // 2. Add correct Cloud URL pointing to treesys-org/arbor-games
             this.state.gameRepos.unshift({
                 id: 'official',
                 name: 'Arbor Official',
-                // Pointing to Raw GitHub ensures the manifest JSON loads correctly cross-origin.
-                // Note: For the HTML games to run perfectly, GitHub Pages should be enabled on the repo.
                 url: 'https://raw.githubusercontent.com/treesys-org/arbor-games/main/manifest.json',
                 isOfficial: true
             });
@@ -81,21 +81,24 @@ export class UserStore {
             bookmarks: this.state.bookmarks, // Add bookmarks to cloud sync
             installedGames: this.state.installedGames,
             gameRepos: this.state.gameRepos,
-            gameData: this.state.gameData, // NEW: Add game data to persistence
+            gameData: this.state.gameData,
             timestamp: Date.now()
         };
     }
 
     persist() {
-        const payload = this.getPersistenceData();
-        localStorage.setItem('arbor-progress', JSON.stringify(payload));
-        
-        // Trigger external persistence (e.g., Cloud Sync)
-        if (this.onPersist) {
-            this.onPersist(payload);
+        try {
+            const payload = this.getPersistenceData();
+            localStorage.setItem('arbor-progress', JSON.stringify(payload));
+            
+            if (this.onPersist) {
+                this.onPersist(payload);
+            }
+        } catch (e) {
+            console.warn("Storage Error", e);
         }
     }
-
+    
     getExportJson() {
         const data = { 
             v: 1, 
@@ -105,12 +108,12 @@ export class UserStore {
             b: this.state.bookmarks,
             games: this.state.installedGames,
             repos: this.state.gameRepos,
-            d: this.state.gameData // NEW: 'd' for data
+            d: this.state.gameData 
         };
         return JSON.stringify(data, null, 2);
     }
 
-    // --- Bookmarks ---
+    // --- Bookmarks (Robust Count Limit Strategy) ---
 
     computeHash(str) {
         if (!str) return "0";
@@ -136,17 +139,47 @@ export class UserStore {
         if (!nodeId || !contentRaw) return;
         const currentHash = this.computeHash(contentRaw);
         
+        // Check Limit logic BEFORE adding
+        const keys = Object.keys(this.state.bookmarks);
+        
+        // If we are at limit and adding a NEW bookmark (not updating existing)
+        if (keys.length >= MAX_BOOKMARKS && !this.state.bookmarks[nodeId]) {
+            // Find oldest based on timestamp
+            let oldestKey = null;
+            let oldestTime = Infinity;
+            
+            keys.forEach(k => {
+                const ts = this.state.bookmarks[k].timestamp || 0;
+                if (ts < oldestTime) {
+                    oldestTime = ts;
+                    oldestKey = k;
+                }
+            });
+            
+            if (oldestKey) {
+                delete this.state.bookmarks[oldestKey];
+            }
+        }
+        
         const newBookmark = {
             hash: currentHash,
             index: index || 0,
             visited: Array.from(visitedSet || []),
-            timestamp: Date.now()
+            timestamp: Date.now() // Critical for LRU pruning
         };
         
         this.state.bookmarks[nodeId] = newBookmark;
         localStorage.setItem('arbor-bookmarks', JSON.stringify(this.state.bookmarks));
-        // Bookmarks change often, maybe debounce this in real app, but for now we sync
         this.persist();
+    }
+    
+    removeBookmark(nodeId) {
+        if (!nodeId) return;
+        if (this.state.bookmarks[nodeId]) {
+            delete this.state.bookmarks[nodeId];
+            localStorage.setItem('arbor-bookmarks', JSON.stringify(this.state.bookmarks));
+            this.persist();
+        }
     }
 
     getBookmark(nodeId, contentRaw) {
@@ -156,6 +189,7 @@ export class UserStore {
         
         if (contentRaw) {
             const currentHash = this.computeHash(contentRaw);
+            // If content changed (hash mismatch), the bookmark is invalid
             if (bookmark.hash !== currentHash) {
                 delete this.state.bookmarks[nodeId];
                 localStorage.setItem('arbor-bookmarks', JSON.stringify(this.state.bookmarks));
@@ -163,6 +197,14 @@ export class UserStore {
             }
         }
         return bookmark;
+    }
+    
+    // Get list of active bookmarks sorted by most recent
+    getRecentBookmarks() {
+        const entries = Object.entries(this.state.bookmarks);
+        // Sort descending by timestamp
+        entries.sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
+        return entries.map(([id, data]) => ({ id, ...data }));
     }
 
     // --- Gamification ---

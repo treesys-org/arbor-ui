@@ -355,9 +355,10 @@ class ArborGraph extends HTMLElement {
         // Increased zoom scale for better visibility on small screens
         const k = isMobile ? 1.15 : 1.0; 
         
-        // Focus on bottom center (Root position)
+        // Focus on bottom center (Root position), but leave room for footer UI
+        // height - 80 gives more clearance than height - 50
+        const ty = (this.height - 80) - (this.height * k); 
         const tx = (this.width / 2) * (1 - k); 
-        const ty = (this.height - 50) - (this.height * k); 
 
         this.svg.transition().duration(duration)
             .call(this.zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(k));
@@ -802,20 +803,32 @@ class ArborGraph extends HTMLElement {
         const currentY = t.applyY(d.y);
         const currentX = t.applyX(d.x);
         
-        // Target Y Position logic (Bottom-Up Tree)
+        // --- SMART CAMERA LOGIC ---
+        // The tree grows BOTTOM-UP (Y decreases as you go deeper).
+        // Children are visually ABOVE the parent.
+        
         let targetY;
+        const isMobile = this.width < 768;
         
         // Note: d.data.expanded represents the NEW state because store.toggleNode ran before this.
         if (d.data.expanded) {
-             // Expanded (Open): We want to see children which are ABOVE (lower Y in SVG).
-             // To see things "above", we push the current node DOWN on the screen.
-             // 85% of screen height puts the node near the bottom, leaving room above for the tree.
-             targetY = this.height * 0.85; 
+             // EXPANDED (Opening): 
+             // We need space ABOVE the node for the children to fan out.
+             // Position the node in the "Lower Third" of the screen.
+             // 0.70 (Desktop) to 0.75 (Mobile) is safe.
+             // Avoid 0.85 as it is often covered by UI/Footer.
+             targetY = this.height * (isMobile ? 0.75 : 0.70);
         } else {
-             // Collapsed (Closed): We want to center the node again as children are hidden.
-             // 50% puts it in the middle.
+             // COLLAPSED (Closing): 
+             // Re-center vertically to show context.
              targetY = this.height * 0.5;
         }
+        
+        // SAFETY CLAMP: Ensure the node is never pushed too close to the very top or bottom
+        // regardless of calculation. 
+        const safeMargin = 80;
+        if (targetY < safeMargin) targetY = safeMargin;
+        if (targetY > this.height - safeMargin) targetY = this.height - safeMargin;
         
         const targetX = this.width / 2; // Always center horizontally
 

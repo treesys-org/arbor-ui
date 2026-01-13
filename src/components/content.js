@@ -224,6 +224,24 @@ class ArborContent extends HTMLElement {
         const el = this.querySelector('#content-area');
         if(el) el.scrollTop = 0;
     }
+    
+    // Toggle the bookmark status via UI button
+    toggleBookmark() {
+        if (!this.currentNode) return;
+        const isBookmarked = !!store.getBookmark(this.currentNode.id, this.currentNode.content);
+        
+        if (isBookmarked) {
+            store.removeBookmark(this.currentNode.id);
+        } else {
+            store.saveBookmark(
+                this.currentNode.id,
+                this.currentNode.content,
+                this.activeSectionIndex,
+                this.visitedSections
+            );
+        }
+        this.render();
+    }
 
     getToc() {
         if (!this.currentNode?.content) return [];
@@ -306,6 +324,8 @@ class ArborContent extends HTMLElement {
     // --- Render ---
 
     render() {
+        const isBookmarked = this.currentNode ? !!store.getBookmark(this.currentNode.id, this.currentNode.content) : false;
+        
         const stateKey = JSON.stringify({
             id: this.currentNode ? this.currentNode.id : null,
             expanded: this.isExpanded,
@@ -314,7 +334,8 @@ class ArborContent extends HTMLElement {
             filter: this.tocFilter,
             quizzes: this.quizStates,
             completed: this.currentNode ? store.isCompleted(this.currentNode.id) : false,
-            visitedCount: this.visitedSections ? this.visitedSections.size : 0
+            visitedCount: this.visitedSections ? this.visitedSections.size : 0,
+            bookmarked: isBookmarked
         });
 
         if (stateKey === this.lastRenderKey) return;
@@ -373,6 +394,10 @@ class ArborContent extends HTMLElement {
            <button id="btn-close-content-${suffix}" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-red-50 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 transition-colors flex-shrink-0">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
            </button>`;
+           
+        const bookmarkIcon = isBookmarked
+            ? `<svg class="w-5 h-5 text-yellow-500 fill-current" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" clip-rule="evenodd" /></svg>`
+            : `<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.563.045.797.777.371 1.141l-4.203 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.203-3.602a.563.563 0 01.371-1.141l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" /></svg>`;
 
         const actionButtonsHtml = `
            <button id="btn-ask-sage" class="px-3 py-1.5 rounded-lg bg-purple-50 dark:bg-purple-900/30 hover:bg-purple-100 dark:hover:bg-purple-900/50 text-purple-600 dark:text-purple-300 font-bold text-xs flex items-center gap-2 border border-purple-100 dark:border-purple-800 transition-colors whitespace-nowrap">
@@ -381,6 +406,10 @@ class ArborContent extends HTMLElement {
            
            <button id="btn-propose-change" class="flex w-9 h-9 items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors flex-shrink-0" title="${ui.proposeChange}">
                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.76 9.76 0 01-2.53-.388m-5.383-.948a.75.75 0 00.017.027l.005.003.003.002l.002.001l.001.001L3 21l2.905-2.719A9.75 9.75 0 0112 3c4.97 0 9 3.694 9 8.25z" /></svg>
+           </button>
+           
+           <button id="btn-toggle-bookmark" class="flex w-9 h-9 items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-500 hover:text-yellow-500 dark:hover:text-yellow-400 transition-colors flex-shrink-0" title="${isBookmarked ? 'Remove Bookmark' : 'Bookmark'}">
+                ${bookmarkIcon}
            </button>
 
            <button id="btn-export-pdf" class="flex px-3 py-1.5 items-center justify-center gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white transition-colors flex-shrink-0" title="${ui.exportTitle}">
@@ -564,6 +593,7 @@ class ArborContent extends HTMLElement {
         safeBind('#btn-edit-content', () => store.openEditor(this.currentNode));
         safeBind('#btn-ask-sage', () => { store.setModal({ type: 'sage', mode: 'chat' }); });
         safeBind('#btn-export-pdf', () => { store.setModal({ type: 'export-pdf', node: this.currentNode }); });
+        safeBind('#btn-toggle-bookmark', () => this.toggleBookmark()); // Bind Bookmark Toggle
         safeBind('#btn-propose-change', () => this.proposeChange());
         safeBind('#btn-toggle-toc', () => this.toggleToc());
         safeBind('#toc-mobile-backdrop', () => this.toggleToc());

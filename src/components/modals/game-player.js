@@ -143,6 +143,8 @@ class ArborModalGamePlayer extends HTMLElement {
                     return storageManager.saveGameData(storageId, key, value);
                 } catch(e) {
                     console.error("Game Save Failed:", e);
+                    // Notify User via Toast or Alert
+                    store.notify("⚠️ Storage Full! Delete old saves in Arcade menu.");
                     return false;
                 }
             },

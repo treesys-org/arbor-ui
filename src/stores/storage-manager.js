@@ -4,10 +4,6 @@ export class StorageManager {
         this.STORAGE_KEY = 'arbor_arcade_saves_v1';
         
         // --- STORAGE QUOTAS (BROWSER LIMIT: ~5MB TOTAL) ---
-        // New Balance:
-        // Core App: ~1.5 MB (Huge buffer for optimized completion data)
-        // Arcade:   ~3.5 MB (Plenty for dozens of complex save files)
-        
         // Global Limit for Arcade: 3,500,000 characters (~3.4 MB)
         this.MAX_GLOBAL_SIZE = 3500000; 
         
@@ -35,14 +31,17 @@ export class StorageManager {
     saveToDisk() {
         try {
             const raw = JSON.stringify(this.cache);
+            
+            // MANUAL MANAGEMENT ENFORCED: No Auto-GC.
             if (raw.length > this.MAX_GLOBAL_SIZE) {
                 console.error(`StorageManager: Global quota exceeded (${raw.length} / ${this.MAX_GLOBAL_SIZE})`);
-                return false; // Fail silently to avoid crashing, handled by individual save
+                return false; // Return false to indicate failure
             }
+            
             localStorage.setItem(this.STORAGE_KEY, raw);
             return true;
         } catch (e) {
-            console.error("StorageManager: Disk write failed (Quota Exceeded?)", e);
+            console.error("StorageManager: Disk write failed (Browser Quota?)", e);
             return false;
         }
     }
@@ -60,24 +59,26 @@ export class StorageManager {
         // Create a tentative new state for this game to check size
         const gameClone = { ...this.cache[gameId] };
         gameClone[key] = value;
+        // Inject system timestamp just for sorting metadata later
+        gameClone._sys_updated = Date.now();
 
-        // Check Game Quota
+        // Check Individual Game Quota (Anti-Hogging)
         const gameStr = JSON.stringify(gameClone);
         if (gameStr.length > this.MAX_GAME_SIZE) {
-            console.warn(`StorageManager: Game "${gameId}" exceeded quota (${gameStr.length} / ${this.MAX_GAME_SIZE}).`);
+            console.warn(`StorageManager: Game "${gameId}" exceeded quota.`);
             throw new Error("GAME_QUOTA_EXCEEDED");
         }
 
-        // Commit to memory
+        // Commit to memory temporarily
+        const oldState = this.cache[gameId];
         this.cache[gameId] = gameClone;
 
-        // Commit to disk
+        // Try to commit to disk
         const success = this.saveToDisk();
         if (!success) {
-            // Rollback memory if disk failed (Global Quota Hit)
-            console.error("StorageManager: Rollback due to global quota.");
-            // We revert the change in memory to keep it consistent with disk
-            this.loadFromDisk(); 
+            // ROLLBACK if disk full
+            console.error("StorageManager: Rollback due to full disk.");
+            this.cache[gameId] = oldState; 
             throw new Error("GLOBAL_QUOTA_EXCEEDED");
         }
         
@@ -92,16 +93,15 @@ export class StorageManager {
     clearGameData(gameId) {
         if (this.cache[gameId]) {
             delete this.cache[gameId];
-            this.saveToDisk();
-            return true;
+            const saved = this.saveToDisk();
+            return saved;
         }
         return false;
     }
     
     clearAll() {
         this.cache = {};
-        this.saveToDisk();
-        return true;
+        return this.saveToDisk();
     }
 
     // --- METRICS FOR UI ---
@@ -122,8 +122,7 @@ export class StorageManager {
             });
         } catch(e) {}
         
-        // Reserve 1.5MB (approx 1,500,000 chars) for Core
-        // With the "Implicit Completion" hack, 1.5MB can store roughly ~40,000 module IDs.
+        // Reserve 1.5MB for Core
         const MAX_CORE_SIZE = 1500000;
         const corePct = Math.round((coreUsed / MAX_CORE_SIZE) * 100);
 
@@ -134,7 +133,8 @@ export class StorageManager {
                 id: gameId,
                 size: size,
                 sizeFmt: (size / 1024).toFixed(1) + ' KB',
-                pct: Math.round((size / this.MAX_GAME_SIZE) * 100)
+                pct: Math.round((size / this.MAX_GAME_SIZE) * 100),
+                updated: this.cache[gameId]._sys_updated || 0
             };
         }).sort((a,b) => b.size - a.size);
 
