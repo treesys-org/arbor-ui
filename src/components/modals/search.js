@@ -16,6 +16,16 @@ class ArborModalSearch extends HTMLElement {
         const ui = store.ui;
         this.render(ui);
         this.bindEvents();
+        // Anti-flicker: Re-render only on language change to update text
+        store.addEventListener('state-change', (e) => {
+            if (e.detail.lang) {
+                this.render(store.ui);
+                this.bindEvents();
+                // Restore focus
+                const inp = this.querySelector('#inp-search');
+                if(inp) inp.focus();
+            }
+        });
     }
 
     disconnectedCallback() {
@@ -38,7 +48,7 @@ class ArborModalSearch extends HTMLElement {
                 
                 <div class="relative w-full mb-4">
                     <span class="absolute left-4 top-4 text-slate-400 text-lg">🔍</span>
-                    <input id="inp-search" type="text" placeholder="" 
+                    <input id="inp-search" type="text" placeholder="${ui.searchPlaceholder || "Search topics..."}" 
                         class="w-full bg-[#1e293b] border border-slate-700 text-slate-200 rounded-xl py-4 pl-12 pr-14 font-bold outline-none focus:ring-2 focus:ring-sky-500 shadow-xl text-lg transition-all placeholder:text-slate-500"
                         value="${this.state.query}" autofocus autocomplete="off">
                     <span class="absolute right-4 top-4 text-[10px] font-bold text-slate-500 border border-slate-600 px-1.5 py-1 rounded bg-[#0f172a] select-none hidden md:inline">ESC</span>
@@ -160,6 +170,9 @@ class ArborModalSearch extends HTMLElement {
         if (closeBtn) closeBtn.onclick = () => this.close();
         
         if (inp) {
+            // Restore query if re-binding
+            inp.value = this.state.query;
+            
             inp.focus();
             inp.oninput = (e) => {
                 const q = e.target.value;

@@ -1,3 +1,4 @@
+
 {
   "appTitle": "ARBOR",
   "appSubtitle": "Open University",
@@ -9,7 +10,7 @@
   "searchBroadLoading": "Cargando todo el contenido de esta letra...",
   "tagModule": "MÓDULO",
   "tagLesson": "LECCIÓN",
-  "tagExam": "EXAMEN",
+  "tagExam": "EXAM",
   "tutorialTitle": "Guía de Arbor",
   "tutorialSkip": "Saltar Intro",
   "tutorialNext": "Siguiente",
@@ -30,6 +31,11 @@
       "title": "Recolecta Semillas",
       "text": "Al completar módulos, cosecharás <strong>Semillas</strong> únicas para tu mochila. ¡Tu jardín crecerá con cada lección que domines!",
       "icon": "🌰"
+    },
+    {
+      "title": "Modo Arcade",
+      "text": "Aprender es jugar. Visita el <strong>Arcade</strong> para encontrar juegos que generan niveles basados en la lección que estás estudiando.",
+      "icon": "🎮"
     },
     {
       "title": "Activa mi Superinteligencia (IA)",
@@ -347,5 +353,8 @@
   "arcadePlaceholder": "https://.../juego/index.html",
   "arcadeDeveloperNote": "Nota para Desarrolladores: Los juegos reciben el contexto vía parámetros URL (?source=...&module=...). ¡Crea tu propio motor!",
   "arcadeContext": "Contexto Actual",
-  "branchMastered": "¡RAMA DOMINADA!"
+  "branchMastered": "¡RAMA DOMINADA!",
+  "gameAiRequiredTitle": "Interfaz Neural Requerida",
+  "gameAiRequiredDesc": "Este juego requiere una conexión de Inteligencia Artificial activa para generar niveles únicos basados en tus lecciones.",
+  "gameAiConnect": "Activar y Jugar"
 }

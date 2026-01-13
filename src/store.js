@@ -109,7 +109,21 @@ class Store extends EventTarget {
             return new Proxy({}, {
                 get: (target, prop) => {
                     if (prop === 'welcomeSteps') return Array(5).fill({ title: 'Loading...', text: '...', icon: '...' });
-                    return String(prop);
+                    
+                    // Smart Fallback to prevent ugly keys like "navAbout" from appearing
+                    const key = String(prop);
+                    
+                    // 1. Handle common specific keys
+                    if (key === 'loading') return 'Loading...';
+                    if (key === 'appTitle') return 'Arbor';
+                    
+                    // 2. Strip "nav" prefix (e.g. navAbout -> About)
+                    let clean = key.replace(/^nav/, '');
+                    
+                    // 3. Add space before capital letters (e.g. AboutUs -> About Us)
+                    clean = clean.replace(/([A-Z])/g, ' $1').trim();
+                    
+                    return clean;
                 }
             });
         }

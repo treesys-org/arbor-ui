@@ -14,8 +14,8 @@ class ArborSage extends HTMLElement {
         this.hasTriedLoadingModels = false; 
         this.lastRenderKey = null;
         
-        // GDPR Consent
-        this.hasConsent = localStorage.getItem('arbor-sage-consent') === 'true';
+        // GDPR Consent (Unified Key)
+        this.hasConsent = localStorage.getItem('arbor-ai-consent') === 'true';
     }
     
     connectedCallback() {
@@ -34,6 +34,8 @@ class ArborSage extends HTMLElement {
             else if (modal.mode && modal.mode !== this.mode) {
                 this.mode = modal.mode;
             }
+            // Re-read consent in case Game Player enabled it
+            this.hasConsent = localStorage.getItem('arbor-ai-consent') === 'true';
             this.render();
         } else {
             if (this.isVisible) {
@@ -70,7 +72,7 @@ class ArborSage extends HTMLElement {
     
     acceptConsent() {
         this.hasConsent = true;
-        localStorage.setItem('arbor-sage-consent', 'true');
+        localStorage.setItem('arbor-ai-consent', 'true');
         this.render();
     }
 

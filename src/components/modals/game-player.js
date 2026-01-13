@@ -1,3 +1,4 @@
+
 import { store } from '../../store.js';
 import { aiService } from '../../services/ai.js';
 
@@ -8,11 +9,21 @@ class ArborModalGamePlayer extends HTMLElement {
         this.activeNodeId = null;
         this.playlist = []; 
         this.isPreparing = true;
+        this.needsConsent = false;
         this.error = null;
         this.scriptCache = new Map();
     }
 
     async connectedCallback() {
+        // Check for unified AI consent key
+        const hasConsent = localStorage.getItem('arbor-ai-consent') === 'true';
+        
+        if (!hasConsent) {
+            this.needsConsent = true;
+            this.render();
+            return;
+        }
+
         this.render();
         try {
             await this.prepareCurriculum();
@@ -36,6 +47,13 @@ class ArborModalGamePlayer extends HTMLElement {
 
     close() {
         store.setModal('arcade'); 
+    }
+    
+    grantConsent() {
+        localStorage.setItem('arbor-ai-consent', 'true');
+        this.needsConsent = false;
+        // Reboot the component logic basically
+        this.connectedCallback();
     }
 
     async prepareCurriculum() {
@@ -215,7 +233,8 @@ class ArborModalGamePlayer extends HTMLElement {
             const finalHtml = doc.documentElement.outerHTML;
             iframe.srcdoc = finalHtml;
             iframe.onload = () => {
-                this.querySelector('#loader').classList.add('hidden');
+                const loader = this.querySelector('#loader');
+                if(loader) loader.classList.add('hidden');
                 iframe.classList.remove('opacity-0');
             };
         } catch (e) {
@@ -227,7 +246,61 @@ class ArborModalGamePlayer extends HTMLElement {
 
     render() {
         const { url, title } = store.value.modal || {};
+        const ui = store.ui;
         if (!url) { this.close(); return; }
+
+        // --- CONSENT SCREEN ---
+        if (this.needsConsent) {
+            const isOllama = aiService.config.provider === 'ollama';
+            
+            this.innerHTML = `
+            <div id="modal-backdrop" class="fixed inset-0 z-[80] bg-black/95 backdrop-blur-sm flex flex-col animate-in fade-in h-full w-full items-center justify-center">
+                <div class="bg-slate-900 border border-slate-700 p-8 rounded-3xl max-w-md text-center shadow-2xl relative overflow-hidden">
+                    
+                    <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 to-purple-600"></div>
+                    
+                    <div class="w-20 h-20 bg-slate-800 rounded-full mx-auto flex items-center justify-center text-5xl mb-6 shadow-xl border border-slate-700">
+                        🧠
+                    </div>
+                    
+                    <h2 class="text-xl font-black text-white mb-2 uppercase tracking-wide">${ui.gameAiRequiredTitle || "Neural Interface Required"}</h2>
+                    
+                    <div class="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 mb-6 text-left">
+                        <p class="text-xs text-slate-300 mb-2 leading-relaxed">
+                            ${ui.gameAiRequiredDesc || "This game uses AI to generate content."}
+                        </p>
+                        
+                        ${isOllama ? `
+                            <div class="flex items-center gap-2 mt-3 p-2 bg-orange-900/20 rounded border border-orange-800/30">
+                                <span class="text-lg">🏠</span>
+                                <span class="text-[10px] text-orange-200 font-bold uppercase">Local Mode (Ollama)</span>
+                            </div>
+                        ` : `
+                            <div class="flex items-center gap-2 mt-3 p-2 bg-blue-900/20 rounded border border-blue-800/30">
+                                <span class="text-lg">☁️</span>
+                                <div class="text-[10px] text-blue-200">
+                                    <span class="font-bold uppercase">Puter Cloud</span><br>
+                                    <span class="opacity-70">Data processed by Puter.com</span>
+                                </div>
+                            </div>
+                        `}
+                    </div>
+
+                    <div class="flex flex-col gap-3">
+                        <button id="btn-grant-consent" class="w-full py-3.5 bg-white text-slate-900 font-black rounded-xl shadow-lg hover:bg-slate-200 active:scale-95 transition-all text-sm uppercase tracking-wider">
+                            ${ui.gameAiConnect || "Connect & Play"}
+                        </button>
+                        <button id="btn-cancel-consent" class="text-xs text-slate-500 hover:text-slate-300 font-bold uppercase tracking-wider">
+                            ${ui.cancel || "Cancel"}
+                        </button>
+                    </div>
+                </div>
+            </div>`;
+            
+            this.querySelector('#btn-grant-consent').onclick = () => this.grantConsent();
+            this.querySelector('#btn-cancel-consent').onclick = () => this.close();
+            return;
+        }
 
         let loadingText = "Loading Cartridge...";
         if (this.isPreparing) {

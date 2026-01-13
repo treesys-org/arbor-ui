@@ -1,3 +1,4 @@
+
 {
   "appTitle": "ARBOR",
   "appSubtitle": "Open University",
@@ -30,6 +31,11 @@
       "title": "Collect your Seeds",
       "text": "As you complete modules, you'll collect unique <strong>Seeds</strong> for your personal backpack. Your garden will grow with every lesson you master!",
       "icon": "🌰"
+    },
+    {
+      "title": "Play & Learn (Arcade)",
+      "text": "Learning is playing. Visit the <strong>Arcade</strong> to find games that use AI to generate unique levels based on the lesson you are currently studying.",
+      "icon": "🎮"
     },
     {
       "title": "Activate my Superintelligence (AI)",
@@ -287,5 +293,8 @@
   "arcadePlaceholder": "https://.../game/index.html",
   "arcadeDeveloperNote": "Developer Note: Games receive context via URL parameters (?source=...&module=...). Create your own engine!",
   "arcadeContext": "Current Context",
-  "branchMastered": "BRANCH MASTERED!"
+  "branchMastered": "BRANCH MASTERED!",
+  "gameAiRequiredTitle": "Neural Interface Required",
+  "gameAiRequiredDesc": "This game requires an active Artificial Intelligence connection to generate unique levels based on your lessons.",
+  "gameAiConnect": "Activate & Play"
 }

@@ -13,9 +13,12 @@ class ArborModalArcade extends HTMLElement {
         this.selectedGame = null;
         this.selectedNodeId = null;
         this.filterText = '';
+        this.lastRenderKey = null;
     }
 
     async connectedCallback() {
+        this.render();
+        store.addEventListener('state-change', () => this.render());
         await this.loadAllGames();
     }
 
@@ -201,6 +204,27 @@ class ArborModalArcade extends HTMLElement {
 
     render() {
         const ui = store.ui;
+        const lang = store.value.lang;
+        const theme = store.value.theme;
+        const installedGamesCount = store.userStore.state.installedGames.length;
+        const reposCount = store.userStore.state.gameRepos.length;
+
+        // Anti-Flicker Key
+        const renderKey = JSON.stringify({
+            lang, theme, 
+            tab: this.activeTab,
+            loading: this.isLoading,
+            preparing: this.isPreparingContext,
+            discGames: this.discoveredGames.length,
+            instGames: installedGamesCount,
+            repos: reposCount,
+            selGameId: this.selectedGame ? this.selectedGame.id : null,
+            selNode: this.selectedNodeId,
+            filter: this.filterText
+        });
+
+        if (renderKey === this.lastRenderKey) return;
+        this.lastRenderKey = renderKey;
         
         // 1. SETUP VIEW (Pre-Launch)
         if (this.selectedGame) {
@@ -352,7 +376,6 @@ class ArborModalArcade extends HTMLElement {
         }
 
         const nodeList = this.getFlatNodes();
-        // Increased limit to show more items, especially children in deep trees
         const filteredNodes = nodeList.slice(0, 500); 
 
         this.innerHTML = `
@@ -386,7 +409,6 @@ class ArborModalArcade extends HTMLElement {
                                 const isLeaf = n.type === 'leaf';
                                 const isExam = n.type === 'exam';
                                 
-                                // Distinct styling for leaves vs modules to make selection easier
                                 let icon = n.icon;
                                 if (!icon) icon = isLeaf ? '📄' : (isExam ? '⚔️' : '📁');
                                 
@@ -394,10 +416,8 @@ class ArborModalArcade extends HTMLElement {
                                 if (isLeaf) typeBadge = `<span class="text-[9px] bg-purple-100 text-purple-700 px-1.5 rounded uppercase font-bold tracking-wider">Lesson</span>`;
                                 if (isExam) typeBadge = `<span class="text-[9px] bg-red-100 text-red-700 px-1.5 rounded uppercase font-bold tracking-wider">Exam</span>`;
                                 
-                                // Indentation based on depth
                                 const indentClass = `pl-${Math.min(n.depth * 4, 12) + 3}`;
                                 
-                                // Disable Exams
                                 const isDisabled = isExam;
                                 const actionClass = isDisabled 
                                     ? 'opacity-40 cursor-not-allowed grayscale bg-slate-50 dark:bg-slate-900' 

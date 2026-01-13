@@ -4,6 +4,7 @@ import { store } from '../../store.js';
 class ArborModalPrivacy extends HTMLElement {
     connectedCallback() {
         this.render();
+        store.addEventListener('state-change', () => this.render());
     }
 
     close() {

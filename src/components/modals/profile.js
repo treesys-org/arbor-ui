@@ -15,18 +15,16 @@ class ArborModalProfile extends HTMLElement {
             showEmojiPicker: false,
             showRestoreInput: false,
             showLoginWarning: false,
-            // Initialize temp state from store to allow immediate UI feedback
             tempAvatar: store.value.gamification.avatar || '👤',
             tempUsername: store.value.gamification.username || ''
         };
+        this.lastRenderKey = null;
     }
 
     connectedCallback() {
-        // Initial Full Render
         this.render();
         store.addEventListener('state-change', () => this.render());
         
-        // Listeners for closing picker when clicking outside
         this.pickerListener = (e) => {
              if (this.state.showEmojiPicker && !e.target.closest('#emoji-picker') && !e.target.closest('#btn-avatar-picker')) {
                  this.state.showEmojiPicker = false;
@@ -44,7 +42,6 @@ class ArborModalProfile extends HTMLElement {
         store.setModal(null);
     }
 
-    // Only updates dynamic parts of the UI to prevent full re-render flickering
     updateView() {
         const picker = this.querySelector('#emoji-picker');
         if (picker) {
@@ -74,7 +71,31 @@ class ArborModalProfile extends HTMLElement {
         const collectedItems = g.seeds || g.fruits || [];
         const puterUser = store.value.puterUser;
         const isSyncing = store.value.isSyncing;
-        
+        const lang = store.value.lang;
+        const theme = store.value.theme;
+
+        // Anti-Flicker Key: Only re-render if meaningful data changes
+        const renderKey = JSON.stringify({
+            lang, theme,
+            username: g.username,
+            avatar: g.avatar,
+            xp: g.xp,
+            streak: g.streak,
+            seeds: collectedItems.length,
+            puterUser: puterUser ? puterUser.username : null,
+            isSyncing,
+            localAvatar: this.state.tempAvatar,
+            // Don't include tempUsername to avoid re-render on every keystroke if we handled it locally
+        });
+
+        if (renderKey === this.lastRenderKey) return;
+        this.lastRenderKey = renderKey;
+
+        // Preserve focus
+        const focusedId = document.activeElement ? document.activeElement.id : null;
+        const selectionStart = document.activeElement ? document.activeElement.selectionStart : null;
+        const selectionEnd = document.activeElement ? document.activeElement.selectionEnd : null;
+
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
             <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full relative overflow-hidden flex flex-col max-h-[90dvh] border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
@@ -106,10 +127,9 @@ class ArborModalProfile extends HTMLElement {
                         <span>💾</span> ${ui.saveProfile}
                     </button>
                     
-                    <!-- CLOUD SYNC SECTION (PUTER) -->
+                    <!-- CLOUD SYNC SECTION -->
                     <div class="bg-indigo-50 dark:bg-indigo-900/10 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800/30 mb-6 text-left relative overflow-hidden">
                         
-                        <!-- Disclaimer Overlay -->
                         <div id="login-warning-overlay" class="hidden absolute inset-0 z-20 bg-white/95 dark:bg-slate-900/95 flex flex-col items-center justify-center p-6 text-center animate-in fade-in">
                             <h4 class="font-black text-indigo-900 dark:text-white mb-2 text-sm uppercase tracking-wide">${ui.syncLoginWarningTitle || "Cloud Sync Disclaimer"}</h4>
                             <p class="text-xs text-slate-600 dark:text-slate-300 mb-4 leading-relaxed">${ui.syncLoginWarningBody || "By connecting, your local progress will be replaced by the cloud backup."}</p>
@@ -213,13 +233,23 @@ class ArborModalProfile extends HTMLElement {
         </div>`;
         
         this.bindEvents();
+        this.updateView(); // Ensure local toggles are respected after render
+
+        // Restore Focus if needed
+        if (focusedId) {
+            const el = document.getElementById(focusedId);
+            if (el) {
+                el.focus();
+                if (selectionStart !== null && el.setSelectionRange) {
+                    el.setSelectionRange(selectionStart, selectionEnd);
+                }
+            }
+        }
     }
     
     bindEvents() {
         this.querySelector('.btn-close').onclick = () => this.close();
         
-        // Puter Bindings
-        // 1. Show Warning
         const btnShowWarning = this.querySelector('#btn-show-login-warning');
         if (btnShowWarning) {
             btnShowWarning.onclick = () => {
@@ -228,7 +258,6 @@ class ArborModalProfile extends HTMLElement {
             };
         }
 
-        // 2. Confirm Login
         const btnConfirm = this.querySelector('#btn-confirm-login');
         if (btnConfirm) {
             btnConfirm.onclick = () => {
@@ -238,7 +267,6 @@ class ArborModalProfile extends HTMLElement {
             };
         }
 
-        // 3. Cancel Login
         const btnCancelLogin = this.querySelector('#btn-cancel-login');
         if (btnCancelLogin) {
             btnCancelLogin.onclick = () => {
@@ -253,24 +281,22 @@ class ArborModalProfile extends HTMLElement {
         const btnPrivacy = this.querySelector('#btn-open-privacy');
         if (btnPrivacy) btnPrivacy.onclick = () => store.setModal('privacy');
 
-        // Avatar Picker Toggle
         this.querySelector('#btn-avatar-picker').onclick = (e) => {
             e.stopPropagation();
             this.state.showEmojiPicker = !this.state.showEmojiPicker;
             this.updateView();
         };
 
-        // Emoji Selection
         this.querySelectorAll('.emoji-btn').forEach(btn => {
             btn.onclick = (e) => {
                 e.stopPropagation();
                 this.state.tempAvatar = e.currentTarget.textContent;
                 this.state.showEmojiPicker = false;
                 this.updateView();
+                this.render(); // Force re-render to update main button avatar
             };
         });
         
-        // Username Input binding
         const inpUsername = this.querySelector('#inp-username');
         if (inpUsername) {
             inpUsername.oninput = (e) => {
@@ -278,7 +304,6 @@ class ArborModalProfile extends HTMLElement {
             };
         }
 
-        // Save
         const btnSave = this.querySelector('#btn-save-profile');
         if (btnSave) {
             btnSave.onclick = () => {
@@ -288,7 +313,6 @@ class ArborModalProfile extends HTMLElement {
             };
         }
 
-        // ... Export/Import bindings (standard) ...
         const btnExport = this.querySelector('#btn-export-progress');
         if (btnExport) btnExport.onclick = () => store.downloadProgressFile();
 

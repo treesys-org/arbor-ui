@@ -1,13 +1,20 @@
+
 import { store } from '../../store.js';
 
 class ArborModalWelcome extends HTMLElement {
     constructor() {
         super();
         this.activeStep = 0;
+        // Bind the render method for event listeners
+        this.handleStateChange = () => this.render();
     }
 
     connectedCallback() {
         this.render();
+        
+        // Listen for store updates (Critical for language switching)
+        store.addEventListener('state-change', this.handleStateChange);
+
         // Keyboard navigation support
         this.keyHandler = (e) => {
             if (e.key === 'ArrowRight') this.next();
@@ -18,6 +25,7 @@ class ArborModalWelcome extends HTMLElement {
     }
 
     disconnectedCallback() {
+        store.removeEventListener('state-change', this.handleStateChange);
         window.removeEventListener('keydown', this.keyHandler);
     }
 
@@ -51,7 +59,11 @@ class ArborModalWelcome extends HTMLElement {
     render() {
         const ui = store.ui;
         const steps = ui.welcomeSteps || [];
-        const current = steps[this.activeStep];
+        
+        // Safety check if steps haven't loaded or language switch causes index out of bounds
+        if (this.activeStep >= steps.length) this.activeStep = 0;
+        
+        const current = steps[this.activeStep] || {};
         const total = steps.length;
         const isLast = this.activeStep === total - 1;
 
