@@ -30,9 +30,9 @@ class ArborGraph extends HTMLElement {
 
              <!-- Zoom Controls -->
              <div id="zoom-controls" class="absolute bottom-6 right-6 flex flex-col gap-2 z-20 pointer-events-auto transition-opacity duration-300 md:bottom-8 md:right-8 group">
-                <button id="btn-zoom-in" class="w-12 h-12 md:w-10 md:h-10 bg-white/90 md:bg-white/60 md:hover:bg-white dark:bg-slate-800/90 dark:md:bg-slate-800/60 dark:md:hover:bg-slate-800 backdrop-blur rounded-full shadow-lg flex items-center justify-center text-slate-700 dark:text-slate-200 transition-all border border-slate-200 dark:border-slate-700 font-bold text-xl active:scale-95 hover:shadow-xl" title="Zoom In (+)">+</button>
-                <button id="btn-zoom-out" class="w-12 h-12 md:w-10 md:h-10 bg-white/90 md:bg-white/60 md:hover:bg-white dark:bg-slate-800/90 dark:md:bg-slate-800/60 dark:md:hover:bg-slate-800 backdrop-blur rounded-full shadow-lg flex items-center justify-center text-slate-700 dark:text-slate-200 transition-all border border-slate-200 dark:border-slate-700 font-bold text-xl active:scale-95 hover:shadow-xl" title="Zoom Out (-)">-</button>
-                <button id="btn-zoom-reset" class="w-12 h-12 md:w-10 md:h-10 bg-white/90 md:bg-white/60 md:hover:bg-white dark:bg-slate-800/90 dark:md:bg-slate-800/60 dark:md:hover:bg-slate-800 backdrop-blur rounded-full shadow-lg flex items-center justify-center text-slate-700 dark:text-slate-200 transition-all border border-slate-200 dark:border-slate-700 p-2 active:scale-95 hover:shadow-xl" title="Reset View (R)">
+                <button id="btn-zoom-in" aria-label="Zoom In" class="w-12 h-12 md:w-10 md:h-10 bg-white/90 md:bg-white/60 md:hover:bg-white dark:bg-slate-800/90 dark:md:bg-slate-800/60 dark:md:hover:bg-slate-800 backdrop-blur rounded-full shadow-lg flex items-center justify-center text-slate-700 dark:text-slate-200 transition-all border border-slate-200 dark:border-slate-700 font-bold text-xl active:scale-95 hover:shadow-xl" title="Zoom In (+)">+</button>
+                <button id="btn-zoom-out" aria-label="Zoom Out" class="w-12 h-12 md:w-10 md:h-10 bg-white/90 md:bg-white/60 md:hover:bg-white dark:bg-slate-800/90 dark:md:bg-slate-800/60 dark:md:hover:bg-slate-800 backdrop-blur rounded-full shadow-lg flex items-center justify-center text-slate-700 dark:text-slate-200 transition-all border border-slate-200 dark:border-slate-700 font-bold text-xl active:scale-95 hover:shadow-xl" title="Zoom Out (-)">-</button>
+                <button id="btn-zoom-reset" aria-label="Reset View" class="w-12 h-12 md:w-10 md:h-10 bg-white/90 md:bg-white/60 md:hover:bg-white dark:bg-slate-800/90 dark:md:bg-slate-800/60 dark:md:hover:bg-slate-800 backdrop-blur rounded-full shadow-lg flex items-center justify-center text-slate-700 dark:text-slate-200 transition-all border border-slate-200 dark:border-slate-700 p-2 active:scale-95 hover:shadow-xl" title="Reset View (R)">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-full h-full"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" /></svg>
                 </button>
              </div>
@@ -95,26 +95,114 @@ class ArborGraph extends HTMLElement {
 
         const isCtrl = e.ctrlKey || e.metaKey;
 
+        // 1. ZOOM & RESET
         switch(e.key) {
             case '+':
             case '=':
                 if (this.svg && this.zoom) {
-                    e.preventDefault(); // Prevent browser zoom
+                    e.preventDefault(); 
                     this.svg.transition().duration(200).call(this.zoom.scaleBy, 1.3);
                 }
-                break;
+                return;
             case '-':
             case '_':
                 if (this.svg && this.zoom) {
                     e.preventDefault();
                     this.svg.transition().duration(200).call(this.zoom.scaleBy, 1/1.3);
                 }
-                break;
+                return;
             case '0':
             case 'r':
             case 'R':
                 this.resetZoom();
+                return;
+        }
+
+        // 2. SPATIAL NAVIGATION (Arrows)
+        const activeEl = document.activeElement;
+        // Check if we are focused on a node (the <g> element has tabindex=0)
+        const isNodeFocused = activeEl && activeEl.classList.contains('node');
+        
+        if (!isNodeFocused) {
+            // If nothing focused, Arrow keys focus the Root
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                e.preventDefault();
+                this.focusRootNode();
+            }
+            return;
+        }
+
+        // Get data from D3 selection
+        const d = d3.select(activeEl).datum();
+        if (!d) return;
+
+        e.preventDefault(); // Stop scrolling
+
+        switch (e.key) {
+            case 'ArrowUp': // Move to Children (Visually Up)
+                if (d.children && d.children.length > 0) {
+                    // Go to middle child
+                    const mid = Math.floor((d.children.length - 1) / 2);
+                    this.focusNodeElement(d.children[mid]);
+                }
                 break;
+
+            case 'ArrowDown': // Move to Parent (Visually Down)
+                if (d.parent) {
+                    this.focusNodeElement(d.parent);
+                }
+                break;
+
+            case 'ArrowLeft': // Previous Sibling
+                if (d.parent && d.parent.children) {
+                    const idx = d.parent.children.indexOf(d);
+                    if (idx > 0) {
+                        this.focusNodeElement(d.parent.children[idx - 1]);
+                    }
+                }
+                break;
+
+            case 'ArrowRight': // Next Sibling
+                if (d.parent && d.parent.children) {
+                    const idx = d.parent.children.indexOf(d);
+                    if (idx < d.parent.children.length - 1) {
+                        this.focusNodeElement(d.parent.children[idx + 1]);
+                    }
+                }
+                break;
+                
+            case 'Enter':
+            case ' ':
+                // Activate Node
+                this.handleNodeClick(null, { data: d.data }); // Mimic click event struct
+                break;
+        }
+    }
+    
+    focusRootNode() {
+        // Find the root node element
+        const root = this.querySelector('.node'); // The first one usually is root or first in DOM
+        if (root) {
+            root.focus();
+            // Optional: Visually highlight or center?
+        }
+    }
+
+    focusNodeElement(d3Node) {
+        if (!d3Node) return;
+        // Find the DOM element bound to this data
+        // We can select all nodes and filter, OR assign IDs.
+        // Since we use D3 data binding, we can find it by matching the data ID.
+        
+        const nodes = this.querySelectorAll('.node');
+        for (let node of nodes) {
+            const nodeData = d3.select(node).datum();
+            if (nodeData && nodeData.data.id === d3Node.data.id) {
+                node.focus();
+                // Optionally center camera on keyboard nav
+                this.adjustCameraToActiveNode(d3Node); 
+                return;
+            }
         }
     }
 
@@ -211,6 +299,8 @@ class ArborGraph extends HTMLElement {
 
         this.svg = d3.select(container).append("svg")
             .attr("viewBox", [0, 0, this.width, this.height])
+            .attr("aria-label", "Knowledge Knowledge Graph")
+            .attr("role", "img")
             .style("width", "100%")
             .style("height", "100%");
 
@@ -433,8 +523,19 @@ class ArborGraph extends HTMLElement {
                 return `translate(${o.x},${o.y}) scale(0)`;
             })
             .style("cursor", "pointer")
+            // ACCESSIBILITY: Add roles and tabindex
+            .attr("role", "button")
+            .attr("tabindex", "0")
+            .attr("aria-label", d => {
+                const type = d.data.type === 'leaf' ? 'Lesson' : (d.data.type === 'exam' ? 'Exam' : 'Module');
+                const status = d.data.expanded ? 'Expanded' : 'Collapsed';
+                const complete = store.isCompleted(d.data.id) ? ', Completed' : '';
+                return `${d.data.name}, ${type}, ${status}${complete}`;
+            })
+            // INTERACTION
             .on("click", (e, d) => this.handleNodeClick(e, d))
             .on("mousedown", (e) => e.stopPropagation());
+            // Keydown handled globally now
 
         // Hit Area (Larger for touch)
         nodeEnter.append("circle")
@@ -488,7 +589,14 @@ class ArborGraph extends HTMLElement {
         const nodeMerged = nodeSelection.merge(nodeEnter);
         
         const nodeUpdate = nodeMerged.transition().duration(this.duration)
-            .attr("transform", d => `translate(${d.x},${d.y}) scale(1)`);
+            .attr("transform", d => `translate(${d.x},${d.y}) scale(1)`)
+            // Update Aria Labels on transition
+            .attr("aria-label", d => {
+                const type = d.data.type === 'leaf' ? 'Lesson' : (d.data.type === 'exam' ? 'Exam' : 'Module');
+                const status = d.data.expanded ? 'Expanded' : 'Collapsed';
+                const complete = store.isCompleted(d.data.id) ? ', Completed' : '';
+                return `${d.data.name}, ${type}, ${status}${complete}`;
+            });
 
         nodeUpdate.select(".node-body")
             .attr("fill", d => {
@@ -674,7 +782,7 @@ class ArborGraph extends HTMLElement {
     }
 
     handleNodeClick(e, d) {
-        e.stopPropagation();
+        if(e) e.stopPropagation();
         if (d.data.status === 'loading') return;
         
         store.toggleNode(d.data.id);

@@ -49,6 +49,7 @@ class ArborModals extends HTMLElement {
              if (this.lastRenderKey !== 'certificates') {
                  this.innerHTML = `<arbor-modal-certificates></arbor-modal-certificates>`;
                  this.lastRenderKey = 'certificates';
+                 this.setFocus();
              }
              return;
         }
@@ -58,6 +59,7 @@ class ArborModals extends HTMLElement {
             if (this.innerHTML !== '') {
                 this.innerHTML = ''; 
                 this.lastRenderKey = null;
+                // Return focus to main if needed, though usually handled by user interaction flow
             }
             return; 
         }
@@ -68,6 +70,7 @@ class ArborModals extends HTMLElement {
             if (this.lastRenderKey !== key) {
                 this.innerHTML = `<arbor-modal-preview></arbor-modal-preview>`;
                 this.lastRenderKey = key;
+                this.setFocus();
             }
             return;
         }
@@ -131,6 +134,18 @@ class ArborModals extends HTMLElement {
             default: 
                 this.innerHTML = `<div class="p-8 bg-white m-4 rounded">Unknown modal: ${type}</div>`;
         }
+        this.setFocus();
+    }
+
+    setFocus() {
+        // Wait for DOM update
+        setTimeout(() => {
+            // Attempt to find autofocus input or first button/input
+            const focusable = this.querySelector('[autofocus], input, button, a[href]');
+            if (focusable) {
+                focusable.focus();
+            }
+        }, 50);
     }
 }
 

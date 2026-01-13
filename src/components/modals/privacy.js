@@ -11,23 +11,32 @@ class ArborModalPrivacy extends HTMLElement {
         store.setModal(null);
     }
 
+    openImpressum() {
+        store.setModal('impressum');
+    }
+
     render() {
         const ui = store.ui;
         
-        // AUTOMATION: Inject Impressum details into the Privacy Policy text
-        // This prevents the user from having to type their address twice.
         let privacyHtml = ui.privacyText || "Legal text not loaded.";
         
-        if (ui.impressumDetails) {
-            // Format line breaks for HTML
-            const formattedImpressum = ui.impressumDetails.replace(/\n/g, '<br>');
-            // Replace the placeholder {impressum} with the actual data
-            privacyHtml = privacyHtml.replace('{impressum}', `
-                <div class="p-3 bg-slate-100 dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 font-mono text-xs text-slate-600 dark:text-slate-400 mb-4">
-                    ${formattedImpressum}
-                </div>
-            `);
-        }
+        // REPLACEMENT LOGIC:
+        // Instead of showing the full address here, we provide a link to the Impressum.
+        // This satisfies GDPR (identifying the controller) via reference, without exposing
+        // personal data visually in two places.
+        const controllerReference = `
+            <div class="mb-4 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
+                <p class="text-sm text-slate-600 dark:text-slate-300 mb-2">
+                    ${ui.impressumText || "The data controller is the publisher of this application."}
+                </p>
+                <button id="btn-link-impressum" class="text-blue-600 dark:text-blue-400 hover:underline text-xs font-bold flex items-center gap-2 transition-colors">
+                    <span>👤</span> <span>${ui.showImpressumDetails || "View Publisher Details (Impressum)"}</span> ➜
+                </button>
+            </div>
+        `;
+
+        // Replace the placeholder {impressum} with the link button
+        privacyHtml = privacyHtml.replace('{impressum}', controllerReference);
 
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
@@ -78,6 +87,9 @@ class ArborModalPrivacy extends HTMLElement {
         </div>`;
 
         this.querySelectorAll('.btn-close').forEach(b => b.onclick = () => this.close());
+        
+        const btnLink = this.querySelector('#btn-link-impressum');
+        if (btnLink) btnLink.onclick = () => this.openImpressum();
     }
 }
 customElements.define('arbor-modal-privacy', ArborModalPrivacy);
