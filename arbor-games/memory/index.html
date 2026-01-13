@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Memory Garden: Overgrowth</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;700;900&display=swap" rel="stylesheet">
     <style>
         :root { --glass: rgba(255, 255, 255, 0.1); --glass-border: rgba(255, 255, 255, 0.2); }
-        html, body { font-family: 'Outfit', sans-serif; background: #0f172a; overflow: hidden; user-select: none; width: 100%; height: 100%; touch-action: none; }
+        body { font-family: 'Outfit', sans-serif; background: #0f172a; overflow: hidden; user-select: none; }
         
         /* 3D Card Styles */
         .perspective-container { perspective: 1200px; }
@@ -18,7 +18,6 @@
             -webkit-transform-style: preserve-3d;
             transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
             cursor: pointer; 
-            touch-action: manipulation;
         }
         .card.flipped { transform: rotateY(180deg); }
         .card.matched { animation: pulseMatch 0.5s ease-out forwards; }
@@ -71,9 +70,6 @@
         
         .overlay { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(15, 23, 42, 0.9); transition: opacity 0.5s; backdrop-filter: blur(5px); }
         .hidden-fade { opacity: 0; pointer-events: none; }
-        
-        /* Mobile Height Fix */
-        #game-ui { height: 100dvh; }
     </style>
 </head>
 <body class="text-white">
@@ -82,25 +78,25 @@
     <canvas id="bg-canvas"></canvas>
 
     <!-- GAME HUD -->
-    <div id="game-ui" class="relative z-10 flex flex-col p-2 md:p-4 hidden">
+    <div id="game-ui" class="relative z-10 flex flex-col h-screen p-4 hidden">
         <!-- Top Bar -->
-        <header class="flex justify-between items-end mb-2 p-3 md:p-4 rounded-2xl md:rounded-3xl bg-slate-900/60 backdrop-blur-xl border border-white/10 relative z-50 shadow-2xl shrink-0">
+        <header class="flex justify-between items-end mb-4">
             <div>
-                <h1 class="text-xl md:text-3xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-600 leading-none">MEMORY<br>GARDEN</h1>
-                <p id="lesson-topic" class="text-[0.6rem] md:text-xs text-emerald-400 font-mono uppercase tracking-widest mt-1 opacity-0 transition-opacity duration-1000 max-w-[150px] md:max-w-[300px] truncate">...</p>
+                <h1 class="text-2xl md:text-3xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-600">MEMORY<br>GARDEN</h1>
+                <p id="lesson-topic" class="text-[0.6rem] md:text-xs text-emerald-400 font-mono uppercase tracking-widest mt-1 opacity-0 transition-opacity duration-1000 max-w-[200px] truncate">...</p>
             </div>
             <div class="text-right">
-                <div class="text-[10px] md:text-xs text-gray-400 font-bold uppercase">Score</div>
-                <div id="score-display" class="text-2xl md:text-4xl font-black font-mono leading-none text-white">0</div>
-                <div class="combo-bar-container w-16 md:w-32 ml-auto mt-1">
+                <div class="text-xs text-gray-400 font-bold uppercase">Score</div>
+                <div id="score-display" class="text-2xl md:text-4xl font-black font-mono leading-none">0</div>
+                <div class="combo-bar-container w-20 md:w-32 ml-auto">
                     <div id="combo-bar" class="combo-bar"></div>
                 </div>
             </div>
         </header>
 
         <!-- Grid -->
-        <main class="flex-1 perspective-container flex items-center justify-center relative z-0 min-h-0">
-            <div id="card-grid" class="grid grid-cols-3 md:grid-cols-4 gap-2 md:gap-4 w-full max-w-4xl mx-auto h-full max-h-[85dvh] content-center p-1">
+        <main class="flex-1 perspective-container flex items-center justify-center">
+            <div id="card-grid" class="grid grid-cols-3 md:grid-cols-4 gap-3 md:gap-4 w-full max-w-4xl mx-auto h-full max-h-[85vh] content-center">
                 <!-- Cards Injected Here -->
             </div>
         </main>
@@ -118,7 +114,7 @@
                 <p id="loading-text" class="animate-pulse text-emerald-300 font-bold text-sm">Consulting the Sage...</p>
             </div>
 
-            <button id="btn-start" class="group relative px-8 md:px-12 py-4 md:py-5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-lg md:text-xl rounded-none clip-path-polygon transition-all hover:scale-105 active:scale-95 w-full md:w-auto" style="touch-action: manipulation;">
+            <button id="btn-start" class="group relative px-8 md:px-12 py-4 md:py-5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-lg md:text-xl rounded-none clip-path-polygon transition-all hover:scale-105 active:scale-95 w-full md:w-auto">
                 <span class="relative z-10">INITIALIZE</span>
                 <div class="absolute inset-0 bg-white/20 scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
             </button>
@@ -130,7 +126,7 @@
         <h2 class="text-3xl md:text-5xl font-black text-yellow-400 mb-2 drop-shadow-[0_0_15px_rgba(250,204,21,0.5)]">GARDEN BLOOMED</h2>
         <p class="text-xl md:text-2xl text-white mb-2">Final Score: <span id="final-score">0</span></p>
         <p class="text-lg text-gray-400 mb-8">High Score: <span id="high-score">0</span></p>
-        <button onclick="window.location.reload()" class="px-8 py-3 border-2 border-white text-white font-bold hover:bg-white hover:text-black transition-colors" style="touch-action: manipulation;">
+        <button onclick="window.location.reload()" class="px-8 py-3 border-2 border-white text-white font-bold hover:bg-white hover:text-black transition-colors">
             REPLAY
         </button>
     </div>
