@@ -102,7 +102,7 @@ class ArborModalSearch extends HTMLElement {
              return a.name.localeCompare(b.name);
          });
          
-         const header = isBookmarks ? `<div class="px-4 py-2 bg-slate-800/50 text-[10px] font-bold text-sky-400 uppercase tracking-widest border-b border-slate-700">In Progress (Bookmarks)</div>` : '';
+         const header = isBookmarks ? `<div class="px-4 py-2 bg-slate-800/50 text-[10px] font-bold text-sky-400 uppercase tracking-widest border-b border-slate-700">Recent Lessons (In Progress)</div>` : '';
 
          return header + sortedResults.map(res => {
             let tag = ui.tagModule || 'MODULE';
@@ -125,20 +125,30 @@ class ArborModalSearch extends HTMLElement {
                 progressIndicator = `<span class="text-[10px] text-green-400 font-mono ml-2">${res.progress}% Read</span>`;
             }
 
+            // Delete Button for Bookmarks
+            const deleteAction = isBookmarks ? `
+                <button class="btn-delete-bookmark w-14 flex items-center justify-center border-l border-slate-700/50 text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors" data-id="${res.id}" title="Remove Bookmark">
+                    ✕
+                </button>
+            ` : '';
+
             return `
-            <button class="btn-search-result w-full text-left p-4 border-b border-slate-700/50 hover:bg-white/5 transition-colors flex items-start gap-4 group" data-json="${encodeURIComponent(JSON.stringify(res))}">
-                <div class="w-10 h-10 rounded-lg bg-[#0f172a] border border-slate-700 text-slate-300 flex items-center justify-center text-xl shrink-0 group-hover:scale-105 transition-transform shadow-md">
-                    ${res.icon || '📄'}
-                </div>
-                <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-3 mb-1">
-                        <h4 class="font-bold text-slate-100 truncate text-base">${res.name}</h4>
-                        <span class="text-[10px] uppercase font-bold px-1.5 py-0.5 border rounded ${tagClass}">${tag}</span>
-                        ${progressIndicator}
+            <div class="flex items-stretch w-full border-b border-slate-700/50 hover:bg-white/5 transition-colors group">
+                <button class="btn-search-result flex-1 text-left p-4 flex items-start gap-4 min-w-0" data-json="${encodeURIComponent(JSON.stringify(res))}">
+                    <div class="w-10 h-10 rounded-lg bg-[#0f172a] border border-slate-700 text-slate-300 flex items-center justify-center text-xl shrink-0 group-hover:scale-105 transition-transform shadow-md">
+                        ${res.icon || '📄'}
                     </div>
-                    <p class="text-xs text-slate-400 truncate font-medium">${pathDisplay}</p>
-                </div>
-            </button>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-3 mb-1">
+                            <h4 class="font-bold text-slate-100 truncate text-base">${res.name}</h4>
+                            <span class="text-[10px] uppercase font-bold px-1.5 py-0.5 border rounded ${tagClass}">${tag}</span>
+                            ${progressIndicator}
+                        </div>
+                        <p class="text-xs text-slate-400 truncate font-medium">${pathDisplay}</p>
+                    </div>
+                </button>
+                ${deleteAction}
+            </div>
             `;
          }).join('') + '<div class="h-10"></div>'; // Extra scroll space
     }
@@ -174,37 +184,44 @@ class ArborModalSearch extends HTMLElement {
                 msgArea.classList.add('hidden');
             }
         } 
-        // MODE 3: Empty Query -> Show Bookmarks
+        // MODE 3: Empty Query -> Show Bookmarks (Filtered: Not Completed, Last 3)
         else {
             const recentBookmarks = store.userStore.getRecentBookmarks();
             const bookmarkedNodes = [];
             
             recentBookmarks.forEach(bm => {
-                const node = store.findNode(bm.id);
-                // Ensure node exists in current tree context
-                if (node) {
-                    // Calculate quick progress estimate if possible
-                    let progress = 0;
-                    if (bm.visited && bm.visited.length > 0) {
-                        // Assuming 5 sections on average if parsing is expensive, 
-                        // or just show tick count. 
-                        // Let's just pass visited count for now or hardcode visual.
-                        // Ideally we'd parse content but that's heavy.
-                        // We'll trust the stored 'index' as rough progress
-                        progress = 10; // Placeholder visual
+                // Filter: Check if node exists AND is NOT completed
+                if (!store.isCompleted(bm.id)) {
+                    const node = store.findNode(bm.id);
+                    if (node) {
+                        bookmarkedNodes.push({
+                            ...node,
+                            progress: Math.min(99, (bm.visited ? bm.visited.length : 0) * 10) // Rough Estimate
+                        });
                     }
-                    
-                    bookmarkedNodes.push({
-                        ...node,
-                        progress: Math.min(99, (bm.visited ? bm.visited.length : 0) * 10) // Rough Estimate
-                    });
                 }
             });
 
-            if (bookmarkedNodes.length > 0) {
-                list.innerHTML = this.getResultsHTML(bookmarkedNodes, ui, true);
+            // Limit: Only show the last 3
+            const limitedNodes = bookmarkedNodes.slice(0, 3);
+
+            if (limitedNodes.length > 0) {
+                list.innerHTML = this.getResultsHTML(limitedNodes, ui, true);
                 list.classList.remove('hidden');
                 msgArea.classList.add('hidden');
+                
+                // Bind Delete Buttons Logic
+                list.querySelectorAll('.btn-delete-bookmark').forEach(btn => {
+                    btn.onclick = (e) => {
+                        e.stopPropagation();
+                        // Native confirm as per requirement
+                        if(confirm('Delete this bookmark?')) {
+                            store.removeBookmark(btn.dataset.id);
+                            this.updateResultsDOM(); // Refresh instantly
+                        }
+                    };
+                });
+
             } else {
                 // Show default msg or empty bookmarks state
                 list.classList.add('hidden');
@@ -213,6 +230,7 @@ class ArborModalSearch extends HTMLElement {
             }
         }
 
+        // Bind Navigation Buttons
         list.querySelectorAll('.btn-search-result').forEach(btn => {
             btn.onclick = () => {
                 const data = JSON.parse(decodeURIComponent(btn.dataset.json));
