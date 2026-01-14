@@ -1,4 +1,3 @@
-
 // BOTANICAL SEEDS: More universal concept for knowledge trees
 const SEED_TYPES = ['🌲', '🌰', '🌾', '🍁', '🥥', '🥜', '🌰', '🫘', '🍄', '🌱'];
 
@@ -15,6 +14,7 @@ export class UserStore {
             installedGames: [], // Single games added manually
             gameRepos: [], // Repositories (manifests) of games
             gameData: {}, // Generic key-value store for games { [gameId]: { [key]: value } }
+            localTrees: [], // Phase 1: Local Knowledge Trees
             gamification: {
                 username: '',
                 avatar: '👤',
@@ -58,6 +58,7 @@ export class UserStore {
                     if (parsed.installedGames) this.state.installedGames = parsed.installedGames;
                     if (parsed.gameRepos) this.state.gameRepos = parsed.gameRepos;
                     if (parsed.gameData) this.state.gameData = parsed.gameData; // Load game data
+                    if (parsed.localTrees) this.state.localTrees = parsed.localTrees; // Load Local Trees
                 }
             }
             
@@ -82,6 +83,7 @@ export class UserStore {
             installedGames: this.state.installedGames,
             gameRepos: this.state.gameRepos,
             gameData: this.state.gameData,
+            localTrees: this.state.localTrees,
             timestamp: Date.now()
         };
     }
@@ -101,16 +103,130 @@ export class UserStore {
     
     getExportJson() {
         const data = { 
-            v: 1, 
+            v: 2, 
             ts: Date.now(), 
             p: Array.from(this.state.completedNodes), 
             g: this.state.gamification,
             b: this.state.bookmarks,
             games: this.state.installedGames,
             repos: this.state.gameRepos,
-            d: this.state.gameData 
+            d: this.state.gameData,
+            t: this.state.localTrees 
         };
         return JSON.stringify(data, null, 2);
+    }
+
+    // --- LOCAL TREE MANAGEMENT (PHASE 1) ---
+
+    plantTree(name) {
+        const id = 'local-' + crypto.randomUUID();
+        const now = new Date().toISOString();
+        
+        // Basic Skeleton compatible with Graph Renderer
+        const skeleton = {
+            generatedAt: now,
+            universeId: id,
+            universeName: name,
+            languages: {
+                "EN": {
+                    id: `${id}-en-root`, name: name, type: "root", expanded: true,
+                    icon: "🌱", description: "My Private Garden",
+                    path: name,
+                    children: [
+                        {
+                            id: `${id}-leaf-1`, parentId: `${id}-en-root`,
+                            name: "First Lesson", type: "leaf", icon: "📝",
+                            path: `${name} / First Lesson`,
+                            order: "1",
+                            description: "Your very first lesson in your new tree.",
+                            content: "# Hello World\n\nThis is your first private lesson. Click **Edit** to change it."
+                        }
+                    ]
+                }
+            }
+        };
+
+        const newTree = {
+            id: id,
+            name: name,
+            updated: Date.now(),
+            data: skeleton
+        };
+
+        this.state.localTrees.push(newTree);
+        this.persist();
+        return newTree;
+    }
+    
+    importLocalTree(jsonData) {
+        if (!jsonData || !jsonData.universeName || !jsonData.languages) {
+            throw new Error("Invalid Arbor tree format.");
+        }
+        
+        const id = 'local-' + crypto.randomUUID();
+        
+        const newTree = {
+            id: id,
+            name: jsonData.universeName,
+            updated: Date.now(),
+            data: jsonData
+        };
+        
+        this.state.localTrees.push(newTree);
+        this.persist();
+        return newTree;
+    }
+
+    deleteLocalTree(id) {
+        this.state.localTrees = this.state.localTrees.filter(t => t.id !== id);
+        this.persist();
+    }
+
+    getLocalTreeData(id) {
+        return this.state.localTrees.find(t => t.id === id)?.data;
+    }
+
+    // Direct JSON Manipulation for Local Editing
+    updateLocalNode(treeId, nodeId, newContent, newMeta) {
+        const treeEntry = this.state.localTrees.find(t => t.id === treeId);
+        if (!treeEntry) return false;
+
+        let found = false;
+        
+        // Recursive search & update
+        const updateRecursive = (node) => {
+            if (found) return; // optimization
+            if (node.id === nodeId) {
+                if (newContent !== null) node.content = newContent;
+                if (newMeta) {
+                    if (newMeta.title) node.name = newMeta.title;
+                    if (newMeta.icon) node.icon = newMeta.icon;
+                    if (newMeta.description) node.description = newMeta.description;
+                    if (newMeta.order) node.order = newMeta.order;
+                }
+                found = true;
+                return;
+            }
+            if (node.children) {
+                for (const child of node.children) {
+                    updateRecursive(child);
+                }
+            }
+        };
+
+        // We assume EN for now for local trees as they are single-user
+        for (const langKey in treeEntry.data.languages) {
+            const root = treeEntry.data.languages[langKey];
+            if (root) updateRecursive(root);
+            if(found) break;
+        }
+
+        if (found) {
+            treeEntry.updated = Date.now();
+            this.state.localTrees = [...this.state.localTrees]; 
+            this.persist();
+        }
+        return found;
     }
 
     // --- Bookmarks (Robust Count Limit Strategy) ---

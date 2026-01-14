@@ -1,4 +1,5 @@
 
+import { store } from '../store.js'; // Need reference to main store to access userStore
 
 const OFFICIAL_DOMAINS = [
     'treesys-org.github.io',
@@ -34,6 +35,38 @@ export class SourceManager {
     }
 
     async init() {
+        // --- VIRAL SHARING INTERCEPTOR ---
+        const urlParams = new URLSearchParams(window.location.search);
+        const sourceUrlFromParam = urlParams.get('source');
+        if (sourceUrlFromParam) {
+            try {
+                const url = new URL(sourceUrlFromParam);
+                const isTrusted = this.isUrlTrusted(url.href);
+                const sourceObject = {
+                    id: `shared-${Date.now()}`,
+                    name: url.hostname,
+                    url: url.href,
+                    isTrusted: isTrusted,
+                    type: 'shared'
+                };
+
+                if (isTrusted) {
+                    return sourceObject;
+                } else {
+                    // It's not trusted, so we trigger a warning modal
+                    // The main store will handle this state update
+                    this.update({ 
+                        pendingUntrustedSource: sourceObject, 
+                        modal: { type: 'load-warning' }
+                    });
+                    return null; // Halt initial load
+                }
+            } catch (e) {
+                console.warn("Invalid source URL parameter", e);
+            }
+        }
+        // ---------------------------------
+        
         // 1. Load Community Sources (Local)
         let localSources = [];
         try { localSources = JSON.parse(localStorage.getItem('arbor-sources')) || []; } catch(e) {}
@@ -45,6 +78,18 @@ export class SourceManager {
         const savedActiveId = localStorage.getItem('arbor-active-source-id');
         let activeSource = localSources.find(s => s.id === savedActiveId);
 
+        // If not in standard sources, check if it's a previously loaded local tree
+        if (!activeSource && savedActiveId && savedActiveId.startsWith('local-')) {
+             // We can reconstruct a temporary source object for local trees
+             // real validation happens in loadData
+             activeSource = {
+                 id: savedActiveId,
+                 name: 'My Private Garden', // A bit of a guess, but will be updated on load
+                 url: `local://${savedActiveId}`,
+                 type: 'local'
+             };
+        }
+
         if (!activeSource) {
             activeSource = { ...DEFAULT_SOURCES[0] };
             // Optimization: If running locally, prefer local relative URL
@@ -55,6 +100,14 @@ export class SourceManager {
         }
 
         return activeSource;
+    }
+
+    async getDefaultSource() {
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            const localSrc = await this._checkLocalBoot();
+            if (localSrc) return localSrc;
+        }
+        return { ...DEFAULT_SOURCES[0] };
     }
 
     async _checkLocalBoot() {
@@ -98,12 +151,6 @@ export class SourceManager {
         this.update({ communitySources: newSources });
         this.state.communitySources = newSources;
         localStorage.setItem('arbor-sources', JSON.stringify(newSources));
-        
-        // This method is called from UI, so we return or let the UI trigger load. 
-        // But for consistency with legacy calls, we can trigger an update here 
-        // if this class was more autonomous. However, UI usually calls store.loadData(newSource).
-        // For addCommunitySource, the caller usually triggers loadData next.
-        // We will leave it as state update mainly.
     }
 
     removeCommunitySource(id) {
@@ -111,37 +158,27 @@ export class SourceManager {
         this.update({ communitySources: newSources });
         this.state.communitySources = newSources;
         localStorage.setItem('arbor-sources', JSON.stringify(newSources));
-        
-        if (this.state.activeSource && this.state.activeSource.id === id) {
-            // Fallback needed by caller
-        }
     }
 
     async discoverManifest(sourceUrl) {
-        if (!sourceUrl) return;
+        if (!sourceUrl || sourceUrl.startsWith('local://')) return;
 
         try {
             const absoluteSource = new URL(sourceUrl, window.location.href).href;
             const candidates = [];
 
-            // STRATEGY 1: Check Sibling (Standard for data.json in data folder)
-            // e.g. .../data/data.json -> .../data/arbor-index.json
+            // STRATEGY 1: Check Sibling
             candidates.push(new URL('arbor-index.json', absoluteSource).href);
-
-            // STRATEGY 2: Check Parent (Fix for Releases inside subfolders)
-            // e.g. .../data/releases/v1.json -> .../data/arbor-index.json
+            // STRATEGY 2: Check Parent
             candidates.push(new URL('../arbor-index.json', absoluteSource).href);
-            
             // STRATEGY 3: Explicit /data/ root detection
             const lower = absoluteSource.toLowerCase();
             if (lower.includes('/data/')) {
                  const idx = lower.lastIndexOf('/data/'); 
                  const rootBase = absoluteSource.substring(0, idx);
-                 // Check root/data/arbor-index.json
                  candidates.push(`${rootBase}/data/arbor-index.json`);
             }
 
-            // Deduplicate
             const uniqueCandidates = [...new Set(candidates)];
 
             for (const url of uniqueCandidates) {
@@ -181,8 +218,37 @@ export class SourceManager {
         this.update({ loading: true, error: null, activeSource: source });
         this.state.activeSource = source;
         
-        this.discoverManifest(source.url);
         localStorage.setItem('arbor-active-source-id', source.id);
+
+        // --- LOCAL INTERCEPTOR ---
+        if (source.url && source.url.startsWith('local://')) {
+            try {
+                const id = source.url.split('://')[1];
+                // Access userStore via the global store instance imported
+                const data = store.userStore.getLocalTreeData(id);
+                
+                if (!data) throw new Error("Local tree not found.");
+                
+                // Simulate network delay for better UX
+                await new Promise(r => setTimeout(r, 300));
+                
+                // Reset releases for local mode
+                this.update({ availableReleases: [] });
+                
+                // Update active source name from loaded data
+                if (data.universeName && data.universeName !== source.name) {
+                    this.update({ activeSource: { ...source, name: data.universeName } });
+                }
+                
+                return data;
+            } catch(e) {
+                this.update({ loading: false, error: "Failed to load local garden." });
+                throw e;
+            }
+        }
+        // -------------------------
+
+        this.discoverManifest(source.url);
 
         try {
             let json;
@@ -194,7 +260,7 @@ export class SourceManager {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 20000); 
 
-                const res = await fetch(url, { signal: controller.signal });
+                const res = await fetch(url, { signal: controller.signal, cache: 'no-cache' });
                 clearTimeout(timeoutId);
 
                 if (!res.ok) throw new Error(`Failed to fetch data from ${source.name} (Status ${res.status}).`);
@@ -209,7 +275,6 @@ export class SourceManager {
                 this.update({ activeSource: { ...source, name: json.universeName } });
             }
 
-            // Return the raw JSON for the main store to process language specifics
             return json;
 
         } catch (e) {

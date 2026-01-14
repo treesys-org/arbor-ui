@@ -32,6 +32,7 @@ class Store extends EventTarget {
             activeSource: null,
             availableReleases: [],
             manifestUrlAttempted: null, 
+            pendingUntrustedSource: null, // NEW: For URL param warning
             
             data: null, // Current Language Tree
             rawGraphData: null, // Full JSON
@@ -78,8 +79,14 @@ class Store extends EventTarget {
              
              // Initial Source Load
              const source = await this.sourceManager.init();
+             // IMPORTANT: init() might return null if it triggers a warning modal
              if (source) {
                  this.loadData(source);
+             } else {
+                 // If init returns null, it means a modal is up, so we're not "loading"
+                 if (!this.state.modal) {
+                     this.update({ loading: false });
+                 }
              }
         });
 
@@ -99,7 +106,10 @@ class Store extends EventTarget {
         if (pUser) this.update({ puterUser: pUser });
 
         const welcomeSeen = localStorage.getItem('arbor-welcome-seen');
-        if (!welcomeSeen) setTimeout(() => this.setModal('welcome'), 50); 
+        // Only show welcome if no other modal is pending (like the security warning)
+        if (!welcomeSeen && !this.state.modal) {
+            setTimeout(() => this.setModal('welcome'), 50); 
+        }
     }
 
     // --- PROXY ACCESSORS ---
@@ -175,6 +185,20 @@ class Store extends EventTarget {
         } catch(e) {
             // Error handling is managed inside SourceManager -> update({error})
         }
+    }
+    
+    proceedWithUntrustedLoad() {
+        const source = this.state.pendingUntrustedSource;
+        if (source) {
+            this.update({ modal: null, pendingUntrustedSource: null });
+            this.loadData(source);
+        }
+    }
+
+    async cancelUntrustedLoad() {
+        this.update({ modal: null, pendingUntrustedSource: null });
+        const defaultSource = await this.sourceManager.getDefaultSource();
+        this.loadData(defaultSource);
     }
 
     processLoadedData(json) {
@@ -267,6 +291,14 @@ class Store extends EventTarget {
         traverse(rootNode);
         if (hydratedCount > 0) {
             console.log(`Arbor Hydration: Expanded ${hydratedCount} implicit completions from compressed save.`);
+        }
+    }
+
+    requestAddCommunitySource(url) {
+        if (this.sourceManager.isUrlTrusted(url)) {
+            this.sourceManager.addCommunitySource(url);
+        } else {
+            this.update({ modal: { type: 'security-warning', url: url } });
         }
     }
 

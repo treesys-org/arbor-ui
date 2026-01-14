@@ -17,7 +17,9 @@ import './modals/certificate-view.js';
 import './modals/empty-module.js';
 import './modals/privacy.js';
 import './modals/arcade.js'; 
-import './modals/game-player.js'; // NEW: Game Player Iframe
+import './modals/game-player.js';
+import './modals/security-warning.js';
+import './modals/load-warning.js'; // NEW
 
 // Admin Panel is essentially a modal
 import './modals/admin.js';
@@ -77,7 +79,7 @@ class ArborModals extends HTMLElement {
 
         // 5. Standard Modals Router
         const type = modal.type || modal;
-        const currentKey = `${type}-${modal.node?.id || ''}`;
+        const currentKey = `${type}-${modal.node?.id || modal.url || ''}`;
 
         if (currentKey === this.lastRenderKey) return;
         this.lastRenderKey = currentKey;
@@ -103,6 +105,12 @@ class ArborModals extends HTMLElement {
                 break;
             case 'sources': 
                 this.innerHTML = `<arbor-modal-sources></arbor-modal-sources>`; 
+                break;
+            case 'security-warning':
+                this.innerHTML = `<arbor-modal-security-warning></arbor-modal-security-warning>`;
+                break;
+            case 'load-warning':
+                this.innerHTML = `<arbor-modal-load-warning></arbor-modal-load-warning>`;
                 break;
             case 'arcade': 
                 this.innerHTML = `<arbor-modal-arcade></arbor-modal-arcade>`; 
