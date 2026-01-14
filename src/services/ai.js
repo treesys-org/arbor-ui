@@ -280,6 +280,53 @@ class HybridAIService {
             return { text: "🦉 Error Puter Cloud: " + (e.message || "Connection failed") };
         }
     }
+
+    // --- ARCHITECT MODE (Structure Generation) ---
+    async generateStructure(topic) {
+        const prompt = `
+        Act as a curriculum architect. Create a structured course outline for: "${topic}".
+        
+        Return strict JSON format with this structure:
+        {
+            "title": "Course Title",
+            "description": "Brief course description",
+            "modules": [
+                {
+                    "title": "Module Title",
+                    "description": "Module description",
+                    "lessons": [
+                        {
+                            "title": "Lesson Title",
+                            "description": "What is learned",
+                            "outline": "3 bullet points of content"
+                        }
+                    ]
+                }
+            ]
+        }
+        Create at least 3 modules with 2 lessons each.
+        IMPORTANT: Return ONLY the JSON. No markdown code blocks.
+        `;
+
+        try {
+            const response = await this.chat([{ role: 'user', content: prompt }]);
+            let text = response.text;
+            
+            // Cleanup Markdown if AI disregards instruction
+            text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+            // Strip any text before/after the JSON braces
+            const start = text.indexOf('{');
+            const end = text.lastIndexOf('}');
+            if (start !== -1 && end !== -1) {
+                text = text.substring(start, end + 1);
+            }
+
+            return JSON.parse(text);
+        } catch (e) {
+            console.error("Architect Error:", e);
+            throw new Error("Failed to generate structure: " + e.message);
+        }
+    }
 }
 
 export const aiService = new HybridAIService();

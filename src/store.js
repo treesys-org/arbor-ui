@@ -597,6 +597,11 @@ class Store extends EventTarget {
     }
 
     async chatWithSage(userText) {
+        // Automatically open modal if it's not open (e.g. called from code)
+        if (!this.state.modal || this.state.modal.type !== 'sage') {
+            this.setModal({ type: 'sage' });
+        }
+
         const currentMsgs = [...this.state.ai.messages, { role: 'user', content: userText }];
         this.update({ ai: { ...this.state.ai, status: 'thinking', messages: currentMsgs } });
 
