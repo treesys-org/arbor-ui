@@ -215,5 +215,56 @@ export const AdminRenderer = {
         });
 
         return html;
+    },
+
+    // New specialized renderer for Governance Mode
+    renderGovernanceTree(nodes, depth, context) {
+        const { getOwner, selectedPath } = context;
+        
+        // Filter only Folders for Governance View
+        const folders = nodes.filter(n => n.type === 'tree').sort((a,b) => a.path.localeCompare(b.path));
+        
+        let html = '';
+        
+        folders.forEach(node => {
+             const name = node.path.split('/').pop().replace(/_/g, ' ');
+             const isSelected = selectedPath === node.path;
+             const owner = getOwner(node.path);
+             const padding = depth * 16 + 12;
+             
+             let childrenHtml = '';
+             if (node.children && node.children.length > 0) {
+                 childrenHtml = AdminRenderer.renderGovernanceTree(node.children, depth + 1, context);
+             }
+             
+             // Owner Badge Logic
+             let ownerBadge = '';
+             if (owner) {
+                 ownerBadge = `<div class="flex items-center gap-1 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider">
+                    👤 ${owner.replace('@', '')}
+                 </div>`;
+             }
+
+             html += `
+             <div>
+                <div class="flex items-center justify-between py-2 px-2 cursor-pointer rounded-lg text-sm transition-all duration-200 border border-transparent 
+                     ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}"
+                     style="padding-left: ${padding}px"
+                     onclick="window.selectGovNode('${node.path}')">
+                    
+                    <div class="flex items-center gap-2 overflow-hidden min-w-0">
+                        <span class="text-slate-400 text-lg">📁</span>
+                        <span class="font-bold ${isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-300'} truncate select-none">${name}</span>
+                    </div>
+                    
+                    <div class="flex-shrink-0 ml-2">
+                        ${ownerBadge}
+                    </div>
+                </div>
+                ${childrenHtml ? `<div class="border-l-2 border-slate-100 dark:border-slate-800 ml-[${padding + 6}px]">${childrenHtml}</div>` : ''}
+             </div>`;
+        });
+
+        return html;
     }
-}
+};

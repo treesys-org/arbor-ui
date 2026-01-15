@@ -1,4 +1,5 @@
 
+
 import { store } from '../../store.js';
 import { fileSystem } from '../../services/filesystem.js';
 import { github } from '../../services/github.js'; 
@@ -17,6 +18,7 @@ class ArborAdminPanel extends HTMLElement {
             treeNodes: [], 
             treeFilter: '',
             expandedPaths: new Set(['content', 'content/EN', 'content/ES']),
+            selectedGovPath: null, // For Team Split View
             isLoggingIn: false,
             loginError: null
         };
@@ -190,6 +192,10 @@ class ArborAdminPanel extends HTMLElement {
             if (set.has(path)) set.delete(path); else set.add(path);
             this.updateState({ expandedPaths: new Set(set) });
         };
+        
+        window.selectGovNode = (path) => {
+            this.updateState({ selectedGovPath: path });
+        };
 
         window.editFile = (path) => {
              // For local mode, attempt to resolve ID
@@ -325,27 +331,18 @@ class ArborAdminPanel extends HTMLElement {
         }
     }
 
-    addRule() {
-        const newRule = { path: '/content/', owner: '' };
-        // Default owner to first admin if available
-        if (this.state.adminData.users.length > 0) {
-            newRule.owner = '@' + this.state.adminData.users[0].login;
+    updateGovRule(path, owner) {
+        // 1. Remove existing rule for this path if any
+        let newRules = this.state.parsedRules.filter(r => r.path !== '/' + path && r.path !== path);
+        
+        // 2. Add new rule if owner is set (not empty)
+        if (owner) {
+            // Ensure path starts with / for standard codeowners format
+            const formattedPath = path.startsWith('/') ? path : '/' + path;
+            newRules.push({ path: formattedPath, owner: owner });
         }
-        const newRules = [...this.state.parsedRules, newRule];
+        
         this.updateState({ parsedRules: newRules });
-    }
-
-    removeRule(index) {
-        const newRules = [...this.state.parsedRules];
-        newRules.splice(index, 1);
-        this.updateState({ parsedRules: newRules });
-    }
-
-    updateRule(index, key, value) {
-        const newRules = [...this.state.parsedRules];
-        newRules[index][key] = value;
-        // Don't full re-render on input typing to keep focus
-        this.state.parsedRules = newRules;
     }
 
     async handleSaveGov() {
@@ -366,7 +363,7 @@ class ArborAdminPanel extends HTMLElement {
             return;
         }
 
-        const { adminTab, isAdmin, canWrite, adminData, treeNodes, treeFilter, parsedRules } = this.state;
+        const { adminTab, isAdmin, canWrite, adminData, treeNodes, treeFilter, parsedRules, selectedGovPath } = this.state;
         const sourceName = store.value.activeSource?.name || 'Unknown Source';
         
         const header = `
@@ -393,7 +390,7 @@ class ArborAdminPanel extends HTMLElement {
             <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${adminTab === 'prs' ? 'border-orange-500 text-orange-600' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-prs">${ui.adminPrs}</button>
             ` : ''}
             ${isAdmin ? `
-            <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${adminTab === 'team' ? 'border-purple-500 text-purple-600' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-team">${ui.adminTeam} & ${ui.adminGovTitle || 'Access'}</button>
+            <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${adminTab === 'team' ? 'border-purple-500 text-purple-600' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-team">${ui.adminTeam} & Access</button>
             ` : ''}
         </div>`;
 
@@ -441,86 +438,111 @@ class ArborAdminPanel extends HTMLElement {
                 `).join('')}
             </div>`;
         }
-        // --- TEAM & GOVERNANCE TAB (UNIFIED) ---
+        // --- TEAM & GOVERNANCE TAB (NEW SPLIT VIEW) ---
         else if (adminTab === 'team') {
+            
+            // Helper to get owner of a path from parsed rules
+            const getOwner = (path) => {
+                const normalized = path.startsWith('/') ? path : '/' + path;
+                const rule = parsedRules.find(r => r.path === normalized);
+                return rule ? rule.owner : null;
+            };
+
+            const selectedOwner = selectedGovPath ? getOwner(selectedGovPath) : null;
+            const selectedName = selectedGovPath ? selectedGovPath.split('/').pop().replace(/_/g, ' ') : null;
+
             content = `
-            <div class="flex flex-col h-full bg-slate-50/30 dark:bg-slate-900/20">
+            <div class="flex h-full overflow-hidden bg-white dark:bg-slate-900">
                 
-                <!-- TOP: COLLABORATORS -->
-                <div class="p-6 pb-2">
-                    <div class="flex justify-between items-center mb-4">
-                        <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                            👥 ${ui.adminTeam} 
-                            <span class="bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded-full text-[10px]">${adminData.users.length}</span>
-                        </h4>
-                        <div class="flex gap-2">
-                            <button id="btn-invite" class="px-3 py-1.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-lg text-xs font-bold hover:opacity-80 transition-opacity shadow-sm">+ ${ui.adminInvite}</button>
-                            <button id="btn-protect-branch" class="px-3 py-1.5 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800 rounded-lg text-xs font-bold hover:bg-yellow-100 dark:hover:bg-yellow-900/40 transition-colors" title="${ui.adminProtectBranch}">🛡️</button>
-                        </div>
+                <!-- LEFT COLUMN: GOVERNANCE TREE -->
+                <div class="w-1/3 border-r border-slate-200 dark:border-slate-800 flex flex-col bg-slate-50/30 dark:bg-slate-950/30">
+                    <div class="p-3 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+                        <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Hierarchy</h4>
+                        <p class="text-[10px] text-slate-500">Select a folder to manage</p>
                     </div>
-                    
-                    <div class="grid grid-cols-2 gap-3 mb-6">
-                        ${adminData.users.map(u => `
-                            <div class="p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl flex items-center gap-3 shadow-sm">
-                                <img src="${u.avatar}" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700">
-                                <div class="min-w-0 flex-1">
-                                    <p class="font-bold text-slate-800 dark:text-white text-xs truncate">${u.login}</p>
-                                    <p class="text-[10px] text-slate-400 font-bold uppercase">${u.role}</p>
-                                </div>
-                            </div>
-                        `).join('')}
+                    <div class="flex-1 overflow-y-auto custom-scrollbar p-2">
+                        ${treeNodes.length === 0 ? '<div class="p-4 text-xs text-slate-400 text-center">Loading Tree...</div>' : 
+                          AdminRenderer.renderGovernanceTree(treeNodes, 0, {
+                              getOwner: getOwner,
+                              selectedPath: selectedGovPath
+                          })
+                        }
                     </div>
                 </div>
 
-                <div class="h-px bg-slate-200 dark:border-slate-700 mx-6"></div>
-
-                <!-- BOTTOM: GOVERNANCE BUILDER -->
-                <div class="flex-1 overflow-y-auto custom-scrollbar p-6 pt-6">
-                    <div class="flex justify-between items-center mb-4">
-                        <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest">⚖️ ${ui.adminGovTitle || 'Access Rules'}</h4>
-                        <button id="btn-save-gov" class="text-xs font-bold text-green-600 dark:text-green-400 hover:underline bg-green-50 dark:bg-green-900/20 px-3 py-1.5 rounded-lg border border-green-200 dark:border-green-800 hover:bg-green-100 transition-colors">
-                            💾 ${ui.adminSaveGov}
-                        </button>
-                    </div>
-
-                    <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
-                        <div class="flex bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 p-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                            <div class="w-7/12 pl-2">${ui.adminGovPath}</div>
-                            <div class="w-4/12">${ui.adminGovOwner}</div>
-                            <div class="w-1/12 text-center"></div>
+                <!-- RIGHT COLUMN: INSPECTOR -->
+                <div class="w-2/3 flex flex-col bg-white dark:bg-slate-900 relative">
+                    
+                    ${!selectedGovPath ? `
+                        <div class="flex-1 flex flex-col items-center justify-center text-center p-8 opacity-50">
+                            <div class="text-6xl mb-4 grayscale">🛡️</div>
+                            <h3 class="font-bold text-slate-400">Select a folder</h3>
+                            <p class="text-xs text-slate-300 max-w-xs mt-2">Manage access rules and assign ownership to collaborators.</p>
                         </div>
-                        
-                        <div id="rules-container">
-                            ${parsedRules.map((rule, idx) => `
-                                <div class="flex items-center p-2 border-b border-slate-100 dark:border-slate-800 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                                    <div class="w-7/12 pr-2">
-                                        <input type="text" class="w-full bg-transparent text-xs font-mono text-slate-700 dark:text-slate-300 outline-none border-b border-transparent focus:border-blue-500 placeholder-slate-300" 
-                                            value="${rule.path}" 
-                                            placeholder="/content/..."
-                                            onchange="document.querySelector('arbor-admin-panel').updateRule(${idx}, 'path', this.value)">
-                                    </div>
-                                    <div class="w-4/12 pr-2">
-                                        <select class="w-full bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-400 rounded py-1 px-2 border-none outline-none focus:ring-1 focus:ring-blue-500"
-                                            onchange="document.querySelector('arbor-admin-panel').updateRule(${idx}, 'owner', this.value)">
-                                            ${adminData.users.map(u => `<option value="@${u.login}" ${rule.owner.toLowerCase() === ('@' + u.login).toLowerCase() ? 'selected' : ''}>@${u.login}</option>`).join('')}
-                                            ${!adminData.users.find(u => ('@'+u.login).toLowerCase() === rule.owner.toLowerCase()) ? `<option value="${rule.owner}" selected>${rule.owner}</option>` : ''}
-                                        </select>
-                                    </div>
-                                    <div class="w-1/12 text-center">
-                                        <button class="text-slate-400 hover:text-red-500 transition-colors text-lg leading-none" onclick="document.querySelector('arbor-admin-panel').removeRule(${idx})">×</button>
+                    ` : `
+                        <div class="p-8 flex-1 overflow-y-auto">
+                            
+                            <!-- Header Info -->
+                            <div class="mb-8">
+                                <div class="flex items-center gap-3 mb-2">
+                                    <div class="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center text-3xl">📁</div>
+                                    <div>
+                                        <h2 class="text-2xl font-black text-slate-800 dark:text-white">${selectedName}</h2>
+                                        <code class="text-xs text-slate-400 font-mono bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">/${selectedGovPath}</code>
                                     </div>
                                 </div>
-                            `).join('')}
+                            </div>
+
+                            <!-- Assignment Card -->
+                            <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm mb-6">
+                                <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Access Rule</h4>
+                                
+                                <div class="flex gap-4 items-start">
+                                    <div class="flex-1">
+                                        <label class="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Assigned Owner</label>
+                                        <select id="sel-gov-owner" class="w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 font-bold text-sm">
+                                            <option value="">-- No specific rule (Inherit) --</option>
+                                            ${adminData.users.map(u => `
+                                                <option value="@${u.login}" ${selectedOwner === '@' + u.login ? 'selected' : ''}>
+                                                    @${u.login} (${u.role})
+                                                </option>
+                                            `).join('')}
+                                        </select>
+                                        <p class="text-[10px] text-slate-400 mt-2">
+                                            Owners have write access to this folder and all subfolders (unless overridden).
+                                        </p>
+                                    </div>
+                                    
+                                    <!-- Current Avatar Preview -->
+                                    <div class="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center shrink-0 border-2 border-slate-200 dark:border-slate-600 overflow-hidden">
+                                        ${(() => {
+                                            if (!selectedOwner) return '<span class="text-2xl opacity-30">👤</span>';
+                                            const u = adminData.users.find(user => '@' + user.login === selectedOwner);
+                                            return u ? `<img src="${u.avatar}" class="w-full h-full object-cover">` : '<span class="text-xl">?</span>';
+                                        })()}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Actions -->
+                            <div class="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+                                <button id="btn-save-gov" class="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl shadow-lg shadow-purple-500/20 active:scale-95 transition-all flex items-center gap-2">
+                                    <span>💾</span> Save Rules
+                                </button>
+                            </div>
+
                         </div>
-                        
-                        <button id="btn-add-rule" class="w-full py-2 text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-t border-slate-100 dark:border-slate-700">
-                            + ${ui.adminGovAdd}
-                        </button>
-                    </div>
+                    `}
                     
-                    <p class="text-[10px] text-slate-400 mt-3 text-center italic">
-                        Assigning ownership prevents other users from editing folders without approval.
-                    </p>
+                    <!-- Global Footer in Inspector -->
+                    <div class="p-4 bg-slate-50 dark:bg-slate-950/50 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-[10px] text-slate-400">
+                        <span>Total Users: ${adminData.users.length}</span>
+                        <div class="flex gap-2">
+                            <button id="btn-invite" class="hover:text-blue-500 font-bold">+ Invite User</button>
+                            <span>|</span>
+                            <button id="btn-protect-branch" class="hover:text-yellow-500 font-bold">Protect Branch</button>
+                        </div>
+                    </div>
                 </div>
             </div>`;
         }
@@ -613,8 +635,14 @@ class ArborAdminPanel extends HTMLElement {
             const btnInvite = this.querySelector('#btn-invite');
             if(btnInvite) btnInvite.onclick = () => this.handleInvite();
             
-            const btnAddRule = this.querySelector('#btn-add-rule');
-            if(btnAddRule) btnAddRule.onclick = () => this.addRule();
+            const selOwner = this.querySelector('#sel-gov-owner');
+            if (selOwner) {
+                selOwner.onchange = (e) => {
+                    if (this.state.selectedGovPath) {
+                        this.updateGovRule(this.state.selectedGovPath, e.target.value);
+                    }
+                };
+            }
             
             const btnSaveGov = this.querySelector('#btn-save-gov');
             if(btnSaveGov) btnSaveGov.onclick = () => this.handleSaveGov();
