@@ -19,6 +19,7 @@ class ArborAdminPanel extends HTMLElement {
             treeFilter: '',
             expandedPaths: new Set(['content', 'content/EN', 'content/ES']),
             selectedGovPath: null, // For Team Split View
+            activeUserFilter: null, // NEW: Filter tree by user login
             isLoggingIn: false,
             loginError: null
         };
@@ -200,6 +201,14 @@ class ArborAdminPanel extends HTMLElement {
         window.selectGovNode = (path) => {
             this.updateState({ selectedGovPath: path });
         };
+        
+        window.filterByOwner = (login) => {
+            if (this.state.activeUserFilter === login) {
+                this.updateState({ activeUserFilter: null }); // Toggle off
+            } else {
+                this.updateState({ activeUserFilter: login });
+            }
+        };
 
         window.editFile = (path) => {
              // For local mode, attempt to resolve ID
@@ -368,7 +377,7 @@ class ArborAdminPanel extends HTMLElement {
             return;
         }
 
-        const { adminTab, isAdmin, canWrite, adminData, treeNodes, treeFilter, parsedRules, selectedGovPath, expandedPaths } = this.state;
+        const { adminTab, isAdmin, canWrite, adminData, treeNodes, treeFilter, parsedRules, selectedGovPath, expandedPaths, activeUserFilter } = this.state;
         const sourceName = store.value.activeSource?.name || 'Unknown Source';
         
         const header = `
@@ -443,7 +452,7 @@ class ArborAdminPanel extends HTMLElement {
                 `).join('')}
             </div>`;
         }
-        // --- TEAM & GOVERNANCE TAB (SPLIT VIEW) ---
+        // --- TEAM & GOVERNANCE TAB (RADICAL REDESIGN) ---
         else if (adminTab === 'team') {
             
             // Helper to get owner of a path from parsed rules
@@ -452,103 +461,124 @@ class ArborAdminPanel extends HTMLElement {
                 const rule = parsedRules.find(r => r.path === normalized);
                 return rule ? rule.owner : null;
             };
+            
+            const getUserInfo = (login) => {
+                if(!login) return null;
+                const clean = login.replace('@', '').toLowerCase();
+                return adminData.users.find(u => u.login.toLowerCase() === clean);
+            };
 
             const selectedOwner = selectedGovPath ? getOwner(selectedGovPath) : null;
             const selectedName = selectedGovPath ? selectedGovPath.split('/').pop().replace(/_/g, ' ') : null;
 
             content = `
-            <div class="flex h-full overflow-hidden bg-white dark:bg-slate-900">
+            <div class="flex flex-col h-full bg-white dark:bg-slate-900 overflow-hidden">
                 
-                <!-- LEFT COLUMN: GOVERNANCE TREE -->
-                <div class="w-1/3 border-r border-slate-200 dark:border-slate-800 flex flex-col bg-slate-50/30 dark:bg-slate-950/30">
-                    <div class="p-3 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
-                        <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Hierarchy</h4>
-                        <p class="text-[10px] text-slate-500">Select a folder to manage</p>
-                    </div>
-                    <div class="flex-1 overflow-y-auto custom-scrollbar p-2">
-                        ${treeNodes.length === 0 ? '<div class="p-4 text-xs text-slate-400 text-center">Loading Tree...</div>' : 
-                          AdminRenderer.renderGovernanceTree(treeNodes, 0, {
-                              getOwner: getOwner,
-                              selectedPath: selectedGovPath,
-                              expandedPaths: expandedPaths // Fix: Pass expanded state
-                          })
-                        }
-                    </div>
+                <!-- TEAM ROSTER BAR (Horizontal) -->
+                <div class="p-3 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3 overflow-x-auto no-scrollbar bg-slate-50/50 dark:bg-slate-950/50 shrink-0">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2 sticky left-0">Team</span>
+                    ${adminData.users.map(u => {
+                        const isActive = activeUserFilter === u.login;
+                        return `
+                        <button onclick="window.filterByOwner('${u.login}')" class="flex items-center gap-2 px-2 py-1.5 rounded-full border transition-all ${isActive ? 'bg-purple-100 dark:bg-purple-900/30 border-purple-300 dark:border-purple-600 shadow-sm' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-purple-300'}">
+                            <img src="${u.avatar}" class="w-5 h-5 rounded-full">
+                            <span class="text-xs font-bold ${isActive ? 'text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400'}">${u.login}</span>
+                        </button>
+                    `}).join('')}
+                    <button id="btn-invite" class="w-8 h-8 rounded-full border border-dashed border-slate-300 text-slate-400 hover:text-blue-500 hover:border-blue-400 flex items-center justify-center text-lg transition-colors">+</button>
                 </div>
 
-                <!-- RIGHT COLUMN: INSPECTOR -->
-                <div class="w-2/3 flex flex-col bg-white dark:bg-slate-900 relative">
+                <!-- SPLIT VIEW -->
+                <div class="flex-1 flex overflow-hidden">
                     
-                    ${!selectedGovPath ? `
-                        <div class="flex-1 flex flex-col items-center justify-center text-center p-8 opacity-50">
-                            <div class="text-6xl mb-4 grayscale">🛡️</div>
-                            <h3 class="font-bold text-slate-400">Select a folder</h3>
-                            <p class="text-xs text-slate-300 max-w-xs mt-2">Manage access rules and assign ownership to collaborators.</p>
+                    <!-- LEFT: VISUAL TERRITORY TREE -->
+                    <div class="w-1/3 border-r border-slate-200 dark:border-slate-800 flex flex-col bg-slate-50/30 dark:bg-slate-950/30">
+                        <div class="flex-1 overflow-y-auto custom-scrollbar p-2">
+                            ${treeNodes.length === 0 ? '<div class="p-4 text-xs text-slate-400 text-center">Loading Tree...</div>' : 
+                              AdminRenderer.renderGovernanceTree(treeNodes, 0, {
+                                  getOwner: getOwner,
+                                  getUserInfo: getUserInfo,
+                                  selectedPath: selectedGovPath,
+                                  expandedPaths: expandedPaths,
+                                  filterUser: activeUserFilter
+                              })
+                            }
                         </div>
-                    ` : `
-                        <div class="p-8 flex-1 overflow-y-auto">
-                            
-                            <!-- Header Info -->
-                            <div class="mb-8">
-                                <div class="flex items-center gap-3 mb-2">
-                                    <div class="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center text-3xl">📁</div>
-                                    <div>
-                                        <h2 class="text-2xl font-black text-slate-800 dark:text-white">${selectedName}</h2>
-                                        <code class="text-xs text-slate-400 font-mono bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">/${selectedGovPath}</code>
-                                    </div>
-                                </div>
-                            </div>
+                    </div>
 
-                            <!-- Assignment Card -->
-                            <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm mb-6">
-                                <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Access Rule</h4>
+                    <!-- RIGHT: ACCESS CARD -->
+                    <div class="w-2/3 flex flex-col bg-white dark:bg-slate-900 relative">
+                        
+                        ${!selectedGovPath ? `
+                            <div class="flex-1 flex flex-col items-center justify-center text-center p-8 opacity-50">
+                                <div class="text-6xl mb-4 grayscale">🛡️</div>
+                                <h3 class="font-bold text-slate-400">Select a Zone</h3>
+                                <p class="text-xs text-slate-300 max-w-xs mt-2">Click a folder to assign responsibility or manage rules.</p>
+                            </div>
+                        ` : `
+                            <div class="p-8 flex-1 overflow-y-auto">
                                 
-                                <div class="flex gap-4 items-start">
-                                    <div class="flex-1">
-                                        <label class="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Assigned Owner</label>
-                                        <select id="sel-gov-owner" class="w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 font-bold text-sm">
-                                            <option value="">-- No specific rule (Inherit) --</option>
-                                            ${adminData.users.map(u => `
-                                                <option value="@${u.login}" ${selectedOwner && selectedOwner.toLowerCase() === '@' + u.login.toLowerCase() ? 'selected' : ''}>
-                                                    @${u.login} (${u.role})
-                                                </option>
-                                            `).join('')}
-                                        </select>
-                                        <p class="text-[10px] text-slate-400 mt-2">
-                                            Owners have write access to this folder and all subfolders (unless overridden).
-                                        </p>
+                                <!-- Header Info -->
+                                <div class="mb-8 flex items-start justify-between">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center text-3xl">📂</div>
+                                        <div>
+                                            <h2 class="text-2xl font-black text-slate-800 dark:text-white">${selectedName}</h2>
+                                            <code class="text-xs text-slate-400 font-mono bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">/${selectedGovPath}</code>
+                                        </div>
                                     </div>
                                     
-                                    <!-- Current Avatar Preview -->
-                                    <div class="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center shrink-0 border-2 border-slate-200 dark:border-slate-600 overflow-hidden">
-                                        ${(() => {
-                                            if (!selectedOwner) return '<span class="text-2xl opacity-30">👤</span>';
-                                            // Ensure we match case-insensitive for avatar finding
-                                            const login = selectedOwner.replace('@', '');
-                                            const u = adminData.users.find(user => user.login.toLowerCase() === login.toLowerCase());
-                                            return u ? `<img src="${u.avatar}" class="w-full h-full object-cover">` : '<span class="text-xl">?</span>';
-                                        })()}
-                                    </div>
+                                    ${activeUserFilter && getOwner(selectedGovPath)?.toLowerCase().includes(activeUserFilter.toLowerCase()) ? 
+                                        `<span class="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full border border-green-200">✅ Owned by Filter</span>` : ''
+                                    }
                                 </div>
-                            </div>
 
-                            <!-- Actions -->
-                            <div class="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-                                <button id="btn-save-gov" class="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl shadow-lg shadow-purple-500/20 active:scale-95 transition-all flex items-center gap-2">
-                                    <span>💾</span> Save Rules
-                                </button>
-                            </div>
+                                <!-- Assignment Card -->
+                                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm mb-6 relative overflow-hidden">
+                                    <div class="absolute top-0 right-0 p-4 opacity-10 text-6xl">👑</div>
+                                    
+                                    <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Direct Ownership</h4>
+                                    
+                                    <div class="flex gap-4 items-center">
+                                        <!-- Current Avatar Preview -->
+                                        <div class="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center shrink-0 border-2 border-slate-200 dark:border-slate-600 overflow-hidden shadow-inner">
+                                            ${(() => {
+                                                if (!selectedOwner) return '<span class="text-2xl opacity-30">👤</span>';
+                                                const u = getUserInfo(selectedOwner);
+                                                return u ? `<img src="${u.avatar}" class="w-full h-full object-cover">` : '<span class="text-xl">?</span>';
+                                            })()}
+                                        </div>
 
-                        </div>
-                    `}
-                    
-                    <!-- Global Footer in Inspector -->
-                    <div class="p-4 bg-slate-50 dark:bg-slate-950/50 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-[10px] text-slate-400">
-                        <span>Total Users: ${adminData.users.length}</span>
-                        <div class="flex gap-2">
-                            <button id="btn-invite" class="hover:text-blue-500 font-bold">+ Invite User</button>
-                            <span>|</span>
-                            <button id="btn-protect-branch" class="hover:text-yellow-500 font-bold">Protect Branch</button>
+                                        <div class="flex-1">
+                                            <select id="sel-gov-owner" class="w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 font-bold text-sm">
+                                                <option value="">-- Inherit from Parent --</option>
+                                                ${adminData.users.map(u => `
+                                                    <option value="@${u.login}" ${selectedOwner && selectedOwner.toLowerCase() === '@' + u.login.toLowerCase() ? 'selected' : ''}>
+                                                        @${u.login} (${u.role})
+                                                    </option>
+                                                `).join('')}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <p class="text-[10px] text-slate-400 mt-4 bg-slate-50 dark:bg-slate-900/50 p-2 rounded">
+                                        ℹ️ Assigning an owner grants them write access to this folder and all subfolders (unless overridden).
+                                    </p>
+                                </div>
+
+                                <!-- Actions -->
+                                <div class="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+                                    <button id="btn-save-gov" class="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl shadow-lg shadow-purple-500/20 active:scale-95 transition-all flex items-center gap-2">
+                                        <span>💾</span> Update Rules
+                                    </button>
+                                </div>
+
+                            </div>
+                        `}
+                        
+                        <div class="p-4 bg-slate-50 dark:bg-slate-950/50 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-[10px] text-slate-400">
+                            <span>Rules defined in .github/CODEOWNERS</span>
+                            <button id="btn-protect-branch" class="hover:text-yellow-500 font-bold">Manage Branch Protection</button>
                         </div>
                     </div>
                 </div>

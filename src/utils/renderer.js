@@ -219,7 +219,7 @@ export const AdminRenderer = {
 
     // New specialized renderer for Governance Mode
     renderGovernanceTree(nodes, depth, context) {
-        const { getOwner, selectedPath, expandedPaths } = context;
+        const { getOwner, getUserInfo, selectedPath, expandedPaths, filterUser } = context;
         
         // Filter only Folders for Governance View
         const folders = nodes.filter(n => n.type === 'tree').sort((a,b) => a.path.localeCompare(b.path));
@@ -232,30 +232,53 @@ export const AdminRenderer = {
              const isExpanded = expandedPaths.has(node.path);
              const owner = getOwner(node.path);
              
+             // VISUAL FILTERING LOGIC
+             let isDimmed = false;
+             let isHighlighted = false;
+             
+             if (filterUser) {
+                 if (owner && owner.toLowerCase().includes(filterUser.toLowerCase())) {
+                     isHighlighted = true;
+                 } else {
+                     isDimmed = true;
+                 }
+             }
+             
              // Use consistent indentation relative to nesting
              const padding = depth * 12 + 10;
              
              let childrenHtml = '';
              let hasChildren = node.children && node.children.some(c => c.type === 'tree');
 
-             if (hasChildren && isExpanded) {
+             // If highlighted, we might want to auto-expand, but for now stick to manual + existing state
+             if (hasChildren && (isExpanded || isHighlighted)) {
                  childrenHtml = AdminRenderer.renderGovernanceTree(node.children, depth + 1, context);
              }
              
-             // Owner Badge Logic
+             // Owner Badge Logic (Visual Upgrade: Avatar instead of Text)
              let ownerBadge = '';
              if (owner) {
-                 ownerBadge = `<div class="flex items-center gap-1 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider">
-                    👤 ${owner.replace('@', '')}
-                 </div>`;
+                 const u = getUserInfo(owner);
+                 if (u) {
+                     ownerBadge = `<img src="${u.avatar}" class="w-5 h-5 rounded-full border border-purple-300 shadow-sm" title="${owner}">`;
+                 } else {
+                     ownerBadge = `<span class="text-xs">👤</span>`;
+                 }
              }
              
              const icon = hasChildren ? (isExpanded ? '📂' : '📁') : '📁';
+             
+             // Style Classes
+             const baseClasses = "flex items-center justify-between py-2 px-2 cursor-pointer rounded-lg text-sm transition-all duration-200 border border-transparent";
+             let activeClasses = "hover:bg-slate-50 dark:hover:bg-slate-800/50";
+             
+             if (isSelected) activeClasses = "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800";
+             if (isHighlighted) activeClasses += " bg-purple-50 dark:bg-purple-900/10 border-purple-200 dark:border-purple-800 shadow-sm";
+             if (isDimmed) activeClasses += " opacity-40 hover:opacity-100 grayscale";
 
              html += `
              <div>
-                <div class="flex items-center justify-between py-2 px-2 cursor-pointer rounded-lg text-sm transition-all duration-200 border border-transparent 
-                     ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}"
+                <div class="${baseClasses} ${activeClasses}"
                      style="padding-left: ${padding}px"
                      onclick="window.selectGovNode('${node.path}')">
                     
