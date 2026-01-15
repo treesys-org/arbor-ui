@@ -7,6 +7,7 @@ import { UserStore } from './stores/user-store.js';
 import { SourceManager } from './stores/source-manager.js';
 import { TreeUtils } from './utils/tree-utils.js';
 import { storageManager } from './stores/storage-manager.js'; // NEW
+import { fileSystem } from './services/filesystem.js';
 
 class Store extends EventTarget {
     constructor() {
@@ -55,6 +56,7 @@ class Store extends EventTarget {
             error: null,
             lastErrorMessage: null,
             viewMode: 'explore', 
+            constructionMode: false, // NEW: Construction Mode
             modal: null, 
             lastActionMessage: null,
             githubUser: null
@@ -353,6 +355,10 @@ class Store extends EventTarget {
     toggleTheme() { this.update({ theme: this.state.theme === 'light' ? 'dark' : 'light' }); }
     setModal(modal) { this.update({ modal }); }
     
+    toggleConstructionMode() {
+        this.update({ constructionMode: !this.state.constructionMode });
+    }
+    
     setViewMode(viewMode) { 
         this.update({ viewMode });
         if(viewMode === 'certificates') this.update({ modal: null });
@@ -425,6 +431,10 @@ class Store extends EventTarget {
     async toggleNode(nodeId) {
         const node = this.findNode(nodeId);
         if (!node) return;
+        
+        // Prevent toggle if in construction mode dragging logic might conflict
+        // (Handled in graph.js via click suppression)
+
         try {
             let path = [];
             let curr = node;
@@ -538,6 +548,40 @@ class Store extends EventTarget {
         } catch(e) {
             console.error("Content fetch failed", e);
             node.content = "Error loading content. Please check internet connection.";
+        } finally {
+            this.update({ loading: false });
+        }
+    }
+    
+    async moveNode(node, newParentId) {
+        this.update({ loading: true });
+        try {
+            const newParent = this.findNode(newParentId);
+            if(!newParent) throw new Error("Target parent not found");
+            
+            // Calculate new paths
+            // Note: This logic assumes 'node' is the d3 data object or has required fields
+            const oldPath = node.sourcePath;
+            // The fileSystem moveNode expects: (sourcePath, newParentPath)
+            // But we need the parent's sourcePath to construct the new path.
+            
+            const parentPath = newParent.sourcePath;
+            const newPath = `${parentPath}/${node.name}`; // Naive construction
+            
+            // Call FileSystem
+            await fileSystem.moveNode(oldPath, parentPath);
+            
+            // Refresh
+            // For now, reload the whole tree as structural changes are complex to patch in-memory
+            const source = this.state.activeSource;
+            await this.loadData(source, false);
+            
+            this.notify("Node moved successfully!");
+            
+        } catch(e) {
+            console.error(e);
+            this.update({ error: "Move failed: " + e.message });
+            setTimeout(() => this.update({ error: null }), 3000);
         } finally {
             this.update({ loading: false });
         }

@@ -54,6 +54,13 @@ class ArborProgressWidget extends HTMLElement {
     }
 
     render() {
+        // HIDE IN CONSTRUCTION MODE
+        if (store.value.constructionMode) {
+            this.style.display = 'none';
+            return;
+        }
+        this.style.display = 'block';
+
         const stats = this.getStats();
         const ui = store.ui;
         const g = store.value.gamification;

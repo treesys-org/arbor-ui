@@ -1,5 +1,4 @@
 
-
 import { store } from '../store.js';
 
 // Sub-components
@@ -19,7 +18,9 @@ import './modals/privacy.js';
 import './modals/arcade.js'; 
 import './modals/game-player.js';
 import './modals/security-warning.js';
-import './modals/load-warning.js'; // NEW
+import './modals/load-warning.js';
+import './modals/releases.js'; 
+import './modals/node-properties.js'; // NEW
 
 // Admin Panel is essentially a modal
 import './modals/admin.js';
@@ -106,6 +107,9 @@ class ArborModals extends HTMLElement {
             case 'sources': 
                 this.innerHTML = `<arbor-modal-sources></arbor-modal-sources>`; 
                 break;
+            case 'releases': 
+                this.innerHTML = `<arbor-modal-releases></arbor-modal-releases>`; 
+                break;
             case 'security-warning':
                 this.innerHTML = `<arbor-modal-security-warning></arbor-modal-security-warning>`;
                 break;
@@ -138,6 +142,9 @@ class ArborModals extends HTMLElement {
                 break;
             case 'export-pdf': 
                 this.innerHTML = `<arbor-modal-export-pdf></arbor-modal-export-pdf>`; 
+                break;
+            case 'node-properties': 
+                this.innerHTML = `<arbor-modal-node-properties></arbor-modal-node-properties>`; 
                 break;
             default: 
                 this.innerHTML = `<div class="p-8 bg-white m-4 rounded">Unknown modal: ${type}</div>`;

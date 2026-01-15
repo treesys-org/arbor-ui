@@ -1,6 +1,6 @@
 
 import { store } from '../../store.js';
-import { github } from '../../services/github.js';
+import { fileSystem } from '../../services/filesystem.js';
 import { aiService } from '../../services/ai.js';
 import { BLOCKS, parseArborFile, visualHTMLToMarkdown, markdownToVisualHTML, reconstructArborFile } from '../../utils/editor-engine.js';
 
@@ -17,13 +17,9 @@ class ArborEditor extends HTMLElement {
         super();
         this.node = null;
         this.meta = { title: '', icon: '📄', description: '', order: '99', isExam: false, extra: [] };
-        this.hasWriteAccess = false;
-        this.isMetaJson = false;
         this.currentSha = null;
+        this.isMetaJson = false;
         this.returnTo = null;
-        this.isLocalTree = false;
-        
-        // History for Undo
         this.historyStack = [];
     }
 
@@ -37,7 +33,7 @@ class ArborEditor extends HTMLElement {
             if (this.node?.id !== modal.node.id) {
                 this.node = modal.node;
                 this.returnTo = modal.returnTo || null;
-                this.historyStack = []; // Reset history on new file
+                this.historyStack = []; 
                 this.loadContent();
             }
         } else {
@@ -45,97 +41,126 @@ class ArborEditor extends HTMLElement {
                 this.node = null;
                 this.returnTo = null;
                 this.innerHTML = '';
+                this.className = '';
             }
         }
+    }
+    
+    getTargetPath() {
+        let path = this.node.sourcePath;
+        
+        // Fix for missing path in older builds for Root Nodes
+        if (!path && this.node.type === 'root') {
+            const lang = store.value.lang || 'EN';
+            path = `content/${lang}`; // Guess standard path
+        }
+
+        // If it's a container (Folder/Root), we edit the meta.json inside it
+        if (this.node.type === 'branch' || this.node.type === 'root') {
+            if (path && !path.endsWith('meta.json')) {
+                // Ensure no double slash if path ends with /
+                path = path.endsWith('/') ? path + 'meta.json' : path + '/meta.json';
+            }
+        }
+        
+        // Fallback for Local Nodes with missing sourcePath (Fix for "Cannot Save" error)
+        if (!path && this.node.id && this.node.id.startsWith('local-')) {
+            // Generate a virtual path so validation passes. 
+            // Local saving uses node.id, so this path is cosmetic/metadata only.
+            path = `${this.node.name}.md`;
+        }
+        
+        return path;
     }
 
     async loadContent() {
         this.renderLoading();
         
-        // CHECK SOURCE TYPE (LOCAL vs REMOTE)
-        const sourceUrl = store.value.activeSource?.url || '';
-        this.isLocalTree = sourceUrl.startsWith('local://');
-
         try {
-            // --- LOCAL MODE (PHASE 1) ---
-            if (this.isLocalTree) {
-                this.hasWriteAccess = true; // Always write access to local
-                this.isMetaJson = false; // Local storage nodes are objects, not files
-
-                // Load content directly from the in-memory graph
-                const freshNode = store.findNode(this.node.id);
-                
-                if (freshNode) {
-                    this.meta = {
-                        title: freshNode.name || '',
-                        icon: freshNode.icon || '📄',
-                        description: freshNode.description || '',
-                        order: freshNode.order || '99',
-                        isExam: freshNode.type === 'exam',
-                        extra: []
-                    };
-                    
-                    const rawContent = freshNode.content || "";
-                    const parsed = parseArborFile(rawContent);
-                    
-                    // If content has headers, they override the node properties
-                    if (parsed.meta.title) this.meta.title = parsed.meta.title;
-                    if (parsed.meta.icon) this.meta.icon = parsed.meta.icon;
-                    if (parsed.meta.description) this.meta.description = parsed.meta.description;
-                    
-                    const visualHTML = markdownToVisualHTML(parsed.body);
-                    this.renderEditor(visualHTML);
-                } else {
-                    // It might be a new file creation request
-                    if (this.node.id.startsWith('new-')) {
-                        this.meta.title = this.node.name;
-                        this.renderEditor('');
-                        return;
-                    }
-                    throw new Error("Node not found in local tree.");
-                }
-                return;
-            }
-
-            // --- REMOTE MODE (GITHUB) ---
-            const path = this.node.sourcePath;
-            if (!path) throw new Error("No sourcePath defined.");
+            const sourcePath = this.getTargetPath();
+            const fileData = await fileSystem.getFile(this.node.id, sourcePath);
             
-            // Check Permissions
-            this.hasWriteAccess = github.canEdit(path);
-            this.isMetaJson = path.endsWith('meta.json');
-
-            // New File
-            if (this.node.id && this.node.id.startsWith('new-')) {
-                 this.meta.title = this.node.name;
-                 this.renderEditor('');
-                 return;
-            }
-
-            const { content, sha } = await github.getFileContent(path);
-            this.currentSha = sha;
+            this.currentSha = fileData.sha;
+            this.isMetaJson = fileData.isMeta;
             
-            if (this.isMetaJson) {
-                const json = JSON.parse(content);
-                this.meta = {
-                    title: json.name || '',
-                    icon: json.icon || '📁',
-                    description: json.description || '',
-                    order: json.order || '99',
-                    isExam: false,
-                    extra: []
-                };
-                this.renderEditor(''); // Empty body for meta.json
-            } else {
-                const parsed = parseArborFile(content);
-                this.meta = parsed.meta;
-                const visualHTML = markdownToVisualHTML(parsed.body);
-                this.renderEditor(visualHTML);
-            }
+            this.meta = {
+                title: fileData.meta.title || fileData.meta.name || '',
+                icon: fileData.meta.icon || '📄',
+                description: fileData.meta.description || '',
+                order: fileData.meta.order || '99',
+                isExam: fileData.meta.isExam || false,
+                extra: fileData.meta.extra || []
+            };
+
+            const visualHTML = fileData.isMeta ? '' : markdownToVisualHTML(fileData.body);
+            this.renderEditor(visualHTML);
 
         } catch (e) {
-            alert("Error: " + e.message);
-            this.closeEditor();
+            console.warn("[ArborEditor] Load error (Rescue Mode Active):", e);
+            
+            // ERROR CHECK: Rate Limit or Forbidden
+            if (e.status === 403 || (e.message && e.message.includes('API rate limit'))) {
+                alert("GitHub API Rate Limit Exceeded.\n\nYou are in a Private Tab or not signed in. GitHub limits anonymous requests to 60/hr. Please sign in or try again later.");
+                this.closeEditor();
+                return;
+            }
+            
+            // RESCUE MODE: If file is missing (404) or path is broken, allow creating it
+            const isNotFound = e.message.toLowerCase().includes('not found') || e.message.includes('404');
+            const isNew = this.node.id.startsWith('new-');
+            
+            if (isNew || isNotFound) {
+                // 1. Initialize defaults from the Graph Node
+                this.meta = {
+                    title: this.node.name || 'New File',
+                    icon: this.node.icon || '📄',
+                    description: this.node.description || '',
+                    order: this.node.order || '99',
+                    isExam: this.node.type === 'exam',
+                    extra: []
+                };
+                
+                let recoveredBody = '';
+
+                // 2. Try to recover content from memory (if graph loaded it)
+                if (this.node.content) {
+                    try {
+                        const parsed = parseArborFile(this.node.content);
+                        // Merge parsed meta over defaults
+                        this.meta = { ...this.meta, ...parsed.meta };
+                        // Ensure title sync
+                        if(parsed.meta.title) this.meta.title = parsed.meta.title;
+                        recoveredBody = parsed.body;
+                    } catch(err) { 
+                        console.log("Content recovery failed", err); 
+                        recoveredBody = this.node.content; // Fallback to raw
+                    }
+                }
+
+                // 3. Determine File Type
+                const targetPath = this.getTargetPath();
+                this.isMetaJson = false;
+                if (targetPath && targetPath.endsWith('meta.json')) {
+                    this.isMetaJson = true;
+                } else if (this.node.type === 'branch' || this.node.type === 'root') {
+                    // Fallback if path logic failed but we know it's a folder
+                    this.isMetaJson = true;
+                }
+
+                // 4. Clear SHA to force creation/overwrite
+                this.currentSha = null;
+                
+                // 5. Render Editor
+                const visualHTML = this.isMetaJson ? '' : markdownToVisualHTML(recoveredBody);
+                this.renderEditor(visualHTML);
+                
+                if (isNotFound && !isNew) {
+                    console.info("Editor opened in Rescue Mode. Saving will repair the missing file.");
+                }
+            } else {
+                alert("Critical Error loading content: " + e.message);
+                this.closeEditor();
+            }
         }
     }
     
@@ -148,47 +173,30 @@ class ArborEditor extends HTMLElement {
     }
 
     generateFinalContent() {
-        // Collect Meta
         const title = this.querySelector('#meta-title').value.trim();
         const icon = this.querySelector('#btn-emoji').textContent.trim();
         const desc = this.querySelector('#meta-desc').value.trim();
         const order = this.querySelector('#meta-order').value.trim();
         
-        // Collect Body
         const visualEditor = this.querySelector('#visual-editor');
         const bodyMarkdown = visualEditor ? visualHTMLToMarkdown(visualEditor) : '';
 
         if (this.isMetaJson) {
-            // JSON Output (Remote folders)
-            const json = {
-                name: title,
-                icon: icon,
-                description: desc,
-                order: order
-            };
+            const json = { name: title, icon: icon, description: desc, order: order };
             return JSON.stringify(json, null, 2);
         } else {
-            // Markdown Output (Remote files AND Local nodes)
             this.meta.title = title;
             this.meta.icon = icon;
             this.meta.description = desc;
             this.meta.order = order;
-            
             return reconstructArborFile(this.meta, bodyMarkdown);
         }
     }
 
     renderLoading() {
-        const ui = store.ui;
-        this.innerHTML = `
-        <div class="fixed inset-0 z-[80] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center">
-             <div class="bg-white dark:bg-slate-900 p-8 rounded-2xl shadow-2xl flex flex-col items-center">
-                 <div class="animate-spin text-4xl mb-4">⏳</div>
-                 <p class="text-slate-400 font-bold animate-pulse">${ui.editorLoading}</p>
-                 <button id="btn-cancel-loading" class="mt-4 text-xs text-red-500 hover:underline">${ui.editorCancelLoading}</button>
-             </div>
-        </div>`;
-        this.querySelector('#btn-cancel-loading').onclick = () => this.closeEditor();
+        // Simple loading state
+        this.className = "fixed inset-0 z-[80] w-full h-full bg-slate-900/50 backdrop-blur-sm flex items-center justify-center pointer-events-none"; 
+        this.innerHTML = `<div class="animate-spin text-4xl">⏳</div>`;
     }
     
     toggleEmojiPicker() {
@@ -212,19 +220,16 @@ class ArborEditor extends HTMLElement {
     insertBlock(type) {
         const editor = this.querySelector('#visual-editor');
         if (!editor) return;
-        
         let html = '';
         if (type === 'section') html = BLOCKS.section();
         if (type === 'quiz') html = BLOCKS.quiz();
         if (type === 'callout') html = BLOCKS.callout();
         if (type === 'image') html = BLOCKS.media('image');
         if (type === 'video') html = BLOCKS.media('video');
-        
         editor.insertAdjacentHTML('beforeend', html);
         editor.scrollTop = editor.scrollHeight;
     }
     
-    // --- HISTORY / UNDO SYSTEM ---
     pushHistory() {
         const editor = this.querySelector('#visual-editor');
         if (!editor) return;
@@ -246,13 +251,8 @@ class ArborEditor extends HTMLElement {
     updateUndoButton() {
         const btn = this.querySelector('#btn-undo');
         if (btn) {
-            if (this.historyStack.length > 0) {
-                btn.disabled = false;
-                btn.classList.remove('opacity-50', 'cursor-not-allowed');
-            } else {
-                btn.disabled = true;
-                btn.classList.add('opacity-50', 'cursor-not-allowed');
-            }
+            btn.disabled = this.historyStack.length === 0;
+            btn.style.opacity = btn.disabled ? '0.5' : '1';
         }
     }
 
@@ -269,26 +269,15 @@ class ArborEditor extends HTMLElement {
         editor.innerHTML = `<div class="p-4 text-center animate-pulse text-purple-500">✨ ${ui.sageThinking || "Thinking..."}</div>`;
         
         try {
-            const promptText = `Create a comprehensive educational lesson in Markdown about: "${topic}". 
-            It MUST include:
-            1. A clear Title (#)
-            2. An Introduction
-            3. Key Concepts with subheadings (##)
-            4. A bulleted list of facts
-            5. A summary.
-            Do not include any other text, just the lesson content.`;
-            
+            const promptText = `Create a comprehensive educational lesson in Markdown about: "${topic}". Include Title, Intro, Subheadings, List, and Summary.`;
             const response = await aiService.chat([{role: 'user', content: promptText}]);
-            const rawMarkdown = response.text;
-            const cleanMarkdown = rawMarkdown.replace(/^```markdown\n/, '').replace(/^```\n/, '').replace(/\n```$/, '');
-            const visualHTML = markdownToVisualHTML(cleanMarkdown);
-            editor.innerHTML = visualHTML;
+            const rawMarkdown = response.text.replace(/^```markdown\n/, '').replace(/^```\n/, '').replace(/\n```$/, '');
+            editor.innerHTML = markdownToVisualHTML(rawMarkdown);
             
-            const titleMatch = cleanMarkdown.match(/^# (.*$)/m);
+            const titleMatch = rawMarkdown.match(/^# (.*$)/m);
             if (titleMatch && !this.querySelector('#meta-title').value) {
                 this.querySelector('#meta-title').value = titleMatch[1].trim();
             }
-            
         } catch(e) {
             alert("AI Error: " + e.message);
             editor.innerHTML = originalText;
@@ -297,125 +286,124 @@ class ArborEditor extends HTMLElement {
 
     renderEditor(bodyHTML) {
         const ui = store.ui;
+        const isConstruct = store.value.constructionMode;
         
-        // --- ADAPTIVE UI STATE ---
-        const modeTitle = this.isLocalTree ? "Garden Mode" : "Contributor Mode";
-        const modeBadgeClass = this.isLocalTree 
-            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" 
-            : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
+        // Full screen focused overlay
+        this.className = `fixed inset-0 z-[80] w-full h-full bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-0 md:p-6 transition-opacity duration-300 pointer-events-auto`;
         
-        const headerBorderClass = this.isLocalTree ? "border-green-500" : "border-slate-200 dark:border-slate-800";
-        
-        const saveLabel = this.isLocalTree ? (ui.editorLocalSave || "Save") : (this.hasWriteAccess ? ui.editorBtnPublish : ui.editorBtnPropose);
-        const saveColor = this.isLocalTree ? "bg-green-600 hover:bg-green-500" : (this.hasWriteAccess ? "bg-blue-600 hover:bg-blue-500" : "bg-orange-500 hover:bg-orange-400");
-        const saveIcon = this.isLocalTree ? "💾" : (this.hasWriteAccess ? "🚀" : "📫");
+        const bgClass = isConstruct 
+            ? "bg-[#2c3e50] bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:20px_20px]" 
+            : "bg-white dark:bg-slate-900";
+            
+        const textClass = isConstruct ? "text-slate-200 font-mono" : "text-slate-800 dark:text-white";
+        const inputClass = isConstruct 
+            ? "bg-[#34495e] border border-slate-600 text-yellow-400 font-mono focus:border-yellow-400" 
+            : "bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500";
+            
+        const editorBg = isConstruct ? "bg-[#34495e]/50 border-2 border-dashed border-slate-600" : "bg-white dark:bg-slate-900 shadow-inner";
+        // Centered prose column for better writing experience
+        const proseClass = isConstruct ? "prose-invert font-mono prose-headings:text-yellow-400 prose-p:text-slate-300" : "prose-slate dark:prose-invert mx-auto max-w-3xl";
 
-        const pathDisplay = this.isLocalTree 
-            ? `My Garden > ${this.meta.title || 'New Lesson'}` 
-            : this.node.sourcePath;
+        const pathDisplay = this.node.sourcePath || 'New File';
+        
+        // Smart Context Labels
+        const panelTitle = this.isMetaJson ? "Folder Properties" : (ui.editorTitle || 'Arbor Studio');
+        const saveLabel = this.isMetaJson ? "Save Props" : (ui.editorLocalSave || "Save");
 
-        const isMeta = this.isMetaJson;
-        const bodyContent = isMeta 
-            ? `<div class="p-8 text-center text-slate-400 italic border-2 border-dashed border-slate-200 rounded-xl">
+        const bodyContent = this.isMetaJson 
+            ? `<div class="p-8 text-center text-slate-400 italic border-2 border-dashed border-slate-500 rounded-xl">
                  <span class="text-4xl block mb-2">📂</span>
-                 ${ui.editorMetaWarning.replace('\n', '<br>')}
+                 FOLDER PROPERTIES<br><span class="text-xs">Edit metadata above</span>
                </div>`
             : bodyHTML;
 
         this.innerHTML = `
-        <div id="editor-backdrop" class="fixed inset-0 z-[80] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-0 animate-in fade-in">
+        <div class="flex flex-col w-full h-full md:rounded-2xl shadow-2xl overflow-hidden border border-slate-700 ${bgClass} ${textClass}">
             
-            <div id="editor-container" class="bg-[#f7f9fa] dark:bg-slate-900 w-full h-full rounded-none shadow-2xl flex flex-col overflow-hidden relative">
-                
-                <!-- CONTEXT HEADER -->
-                <div class="bg-white dark:bg-slate-900 border-b ${headerBorderClass} p-3 flex justify-between items-center shadow-sm shrink-0 border-b-2">
-                    <div class="flex items-center gap-4">
-                        <div>
-                            <div class="flex items-center gap-2">
-                                <span class="text-xs font-black uppercase px-2 py-0.5 rounded ${modeBadgeClass}">${modeTitle}</span>
-                                <span class="text-xs text-slate-400 font-mono hidden md:inline-block">${pathDisplay}</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <button id="btn-submit" class="${saveColor} text-white px-6 py-2 rounded-lg font-bold shadow-lg hover:brightness-110 active:scale-95 transition-all uppercase tracking-wide text-xs flex items-center gap-2">
-                            <span>${saveIcon}</span> <span class="hidden md:inline">${saveLabel}</span>
-                        </button>
-                        <div class="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
-                        <button id="btn-cancel" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-colors font-bold text-lg">✕</button>
+            <!-- HEADER -->
+            <div class="p-4 border-b border-slate-600/50 flex justify-between items-center shrink-0 bg-slate-900/10 backdrop-blur-md z-20">
+                <div class="flex items-center gap-3 overflow-hidden">
+                    <span class="text-2xl">${isConstruct ? '🏗️' : '✏️'}</span>
+                    <div class="min-w-0">
+                        <div class="text-[10px] uppercase font-bold opacity-50 tracking-widest">${panelTitle}</div>
+                        <div class="text-xs font-bold truncate font-mono" title="${pathDisplay}">${pathDisplay}</div>
                     </div>
                 </div>
-                
-                <!-- METADATA FORM -->
-                <div class="bg-slate-50 dark:bg-slate-950/50 p-4 border-b border-slate-200 dark:border-slate-800 grid grid-cols-12 gap-4 shrink-0 relative">
-                     <div class="col-span-2 md:col-span-1 relative">
-                         <label class="text-[10px] uppercase font-bold text-slate-400 block mb-1">${ui.editorLabelIcon}</label>
-                         <button id="btn-emoji" class="w-full h-10 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-xl flex items-center justify-center hover:bg-blue-50 transition-colors">${this.meta.icon}</button>
-                         
-                         <div id="emoji-picker" class="hidden absolute top-12 left-0 w-72 bg-white dark:bg-slate-800 shadow-2xl rounded-xl border border-slate-200 dark:border-slate-700 z-50 p-2 h-64 overflow-y-auto custom-scrollbar">
-                            ${Object.entries(EMOJI_DATA).map(([cat, emojis]) => `
-                                <div class="text-[10px] font-bold text-slate-400 mt-2 mb-1 px-1 uppercase">${cat}</div>
-                                <div class="grid grid-cols-6 gap-1">
-                                    ${emojis.map(e => `<button class="emoji-btn hover:bg-slate-100 dark:hover:bg-slate-700 rounded p-1 text-lg">${e}</button>`).join('')}
-                                </div>
-                            `).join('')}
-                         </div>
-                     </div>
-                     
-                     <div class="col-span-10 md:col-span-9">
-                         <label class="text-[10px] uppercase font-bold text-slate-400 block mb-1">${ui.editorLabelTitle}</label>
-                         <input id="meta-title" class="w-full h-10 px-3 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg font-bold outline-none focus:ring-2 focus:ring-blue-500" value="${this.meta.title}" placeholder="Lesson Title">
-                     </div>
-                     
-                     <div class="hidden md:block md:col-span-2">
-                         <label class="text-[10px] uppercase font-bold text-slate-400 block mb-1">${ui.editorLabelOrder}</label>
-                         <input id="meta-order" type="number" class="w-full h-10 px-3 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg font-mono outline-none focus:ring-2 focus:ring-blue-500" value="${this.meta.order}">
-                     </div>
-                     
-                     <div class="col-span-12">
-                         <label class="text-[10px] uppercase font-bold text-slate-400 block mb-1">${ui.editorLabelDesc}</label>
-                         <input id="meta-desc" class="w-full h-10 px-3 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" value="${this.meta.description}" placeholder="Short description...">
-                     </div>
+                <div class="flex items-center gap-3">
+                    <button id="btn-submit" class="bg-green-600 hover:bg-green-500 text-white px-5 py-2 rounded-lg text-sm font-bold uppercase tracking-wider shadow-lg flex items-center gap-2 transition-all active:scale-95">
+                        <span>💾</span> <span class="hidden sm:inline">${saveLabel}</span>
+                    </button>
+                    <button id="btn-cancel" class="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors">✕</button>
                 </div>
-                
-                <!-- TOOLBAR -->
-                ${!isMeta ? `
-                <div class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-2 flex gap-2 overflow-x-auto shrink-0 items-center justify-center sticky top-0 z-20 shadow-sm">
-                    <button id="btn-undo" class="tool-btn w-8 h-8 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 opacity-50 cursor-not-allowed" disabled title="Undo">↩</button>
-                    <div class="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
-                    
-                    <div class="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-1 gap-1">
-                        <button class="tool-btn w-8 h-8 rounded hover:bg-white dark:hover:bg-slate-700 font-bold" data-cmd="bold">B</button>
-                        <button class="tool-btn w-8 h-8 rounded hover:bg-white dark:hover:bg-slate-700 italic" data-cmd="italic">I</button>
-                        <button class="tool-btn w-8 h-8 rounded hover:bg-white dark:hover:bg-slate-700 font-serif font-bold" data-cmd="formatBlock" data-val="H2">H2</button>
-                    </div>
-                    <div class="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
-                    
-                    <div class="flex gap-2">
-                        <button class="block-btn px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-xs font-bold hover:bg-green-100" data-type="quiz">+ Quiz</button>
-                        <button class="block-btn px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold hover:bg-blue-100" data-type="section">+ Section</button>
-                        <button class="block-btn px-3 py-1.5 bg-yellow-50 text-yellow-700 border border-yellow-200 rounded-lg text-xs font-bold hover:bg-yellow-100" data-type="callout">+ Note</button>
-                    </div>
-                    
-                    <div class="ml-auto">
-                        <button id="btn-magic-draft" class="bg-purple-100 hover:bg-purple-200 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-2 transition-colors border border-purple-200 dark:border-purple-800">
-                            ✨ ${ui.editorMagicDraft || "AI Draft"}
-                        </button>
-                    </div>
-                </div>` : ''}
+            </div>
 
-                <!-- VISUAL EDITOR -->
-                <div class="flex-1 relative bg-slate-200 dark:bg-slate-950 overflow-y-auto custom-scrollbar p-0 flex justify-center">
-                     <div id="visual-editor" 
-                          class="w-full max-w-4xl bg-white dark:bg-slate-900 shadow-xl min-h-[150vh] my-4 md:my-8 p-8 md:p-16 pb-[80vh] prose prose-slate dark:prose-invert max-w-none focus:outline-none rounded-none md:rounded-lg" 
-                          contenteditable="${!isMeta}" 
-                          spellcheck="false">
-                          ${bodyContent}
-                     </div>
+            <!-- TOOLBAR (Docked below header) -->
+            ${!this.isMetaJson ? `
+            <div class="flex flex-wrap gap-2 items-center px-4 py-2 border-b border-slate-600/30 bg-slate-900/5 backdrop-blur-sm z-10 shrink-0">
+                <button id="btn-undo" class="tool-btn w-8 h-8 flex items-center justify-center rounded hover:bg-black/10 dark:hover:bg-white/10 opacity-50 transition-colors" disabled>↩</button>
+                <div class="w-px h-6 bg-slate-400/30 mx-1"></div>
+                <button class="tool-btn px-3 py-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 font-bold text-sm transition-colors" data-cmd="bold">B</button>
+                <button class="tool-btn px-3 py-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 italic text-sm transition-colors" data-cmd="italic">I</button>
+                <button class="tool-btn px-3 py-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 font-mono text-xs transition-colors" data-cmd="formatBlock" data-val="H2">H2</button>
+                <div class="w-px h-6 bg-slate-400/30 mx-1"></div>
+                <button class="block-btn px-3 py-1.5 bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/30 rounded text-xs font-bold uppercase hover:bg-green-500/20 transition-colors" data-type="quiz">+ Quiz</button>
+                <button class="block-btn px-3 py-1.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30 rounded text-xs font-bold uppercase hover:bg-blue-500/20 transition-colors" data-type="section">+ Sect</button>
+                <button class="block-btn px-3 py-1.5 bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/30 rounded text-xs font-bold uppercase hover:bg-orange-500/20 transition-colors" data-type="callout">+ Note</button>
+                <button id="btn-magic-draft" class="ml-auto px-3 py-1.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30 rounded text-xs font-bold uppercase hover:bg-purple-500/20 flex items-center gap-1 transition-colors">
+                    <span>✨</span> AI
+                </button>
+            </div>` : ''}
+            
+            <div class="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 space-y-6">
+                <!-- Inner Container to constrain content width -->
+                <div class="max-w-5xl mx-auto w-full space-y-6">
+                    
+                    <!-- METADATA GRID -->
+                    <div class="grid grid-cols-12 gap-3 p-4 rounded-xl border border-slate-600/20 bg-black/5">
+                         <div class="col-span-2 relative">
+                             <label class="text-[9px] uppercase font-bold opacity-50 block mb-1">Icon</label>
+                             <button id="btn-emoji" class="w-full h-10 rounded text-xl flex items-center justify-center hover:brightness-110 transition-colors ${inputClass}">${this.meta.icon}</button>
+                             <div id="emoji-picker" class="hidden absolute top-12 left-0 w-64 bg-slate-800 shadow-2xl rounded border border-slate-600 z-50 p-2 h-48 overflow-y-auto custom-scrollbar">
+                                ${Object.entries(EMOJI_DATA).map(([cat, emojis]) => `
+                                    <div class="text-[9px] font-bold text-slate-400 mt-1 mb-1 px-1 uppercase">${cat}</div>
+                                    <div class="grid grid-cols-6 gap-1">
+                                        ${emojis.map(e => `<button class="emoji-btn hover:bg-white/10 rounded p-1 text-lg">${e}</button>`).join('')}
+                                    </div>
+                                `).join('')}
+                             </div>
+                         </div>
+                         <div class="col-span-10">
+                             <label class="text-[9px] uppercase font-bold opacity-50 block mb-1">Title</label>
+                             <input id="meta-title" class="w-full h-10 px-3 rounded outline-none ${inputClass}" value="${this.meta.title}" placeholder="Lesson Title">
+                         </div>
+                         <div class="col-span-3">
+                             <label class="text-[9px] uppercase font-bold opacity-50 block mb-1">Order</label>
+                             <input id="meta-order" type="number" class="w-full h-8 px-2 rounded text-xs outline-none ${inputClass}" value="${this.meta.order}">
+                         </div>
+                         <div class="col-span-9">
+                             <label class="text-[9px] uppercase font-bold opacity-50 block mb-1">Description</label>
+                             <input id="meta-desc" class="w-full h-8 px-2 rounded text-xs outline-none ${inputClass}" value="${this.meta.description}" placeholder="...">
+                         </div>
+                    </div>
+                    
+                    <!-- VISUAL EDITOR -->
+                    <div id="visual-editor" 
+                         class="w-full min-h-[600px] p-8 outline-none ${editorBg} ${proseClass} rounded-xl text-base shadow-sm" 
+                         contenteditable="${!this.isMetaJson}" 
+                         spellcheck="false">
+                         ${bodyContent}
+                    </div>
+                    
+                    <div class="h-20"></div> <!-- Scroll Spacer -->
                 </div>
             </div>
         </div>`;
         
+        this.bindEvents();
+        this.updateUndoButton();
+    }
+
+    bindEvents() {
         this.querySelector('#btn-cancel').onclick = () => this.closeEditor();
         this.querySelector('#btn-submit').onclick = () => this.submitChanges();
         
@@ -437,75 +425,60 @@ class ArborEditor extends HTMLElement {
             };
         });
         
-        if (!isMeta) {
-            this.querySelectorAll('.tool-btn').forEach(btn => {
-                btn.onclick = () => this.execCmd(btn.dataset.cmd, btn.dataset.val);
-            });
-            this.querySelectorAll('.block-btn').forEach(btn => {
-                btn.onclick = () => this.insertBlock(btn.dataset.type);
-            });
-        }
+        this.querySelectorAll('.tool-btn').forEach(btn => {
+            btn.onclick = () => this.execCmd(btn.dataset.cmd, btn.dataset.val);
+        });
+        this.querySelectorAll('.block-btn').forEach(btn => {
+            btn.onclick = () => this.insertBlock(btn.dataset.type);
+        });
         
+        // Hide emoji picker on outside click
         this.onclick = (e) => {
             if(!e.target.closest('#emoji-picker') && !e.target.closest('#btn-emoji')) {
                 const p = this.querySelector('#emoji-picker');
                 if(p) p.classList.add('hidden');
             }
         };
-        
-        this.updateUndoButton();
     }
 
     async submitChanges() {
         const btn = this.querySelector('#btn-submit');
         const originalText = btn.innerHTML;
-        btn.innerHTML = store.ui.editorProcessing;
+        btn.innerHTML = '...';
         btn.disabled = true;
         
         const finalContent = this.generateFinalContent();
+        const msg = `Update ${this.meta.title || 'File'}`;
         
-        try {
-            // --- LOCAL SAVE STRATEGY ---
-            if (this.isLocalTree) {
-                // Get Tree ID from source URL (local://uuid)
-                const sourceUrl = store.value.activeSource.url;
-                const treeId = sourceUrl.split('://')[1];
-                
-                const metaUpdates = {
-                    title: this.meta.title,
-                    icon: this.meta.icon,
-                    description: this.meta.description,
-                    order: this.meta.order
-                };
+        // Ensure we save to the corrected path (e.g. meta.json)
+        const targetPath = this.getTargetPath();
+        
+        // If targetPath is missing, getTargetPath() returns a fallback for local nodes.
+        // We double check here just in case.
+        if (!targetPath) {
+             alert("Error: Cannot determine save path. Please ensure this is a valid node.");
+             btn.innerHTML = originalText;
+             btn.disabled = false;
+             return;
+        }
 
-                const success = store.userStore.updateLocalNode(treeId, this.node.id, finalContent, metaUpdates);
-                
-                if (success) {
-                    // Update Active Source Name in UI instantly
-                    if (store.value.activeSource.name !== metaUpdates.title && this.node.type === 'root') {
-                        store.update({ activeSource: { ...store.value.activeSource, name: metaUpdates.title } });
-                    }
-                    
-                    alert(store.ui.editorLocalSaveSuccess || "Changes saved to your garden!");
-                    // Force refresh graph logic by reloading from storage
-                    const updatedSource = store.userStore.getLocalTreeData(treeId);
-                    store.processLoadedData(updatedSource);
+        const nodePayload = { ...this.node, sourcePath: targetPath, sha: this.currentSha };
+
+        try {
+            const result = await fileSystem.saveFile(nodePayload, finalContent, this.meta, msg);
+            
+            if (result.success) {
+                if (result.mode === 'instant') {
+                    // Quick flash instead of alert for better flow
+                    btn.innerHTML = '✔ SAVED';
+                    setTimeout(() => this.closeEditor(), 500);
                 } else {
-                    throw new Error("Could not update local node. Node ID not found.");
-                }
-            } 
-            // --- REMOTE SAVE STRATEGY ---
-            else {
-                const msg = `Update ${this.meta.title || 'File'}`;
-                if (this.hasWriteAccess) {
-                    await github.commitFile(this.node.sourcePath, finalContent, msg, this.currentSha);
                     alert(store.ui.editorSuccessPublish);
-                } else {
-                    const prUrl = await github.createPullRequest(this.node.sourcePath, finalContent, msg);
-                    alert(store.ui.editorSuccessProposal + prUrl);
+                    this.closeEditor();
                 }
+            } else {
+                throw new Error("Save operation reported failure.");
             }
-            this.closeEditor();
         } catch(e) {
             alert("Error: " + e.message);
             btn.innerHTML = originalText;

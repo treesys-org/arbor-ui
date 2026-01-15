@@ -1,4 +1,3 @@
-
 {
   "appTitle": "ARBOR",
   "appSubtitle": "Open University",
@@ -211,10 +210,10 @@
   "exportTitle_Profile": "Export Progress",
   "importTitle": "Import Progress",
   "exportDesc_Profile": "Download a file to save your progress.",
-  "importDesc": "Upload a file to restore progress.",
+  "importDesc": "Load a tree file (.json) into your local garden.",
   "copyCode": "Copy Code",
   "downloadFile": "Download File",
-  "importBtn": "Load Progress",
+  "importBtn": "Import Tree",
   "importSuccess": "Progress loaded successfully!",
   "importError": "Invalid code or file.",
   "syncConflict": "Cloud data found. Do you want to load your progress from the cloud? This will overwrite your local progress.",
@@ -312,5 +311,5 @@
   "editorLocalSaveSuccess": "Tree updated locally.",
   "editorMagicDraft": "Magic Draft (AI)",
   "editorMagicDraftPrompt": "What should this lesson be about?",
-  "sourceExport": "Export Tree"
+  "sourceExport": "Export"
 }

@@ -4,7 +4,7 @@ import { store } from '../../store.js';
 class ArborModalArcade extends HTMLElement {
     constructor() {
         super();
-        this.activeTab = 'games'; // 'games' | 'sources' | 'storage'
+        this.activeTab = 'games'; // 'games' | 'storage'
         this.discoveredGames = [];
         this.isLoading = false;
         this.isPreparingContext = false;
@@ -168,20 +168,6 @@ class ArborModalArcade extends HTMLElement {
         this.render();
     }
 
-    addRepo() {
-        const url = this.querySelector('#inp-repo-url').value.trim();
-        if (!url) return;
-        store.userStore.addGameRepo(url);
-        this.loadAllGames(); 
-    }
-
-    removeRepo(id) {
-        if(confirm("Remove this repository?")) {
-            store.userStore.removeGameRepo(id);
-            this.loadAllGames();
-        }
-    }
-
     // Flattens the tree for the list view
     getFlatNodes() {
         const root = store.value.data;
@@ -261,16 +247,12 @@ class ArborModalArcade extends HTMLElement {
         }));
         
         const allGames = [...this.discoveredGames, ...manualGames];
-        const repos = store.userStore.state.gameRepos;
 
         // --- TABS ---
         const tabsHtml = `
             <div class="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 shrink-0">
                 <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${this.activeTab === 'games' ? 'border-orange-500 text-orange-600 dark:text-orange-400' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-games">
                     🎮 ${ui.arcadeFeatured || "Games"}
-                </button>
-                <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${this.activeTab === 'sources' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-sources">
-                    📡 ${ui.navSources || "Sources"}
                 </button>
                 <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${this.activeTab === 'storage' ? 'border-red-500 text-red-600 dark:text-red-400' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-storage">
                     💾 Data
@@ -327,39 +309,6 @@ class ArborModalArcade extends HTMLElement {
                 `;
             }
         } 
-        else if (this.activeTab === 'sources') {
-            contentHtml = `
-            <div class="space-y-3 mb-6">
-                ${repos.map(r => `
-                    <div class="flex items-center justify-between p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl">
-                        <div class="flex items-center gap-3 overflow-hidden">
-                            <div class="text-xl">📦</div>
-                            <div class="min-w-0">
-                                <h4 class="font-bold text-sm text-slate-800 dark:text-white truncate">
-                                    ${r.name || 'Repository'}
-                                    ${r.isOfficial ? '<span class="ml-2 text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded uppercase">Verified</span>' : ''}
-                                </h4>
-                                <p class="text-[10px] text-slate-400 truncate font-mono">${r.url}</p>
-                            </div>
-                        </div>
-                        ${!r.isOfficial ? `
-                        <button class="btn-remove-repo px-2 py-1 text-slate-400 hover:text-red-500 transition-colors" data-id="${r.id}">✕</button>
-                        ` : ''}
-                    </div>
-                `).join('')}
-            </div>
-
-            <div class="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-800/30">
-                <label class="block text-xs font-bold text-blue-800 dark:text-blue-300 uppercase mb-2">Add Repository URL</label>
-                <div class="flex gap-2">
-                    <input id="inp-repo-url" type="text" placeholder="https://.../manifest.json" class="flex-1 bg-white dark:bg-slate-950 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-white">
-                    <button id="btn-add-repo" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl font-bold shadow-md active:scale-95 transition-transform text-sm">
-                        Add
-                    </button>
-                </div>
-            </div>
-            `;
-        }
         else if (this.activeTab === 'storage') {
             const usagePercent = stats.arcade.percent;
             const barColor = usagePercent > 90 ? 'bg-red-500' : (usagePercent > 70 ? 'bg-orange-500' : 'bg-purple-500');
@@ -543,14 +492,10 @@ class ArborModalArcade extends HTMLElement {
     bindMainEvents() {
         this.querySelector('.btn-close').onclick = () => this.close();
         this.querySelector('#tab-games').onclick = () => { this.activeTab = 'games'; this.render(); };
-        this.querySelector('#tab-sources').onclick = () => { this.activeTab = 'sources'; this.render(); };
         this.querySelector('#tab-storage').onclick = () => { this.activeTab = 'storage'; this.render(); };
         
         const btnAddCustom = this.querySelector('#btn-add-custom');
         if(btnAddCustom) btnAddCustom.onclick = () => this.addCustomGame();
-
-        const btnAddRepo = this.querySelector('#btn-add-repo');
-        if(btnAddRepo) btnAddRepo.onclick = () => this.addRepo();
 
         this.querySelectorAll('.btn-prepare').forEach(b => {
             b.onclick = (e) => {
@@ -567,10 +512,6 @@ class ArborModalArcade extends HTMLElement {
                 store.userStore.removeGame(e.currentTarget.dataset.id);
                 this.render();
             };
-        });
-
-        this.querySelectorAll('.btn-remove-repo').forEach(b => {
-            b.onclick = (e) => this.removeRepo(e.currentTarget.dataset.id);
         });
         
         // STORAGE TAB HANDLERS

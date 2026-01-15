@@ -155,16 +155,34 @@ class HybridAIService {
 
         const lastMsgObj = messages[messages.length - 1];
         const lastMsg = lastMsgObj.content;
+        
+        // Detect Context Mode from Store (set by Sage input handler)
+        const mode = store.value.ai?.contextMode || 'normal';
 
         // 1. Check for LOCAL COMMANDS
         if (lastMsg.startsWith('LOCAL_ACTION:')) {
-            // ... (Same analysis logic as before) ...
             return { text: "Command executed." };
         }
 
-        // 2. Determine System Context (RAG)
+        // 2. Determine System Context
         let systemContext = "";
-        if (contextNode && contextNode.content) {
+        
+        if (mode === 'architect') {
+            // ARCHITECT PERSONA
+            systemContext = `
+            ROLE: You are the Chief Architect of the Knowledge Tree.
+            TASK: Help the user design, structure, and modify the educational curriculum.
+            CAPABILITIES: You can suggest module structures, lesson outlines, and reorganizations.
+            TONE: Professional, structural, constructive.
+            
+            If the user asks to create a tree or course, output a JSON structure following this schema:
+            {
+                "title": "Course Title",
+                "modules": [{ "title": "Module", "lessons": [{ "title": "Lesson", "description": "..." }] }]
+            }
+            `;
+        } else if (contextNode && contextNode.content) {
+            // RAG PERSONA
             const relevantText = this.retrieveRelevantContext(lastMsg, contextNode.content);
             systemContext = `
             CONTEXT FROM CURRENT LESSON ("${contextNode.name}"):
@@ -176,6 +194,7 @@ class HybridAIService {
             Keep answers concise and encouraging.
             `;
         } else {
+             // GENERAL PERSONA
              systemContext = "You are the Sage Owl of Arbor Academy. Answer general questions helpfully.";
         }
 
@@ -282,9 +301,16 @@ class HybridAIService {
     }
 
     // --- ARCHITECT MODE (Structure Generation) ---
-    async generateStructure(topic) {
+    async generateStructure(topic, instructions = "") {
+        // Construct prompt dynamically based on user instructions
+        // If instructions are missing, use the default suggestions as guidance
+        const constraints = instructions 
+            ? `USER INSTRUCTIONS: ${instructions}` 
+            : `GUIDANCE: Create a standard course outline with at least 3 modules and 2 lessons per module.`;
+
         const prompt = `
         Act as a curriculum architect. Create a structured course outline for: "${topic}".
+        ${constraints}
         
         Return strict JSON format with this structure:
         {
@@ -304,7 +330,6 @@ class HybridAIService {
                 }
             ]
         }
-        Create at least 3 modules with 2 lessons each.
         IMPORTANT: Return ONLY the JSON. No markdown code blocks.
         `;
 

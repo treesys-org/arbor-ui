@@ -391,7 +391,8 @@ def process_universe(source_root_path, is_archive=False):
             "id": root_id, "name": root_name, "parentId": None, 
             "icon": "🌳", "expanded": True, "status": "available", 
             "type": "root", "description": f"{lang_folder.upper()} Curriculum", 
-            "path": root_name 
+            "path": root_name,
+            "sourcePath": os.path.relpath(lang_path, ".").replace("\\", "/") # FIX: Explicitly add sourcePath to Root
         }
         
         lang_search_nodes = []

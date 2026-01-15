@@ -1,13 +1,11 @@
 
 import { store } from '../../store.js';
-import { aiService } from '../../services/ai.js';
 
 class ArborModalSources extends HTMLElement {
     constructor() {
         super();
         this.activeTab = 'global'; // 'global' | 'local'
         this.selectedVersionUrl = null;
-        this.isGenerating = false;
     }
 
     connectedCallback() {
@@ -49,14 +47,10 @@ class ArborModalSources extends HTMLElement {
         const name = prompt(ui.treeNamePlaceholder || "Name your tree:");
         if (!name) return;
         
+        // 1. Create the Local Tree (Basic Skeleton)
         const newTree = store.userStore.plantTree(name);
         
-        // Notify Sage to welcome the user to their new garden
-        setTimeout(() => {
-            store.chatWithSage(`I just planted a new tree called "${name}". Give me a short, inspiring welcome message about cultivating knowledge.`);
-        }, 1000);
-        
-        // Load immediately
+        // 2. Load it immediately
         const source = {
             id: newTree.id,
             name: newTree.name,
@@ -64,47 +58,17 @@ class ArborModalSources extends HTMLElement {
             type: 'local',
             isTrusted: true
         };
+        
         store.loadData(source);
-        this.activeTab = 'local'; // Switch tab context
-        this.close();
-    }
-    
-    async generateTreeWithAI() {
-        const topic = prompt("What subject do you want to teach? (e.g., 'Introduction to Quantum Physics')");
-        if (!topic) return;
-
-        this.isGenerating = true;
-        this.render();
-
-        try {
-            // 1. Get Schema from AI
-            const schema = await aiService.generateStructure(topic);
-            
-            // 2. Build Tree in UserStore
-            const newTree = store.userStore.plantTreeFromAI(schema);
-            
-            // 3. Load it
-            const source = {
-                id: newTree.id,
-                name: newTree.name,
-                url: `local://${newTree.id}`,
-                type: 'local',
-                isTrusted: true
-            };
-            store.loadData(source);
-            this.close();
-            
-            // Notify
-            setTimeout(() => {
-                store.notify("Tree generated successfully! 🧠");
-            }, 500);
-
-        } catch (e) {
-            alert("Failed to generate tree: " + e.message);
-        } finally {
-            this.isGenerating = false;
-            this.render();
-        }
+        
+        // 3. Switch Context to "Editor Mode" (Construction + Architect)
+        store.update({ constructionMode: true });
+        store.setModal({ type: 'sage', mode: 'architect' });
+        
+        // 4. Prime the Architect with a greeting
+        setTimeout(() => {
+            store.chatWithSage(`I just planted a new empty tree called "${name}". I am ready to build. What do you suggest?`);
+        }, 500);
     }
 
     importTreeFromFile() {
@@ -235,7 +199,7 @@ class ArborModalSources extends HTMLElement {
                     
                     <div class="flex gap-2 items-end">
                         <div class="flex-1">
-                            <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1">Release / Version</label>
+                            <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1">Version</label>
                             <div class="relative">
                                 <select id="version-select" class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-purple-500 appearance-none">
                                     ${effectiveReleases.map(r => `
@@ -328,66 +292,58 @@ class ArborModalSources extends HTMLElement {
 
         // --- TAB: LOCAL GARDEN ---
         if (this.activeTab === 'local') {
-            if (this.isGenerating) {
-                contentHtml = `
-                <div class="flex flex-col items-center justify-center h-full text-center p-8">
-                    <div class="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                    <h3 class="text-xl font-black text-slate-800 dark:text-white mb-2">Generating Tree...</h3>
-                    <p class="text-sm text-slate-500">Consulting the Owl Architect.</p>
-                </div>`;
-            } else {
-                contentHtml = `
-                <div class="flex flex-col h-full">
-                    <!-- Action Buttons -->
-                    <div class="grid grid-cols-2 gap-3 mb-6">
-                        <button id="btn-plant-tree" class="py-3 px-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 font-bold rounded-xl active:scale-95 transition-all flex flex-col items-center gap-1 group">
-                            <span class="text-xl group-hover:-translate-y-0.5 transition-transform">🌱</span> 
-                            <span class="text-xs">${ui.plantTree || 'Plant New'}</span>
-                        </button>
-                        <button id="btn-generate-ai" class="py-3 px-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-400 font-bold rounded-xl active:scale-95 transition-all flex flex-col items-center gap-1 group">
-                            <span class="text-xl group-hover:-translate-y-0.5 transition-transform">✨</span> 
-                            <span class="text-xs">AI Architect</span>
-                        </button>
-                    </div>
-                    
-                    <button id="btn-import-tree" class="w-full py-2 px-4 mb-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2 group hover:bg-slate-100 dark:hover:bg-slate-700">
-                        <span class="text-lg">📥</span> 
-                        <span class="text-xs">${ui.importBtn || 'Import from File'}</span>
+            contentHtml = `
+            <div class="flex flex-col h-full">
+                <!-- Action Buttons -->
+                <div class="grid grid-cols-1 gap-3 mb-6">
+                    <button id="btn-plant-tree" class="py-4 px-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 font-bold rounded-xl active:scale-95 transition-all flex flex-col items-center gap-1 group shadow-sm hover:shadow-md">
+                        <span class="text-2xl group-hover:-translate-y-0.5 transition-transform">🌱</span> 
+                        <span class="text-sm uppercase tracking-wide">${ui.plantTree || 'Plant New Tree'}</span>
                     </button>
+                </div>
+                
+                <button id="btn-import-tree" class="w-full py-3 px-4 mb-6 bg-white dark:bg-slate-900 border-2 border-dashed border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 font-bold rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2 group hover:border-sky-500 hover:text-sky-500 dark:hover:border-sky-400 dark:hover:text-sky-400">
+                    <span class="text-lg">📥</span> 
+                    <span class="text-sm">${ui.importBtn || 'Import Tree'}</span>
+                </button>
 
-                    <!-- Local Trees List -->
-                    <div class="flex-1 overflow-y-auto custom-scrollbar space-y-3 pb-4">
-                        ${localTrees.length === 0 
-                            ? `<div class="text-center p-8 text-slate-400 italic text-sm">Your garden is empty. Plant your first tree!</div>` 
-                            : localTrees.map(t => {
-                                const isActive = activeSource.id === t.id;
-                                return `
-                                <div class="bg-white dark:bg-slate-900 border ${isActive ? 'border-green-500 ring-1 ring-green-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl p-4 flex items-center justify-between group hover:border-green-300 dark:hover:border-green-700 transition-colors">
-                                    <div class="flex items-center gap-4 min-w-0">
-                                        <div class="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 flex items-center justify-center text-xl">
-                                            🌳
-                                        </div>
-                                        <div class="min-w-0">
-                                            <h4 class="font-bold text-slate-800 dark:text-white truncate">${t.name}</h4>
-                                            <p class="text-[10px] text-slate-400">Last updated: ${new Date(t.updated).toLocaleDateString()}</p>
-                                        </div>
+                <!-- Local Trees List -->
+                <div class="flex-1 overflow-y-auto custom-scrollbar space-y-3 pb-4">
+                    ${localTrees.length === 0 
+                        ? `<div class="text-center p-8 text-slate-400 italic text-sm">Your garden is empty. Plant your first tree!</div>` 
+                        : localTrees.map(t => {
+                            const isActive = activeSource.id === t.id;
+                            return `
+                            <div class="bg-white dark:bg-slate-900 border ${isActive ? 'border-green-500 ring-1 ring-green-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl p-4 flex items-center justify-between group hover:border-green-300 dark:hover:border-green-700 transition-colors">
+                                <div class="flex items-center gap-4 min-w-0">
+                                    <div class="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 flex items-center justify-center text-xl">
+                                        🌳
                                     </div>
-                                    <div class="flex gap-2 shrink-0">
-                                        <button class="btn-export-local px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 transition-colors" data-id="${t.id}" data-name="${t.name}" title="${ui.sourceExport || 'Export Tree'}">📤</button>
-                                        ${isActive 
-                                            ? `<span class="px-3 py-1.5 bg-green-100 text-green-700 text-xs font-bold rounded-lg">${ui.sourceActive}</span>`
-                                            : `<button class="btn-load-local px-3 py-1.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold rounded-lg shadow hover:opacity-90 transition-opacity" data-id="${t.id}" data-name="${t.name}">Open</button>`
-                                        }
-                                        <button class="btn-delete-local w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" data-id="${t.id}">✕</button>
+                                    <div class="min-w-0">
+                                        <h4 class="font-bold text-slate-800 dark:text-white truncate">${t.name}</h4>
+                                        <p class="text-[10px] text-slate-400">Last updated: ${new Date(t.updated).toLocaleDateString()}</p>
                                     </div>
                                 </div>
-                                `;
-                            }).join('')
-                        }
-                    </div>
+                                <div class="flex gap-2 shrink-0 items-center">
+                                    <button class="btn-export-local px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-slate-600 dark:text-blue-300 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 transition-colors flex items-center gap-1.5" data-id="${t.id}" data-name="${t.name}">
+                                        <span>📤</span>
+                                        <span>${ui.sourceExport || 'Export'}</span>
+                                    </button>
+                                    
+                                    ${isActive 
+                                        ? `<span class="px-3 py-1.5 bg-green-100 text-green-700 text-xs font-bold rounded-lg border border-green-200 cursor-default">✔ ${ui.sourceActive}</span>`
+                                        : `<button class="btn-load-local px-4 py-1.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold rounded-lg shadow hover:opacity-90 transition-opacity" data-id="${t.id}" data-name="${t.name}">Open</button>`
+                                    }
+                                    
+                                    <button class="btn-delete-local w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" data-id="${t.id}" title="${ui.sourceRemove}">✕</button>
+                                </div>
+                            </div>
+                            `;
+                        }).join('')
+                    }
                 </div>
-                `;
-            }
+            </div>
+            `;
         }
 
         this.innerHTML = `
@@ -473,9 +429,6 @@ class ArborModalSources extends HTMLElement {
         if (this.activeTab === 'local') {
             const btnPlant = this.querySelector('#btn-plant-tree');
             if (btnPlant) btnPlant.onclick = () => this.plantNewTree();
-            
-            const btnAi = this.querySelector('#btn-generate-ai');
-            if (btnAi) btnAi.onclick = () => this.generateTreeWithAI();
             
             const btnImport = this.querySelector('#btn-import-tree');
             if (btnImport) btnImport.onclick = () => this.importTreeFromFile();

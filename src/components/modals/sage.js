@@ -6,7 +6,7 @@ class ArborSage extends HTMLElement {
     constructor() {
         super();
         this.isVisible = false;
-        this.mode = 'chat'; // 'chat' | 'settings' | 'menu'
+        this.mode = 'chat'; // 'chat' | 'settings' | 'menu' | 'architect'
         
         // UI State
         this.ollamaModels = [];
@@ -140,7 +140,7 @@ class ArborSage extends HTMLElement {
         this.lastRenderKey = stateKey;
 
         // Check for GDPR consent if using Cloud (Puter)
-        if (this.mode === 'chat' && provider === 'puter' && !this.hasConsent) {
+        if (this.mode !== 'settings' && provider === 'puter' && !this.hasConsent) {
             this.renderConsent();
             return;
         }
@@ -348,11 +348,17 @@ class ArborSage extends HTMLElement {
         const chatArea = this.querySelector('#sage-chat-area');
         
         const aiState = store.value.ai;
-        const displayMessages = aiState.messages.length > 0 ? aiState.messages : [{ role: 'assistant', content: ui.sageHello }];
+        const isArchitect = this.mode === 'architect';
+        
+        const displayMessages = aiState.messages.length > 0 ? aiState.messages : [{ 
+            role: 'assistant', 
+            content: isArchitect ? "👷 Ready to build. What shall we plant?" : ui.sageHello 
+        }];
+        
         const displayStatus = aiState.status;
         const isOllama = aiService.config.provider === 'ollama';
         const isThinking = displayStatus === 'thinking';
-        let sendBtnColor = isOllama ? 'bg-orange-600' : 'bg-teal-600';
+        let sendBtnColor = isArchitect ? 'bg-orange-600' : (isOllama ? 'bg-orange-600' : 'bg-teal-600');
 
         const getMessagesHTML = () => {
              return displayMessages.map(m => `
@@ -378,16 +384,15 @@ class ArborSage extends HTMLElement {
         if (chatArea) {
             chatArea.innerHTML = getMessagesHTML();
             chatArea.scrollTop = chatArea.scrollHeight;
-            
-            // Re-bind interactive elements inside chat
             this.bindMessageEvents(chatArea);
             return;
         }
 
         this.className = "fixed inset-x-0 bottom-0 z-[100] flex flex-col items-end md:bottom-6 md:right-6 md:w-auto pointer-events-none";
         
-        let headerGradient = isOllama ? 'from-orange-500 to-red-500' : 'from-teal-500 to-emerald-600';
+        let headerGradient = isArchitect ? 'from-amber-500 to-orange-600' : (isOllama ? 'from-orange-500 to-red-500' : 'from-teal-500 to-emerald-600');
         let providerName = isOllama ? 'Local (Ollama)' : 'Puter Cloud';
+        if (isArchitect) providerName += ' (Architect)';
 
         this.innerHTML = `
             <div id="sage-backdrop" class="md:hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm pointer-events-auto transition-opacity"></div>
@@ -395,9 +400,12 @@ class ArborSage extends HTMLElement {
                 
                 <div class="p-4 bg-gradient-to-r ${headerGradient} text-white flex justify-between items-center shadow-md z-10 shrink-0 rounded-t-2xl">
                     <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-xl backdrop-blur-sm shadow-inner">🦉</div>
+                        <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-xl backdrop-blur-sm shadow-inner relative">
+                            <span>🦉</span>
+                            ${isArchitect ? '<span class="absolute -top-1 -right-1 text-xs">⛑️</span>' : ''}
+                        </div>
                         <div>
-                            <h3 class="font-black text-sm leading-none">${ui.sageTitle}</h3>
+                            <h3 class="font-black text-sm leading-none">${isArchitect ? 'Architect' : ui.sageTitle}</h3>
                             <div class="flex items-center gap-1 mt-0.5">
                                 <span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
                                 <p class="text-[10px] opacity-80 font-medium">${providerName}</p>
@@ -422,14 +430,16 @@ class ArborSage extends HTMLElement {
                 </div>
                 ` : ''}
 
+                ${!isArchitect ? `
                 <div class="px-3 py-2 flex gap-2 overflow-x-auto custom-scrollbar bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0">
                     <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-100 dark:border-blue-800" data-action="summarize">📝 ${ui.sageBtnSummarize}</button>
                     <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-100 dark:border-blue-800" data-action="explain">🎓 ${ui.sageBtnExplain}</button>
                     <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-100 dark:border-blue-800" data-action="quiz">❓ ${ui.sageBtnQuiz}</button>
                 </div>
+                ` : ''}
 
                 <form id="sage-form" class="p-3 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex gap-2 shrink-0 pb-[calc(0.75rem+env(safe-area-inset-bottom,20px))] md:pb-3">
-                    <input id="sage-input" type="text" class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 ${isOllama ? 'focus:ring-orange-500' : 'focus:ring-teal-500'} dark:text-white placeholder:text-slate-400 disabled:opacity-50" placeholder="${ui.sageInputPlaceholder}" autocomplete="off">
+                    <input id="sage-input" type="text" class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 ${isOllama || isArchitect ? 'focus:ring-orange-500' : 'focus:ring-teal-500'} dark:text-white placeholder:text-slate-400 disabled:opacity-50" placeholder="${isArchitect ? 'Instruct the Architect...' : ui.sageInputPlaceholder}" autocomplete="off">
                     <button type="submit" class="w-11 h-11 ${sendBtnColor} text-white rounded-xl hover:opacity-90 transition-all flex items-center justify-center shadow-lg active:scale-95">
                         <svg class="w-5 h-5 translate-x-0.5 -translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>
                     </button>
@@ -449,6 +459,12 @@ class ArborSage extends HTMLElement {
              e.preventDefault();
              const inp = this.querySelector('#sage-input');
              if (inp.value.trim()) {
+                 // Pass context to chat if in architect mode
+                 if (isArchitect) {
+                     store.update({ ai: { ...store.value.ai, contextMode: 'architect' } }); 
+                 } else {
+                     store.update({ ai: { ...store.value.ai, contextMode: 'normal' } }); 
+                 }
                  store.chatWithSage(inp.value.trim());
                  inp.value = '';
              }

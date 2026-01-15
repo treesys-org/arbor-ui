@@ -1,6 +1,6 @@
 
-
 import { store } from '../store.js';
+import { fileSystem } from '../services/filesystem.js';
 
 class ArborSidebar extends HTMLElement {
     constructor() { 
@@ -21,8 +21,9 @@ class ArborSidebar extends HTMLElement {
 
     render() {
         // Debounce / Memoize Render
-        const { theme, lang, viewMode, gamification, githubUser } = store.value;
+        const { theme, lang, viewMode, gamification, githubUser, constructionMode } = store.value;
         const g = gamification;
+        const canEdit = fileSystem.features.canWrite;
         
         const seedsCount = g.seeds ? g.seeds.length : (g.fruits ? g.fruits.length : 0);
         
@@ -33,7 +34,9 @@ class ArborSidebar extends HTMLElement {
             ghUser: githubUser?.login,
             mobileOpen: this.isMobileMenuOpen,
             username: g.username,
-            avatar: g.avatar
+            avatar: g.avatar,
+            constructionMode,
+            canEdit
         });
         
         if (currentKey === this.renderKey) return;
@@ -60,10 +63,15 @@ class ArborSidebar extends HTMLElement {
                 <!-- Menu Items -->
                 <nav class="flex flex-col">
                     <button class="js-btn-arcade menu-item"><span>🎮</span> <span>${ui.navArcade || 'Arcade'}</span></button>
+                    
+                    <button class="js-btn-construct menu-item ${constructionMode ? 'bg-orange-50 text-orange-600' : ''}">
+                        <span>${constructionMode ? '🏗️' : '👷'}</span> 
+                        <span>Construction Mode</span>
+                    </button>
+                    
                     <button class="js-btn-lang menu-item"><span>${store.currentLangInfo.flag}</span> <span>${ui.languageTitle}</span></button>
                     <button class="js-btn-theme menu-item"><span>${store.value.theme === 'light' ? '🌙' : '☀️'}</span> <span>Toggle Theme</span></button>
                     <div class="h-px bg-slate-100 dark:bg-slate-700 my-1 mx-2"></div>
-                    <button class="js-btn-contrib menu-item"><span>🐙</span> <span>${ui.navContributor}</span></button>
                     <button class="js-btn-about menu-item"><span>ℹ️</span> <span>${ui.navAbout}</span></button>
                     <div class="h-px bg-slate-100 dark:bg-slate-700 my-1 mx-2"></div>
                     <button class="js-btn-privacy menu-item"><span>🛡️</span> <span>${ui.privacyTitle || 'Privacy'}</span></button>
@@ -167,12 +175,19 @@ class ArborSidebar extends HTMLElement {
                      <button class="js-btn-sage w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-purple-500 hover:text-white transition-all" aria-label="${ui.navSage}">🦉</button>
                      <span class="tooltip">${ui.navSage}</span>
                 </div>
+                
+                <div class="w-8 h-px bg-slate-200 dark:bg-slate-700 my-1"></div>
+                <!-- CONSTRUCTION MODE (Always Visible) -->
+                <div class="relative group">
+                     <button class="js-btn-construct w-10 h-10 rounded-xl flex items-center justify-center transition-all ${constructionMode ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30 animate-pulse' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-orange-500 hover:text-white'}" aria-label="Construction Mode">🏗️</button>
+                     <span class="tooltip">Construction Mode</span>
+                </div>
             </div>
 
             <!-- BOTTOM SECTION -->
             <div class="flex flex-col gap-3 items-center w-full">
                 
-                <div class="relative group"><button class="js-btn-contrib w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white" aria-label="${ui.navContributor}">🐙</button><span class="tooltip">${ui.navContributor}</span></div>
+                <!-- Removed Contributor Octopus Button per user request -->
                 <div class="relative group"><button class="js-btn-about w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="${ui.navAbout}"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 15" /></svg></button><span class="tooltip">${ui.navAbout}</span></div>
                 
                 <!-- Privacy Button (Extreme Legal) -->
@@ -218,12 +233,12 @@ class ArborSidebar extends HTMLElement {
         this.querySelectorAll('.js-btn-certs').forEach(b => b.onclick = mobileMenuAction(() => store.setViewMode('certificates')));
         this.querySelectorAll('.js-btn-sources').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('sources')));
         this.querySelectorAll('.js-btn-arcade').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('arcade')));
+        this.querySelectorAll('.js-btn-construct').forEach(b => b.onclick = mobileMenuAction(() => store.toggleConstructionMode()));
         this.querySelectorAll('.js-btn-about').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('about')));
         this.querySelectorAll('.js-btn-lang').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('language')));
         this.querySelectorAll('.js-btn-help').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('tutorial')));
         this.querySelectorAll('.js-btn-impressum').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('impressum')));
         this.querySelectorAll('.js-btn-privacy').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('privacy'))); // Bind Privacy
-        this.querySelectorAll('.js-btn-contrib').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('contributor')));
         this.querySelectorAll('.js-btn-profile').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('profile')));
         
         // Mobile Basket Button -> Trigger Global Progress Widget Event instead of Profile

@@ -359,8 +359,6 @@ class ArborContent extends HTMLElement {
         // Progress based on actual visited sections (ticks)
         const progress = toc.length > 0 ? Math.round((this.visitedSections.size / toc.length) * 100) : 0;
         
-        const canEdit = store.value.githubUser && this.currentNode.sourcePath;
-
         const isExam = this.currentNode.type === 'exam';
         const quizSectionIndex = isExam ? toc.findIndex(item => item.isQuiz) : -1;
         const onExamIntro = isExam && quizSectionIndex > -1 && this.activeSectionIndex < quizSectionIndex;
@@ -416,15 +414,6 @@ class ArborContent extends HTMLElement {
                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                 <span class="font-bold text-xs hidden sm:inline">PDF</span>
            </button>
-
-           <div class="block w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
-
-           ${canEdit ? `
-           <button id="btn-edit-content" class="flex px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-xs items-center gap-2 whitespace-nowrap">
-              ✏️ <span class="hidden sm:inline">${ui.editButton}</span>
-           </button>
-           <div class="block w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
-           ` : ''}
         `;
 
         this.className = ""; 
@@ -546,7 +535,7 @@ class ArborContent extends HTMLElement {
                         
                         ${onExamIntro ? `
                          <div class="mt-8 pt-8 border-t border-slate-200 dark:border-slate-800 flex justify-center">
-                             <button id="btn-start-exam" class="px-8 py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all bg-red-600 text-white hover:bg-red-500 shadow-lg shadow-red-500/20 active:scale-95">
+                             <button id="btn-start-exam" class="px-8 py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all bg-red-600 text-white hover:bg-red-50 shadow-lg shadow-red-500/20 active:scale-95">
                                  <span>${ui.quizStart} ${ui.quizLabel}</span>
                              </button>
                          </div>
@@ -573,7 +562,7 @@ class ArborContent extends HTMLElement {
             
             ${onExamIntro ? `
             <div class="md:hidden flex-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-t border-slate-200 dark:border-slate-800 px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,20px))] z-20">
-                 <button id="btn-start-exam-mobile" class="w-full justify-center text-center px-4 py-3 rounded-xl font-bold flex items-center gap-2 transition-all bg-red-600 text-white hover:bg-red-500 shadow-lg shadow-red-500/20 active:scale-95">
+                 <button id="btn-start-exam-mobile" class="w-full justify-center text-center px-4 py-3 rounded-xl font-bold flex items-center gap-2 transition-all bg-red-600 text-white hover:bg-red-50 shadow-lg shadow-red-500/20 active:scale-95">
                      <span>${ui.quizStart} ${ui.quizLabel}</span>
                  </button>
             </div>
@@ -590,7 +579,7 @@ class ArborContent extends HTMLElement {
         safeBind('#btn-close-content-mobile', () => this.handleClose());
         safeBind('#btn-close-content-desktop', () => this.handleClose());
         
-        safeBind('#btn-edit-content', () => store.openEditor(this.currentNode));
+        // Removed btn-edit-content binding as button was removed
         safeBind('#btn-ask-sage', () => { store.setModal({ type: 'sage', mode: 'chat' }); });
         safeBind('#btn-export-pdf', () => { store.setModal({ type: 'export-pdf', node: this.currentNode }); });
         safeBind('#btn-toggle-bookmark', () => this.toggleBookmark()); // Bind Bookmark Toggle
