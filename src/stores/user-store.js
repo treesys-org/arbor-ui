@@ -253,6 +253,66 @@ export class UserStore {
         return newTree;
     }
     
+    applyBlueprintToTree(treeId, schema) {
+        const treeEntry = this.state.localTrees.find(t => t.id === treeId);
+        if (!treeEntry) return false;
+
+        const id = treeEntry.id; 
+        const rootId = `${id}-en-root`;
+        
+        // Find Root Node
+        const langData = treeEntry.data.languages['EN'] || Object.values(treeEntry.data.languages)[0];
+        if (!langData) return false;
+
+        // Generate Nodes from Schema
+        const children = [];
+        if (schema.modules) {
+            schema.modules.forEach((mod, mIdx) => {
+                const modId = `${id}-mod-${Date.now()}-${mIdx}`;
+                const modPath = `${treeEntry.name} / ${mod.title}`;
+                
+                const modNode = {
+                    id: modId, 
+                    parentId: rootId, 
+                    name: mod.title, 
+                    type: "branch", 
+                    icon: "📁",
+                    description: mod.description || "", 
+                    path: modPath, 
+                    order: String(mIdx + 1), 
+                    expanded: false, 
+                    children: []
+                };
+
+                if (mod.lessons) {
+                    mod.lessons.forEach((les, lIdx) => {
+                        const lesId = `${id}-les-${Date.now()}-${mIdx}-${lIdx}`;
+                        const lesNode = {
+                            id: lesId, 
+                            parentId: modId, 
+                            name: les.title, 
+                            type: "leaf", 
+                            icon: "📄",
+                            path: `${modPath} / ${les.title}`, 
+                            order: String(lIdx + 1), 
+                            description: les.description || "",
+                            content: `@title: ${les.title}\n\n# ${les.title}\n\n${les.description}\n\n${les.outline || "Content pending..."}`
+                        };
+                        modNode.children.push(lesNode);
+                    });
+                }
+                children.push(modNode);
+            });
+        }
+
+        // Replace children
+        langData.children = children;
+        
+        treeEntry.updated = Date.now();
+        this.persist();
+        return true;
+    }
+    
     importLocalTree(jsonData) {
         if (!jsonData || !jsonData.universeName || !jsonData.languages) throw new Error("Invalid Arbor tree format.");
         const id = 'local-' + crypto.randomUUID();

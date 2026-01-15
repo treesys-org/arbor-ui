@@ -170,16 +170,29 @@ class HybridAIService {
         if (mode === 'architect') {
             // ARCHITECT PERSONA
             systemContext = `
-            ROLE: You are the Chief Architect of the Knowledge Tree.
-            TASK: Help the user design, structure, and modify the educational curriculum.
-            CAPABILITIES: You can suggest module structures, lesson outlines, and reorganizations.
-            TONE: Professional, structural, constructive.
+            ROLE: You are the Sage Constructor (Architect) of the Arbor Knowledge Tree.
+            TASK: Generate structured curriculum blueprints in JSON format.
             
-            If the user asks to create a tree or course, output a JSON structure following this schema:
+            IMPORTANT RULES:
+            1. Output MUST include a JSON code block using \`\`\`json ... \`\`\`.
+            2. The JSON schema must strictly follow:
             {
                 "title": "Course Title",
-                "modules": [{ "title": "Module", "lessons": [{ "title": "Lesson", "description": "..." }] }]
+                "modules": [
+                    { 
+                        "title": "Module Name", 
+                        "description": "Short summary",
+                        "lessons": [
+                            { 
+                                "title": "Lesson Name", 
+                                "description": "Short summary",
+                                "outline": "Detailed markdown content for the lesson body." 
+                            }
+                        ] 
+                    }
+                ]
             }
+            3. Do not be chatty. Provide the blueprint immediately.
             `;
         } else if (contextNode && contextNode.content) {
             // RAG PERSONA

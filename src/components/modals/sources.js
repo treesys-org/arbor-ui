@@ -419,8 +419,12 @@ class ArborModalSources extends HTMLElement {
         const source = { id: newTree.id, name: newTree.name, url: `local://${newTree.id}`, type: 'local', isTrusted: true };
         store.loadData(source);
         store.update({ constructionMode: true });
+        
+        // FIX: Close the modal first so Sage is visible
+        this.close();
+        
         store.setModal({ type: 'sage', mode: 'architect' });
-        setTimeout(() => store.chatWithSage(`I just planted a new empty tree called "${name}". I am ready to build. What do you suggest?`), 500);
+        setTimeout(() => store.chatWithSage(`I have planted a new garden named "${name}". Please generate a curriculum structure (JSON) for this topic.`), 500);
     }
 
     importTreeFromFile() {

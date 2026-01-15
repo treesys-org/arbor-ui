@@ -111,6 +111,35 @@ class ArborSage extends HTMLElement {
         if (action === 'quiz') prompt = ui.sagePromptQuiz || "Give me a quiz question.";
         if (prompt) store.chatWithSage(prompt);
     }
+    
+    async handleConstruct(e) {
+        const idx = e.currentTarget.dataset.msgIndex;
+        const msg = store.value.ai.messages[idx];
+        if(!msg) return;
+
+        const jsonMatch = msg.content.match(/```json\s*([\s\S]*?)\s*```/);
+        if(jsonMatch) {
+            try {
+                const json = JSON.parse(jsonMatch[1]);
+                const activeSource = store.value.activeSource;
+                if(activeSource.type !== 'local') {
+                    alert("You can only build in a Local Garden.");
+                    return;
+                }
+                
+                store.userStore.applyBlueprintToTree(activeSource.id, json);
+                
+                // Refresh Graph
+                await store.loadData(activeSource, store.value.lang, true);
+                
+                store.notify("✅ Garden Constructed!");
+                this.close(); 
+                
+            } catch(err) {
+                alert("Invalid Blueprint JSON: " + err.message);
+            }
+        }
+    }
 
     render() {
         if (!this.isVisible) {
@@ -361,17 +390,41 @@ class ArborSage extends HTMLElement {
         let sendBtnColor = isArchitect ? 'bg-orange-600' : (isOllama ? 'bg-orange-600' : 'bg-teal-600');
 
         const getMessagesHTML = () => {
-             return displayMessages.map(m => `
+             return displayMessages.map(m => {
+                let contentHtml = this.formatMessage(m.content);
+                
+                // Check for Blueprint JSON and if role is assistant
+                const jsonMatch = m.content.match(/```json\s*([\s\S]*?)\s*```/);
+                if (jsonMatch && m.role === 'assistant') {
+                    // Embed the build button and a friendly hardcoded message
+                    const msgReady = store.value.lang === 'ES' 
+                        ? "He creado una estructura para ti. ¿Quieres construirla?" 
+                        : "I have created a structure for you. Do you want to build it?";
+
+                    contentHtml += `
+                        <div class="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-100 dark:border-green-800">
+                            <p class="font-bold text-green-800 dark:text-green-300 mb-3 text-sm flex items-center gap-2">
+                                <span>👷</span> ${msgReady}
+                            </p>
+                            <button class="btn-construct-blueprint w-full py-3 bg-green-600 hover:bg-green-500 text-white rounded-lg font-bold text-xs shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95" data-msg-index="${displayMessages.indexOf(m)}">
+                                <span>🏗️</span> Build Structure
+                            </button>
+                        </div>
+                    `;
+                }
+
+                return `
                 <div class="flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 fade-in duration-300">
                     <div class="max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed shadow-sm relative group text-left
                         ${m.role === 'user' 
                             ? (sendBtnColor + ' text-white rounded-br-none') 
                             : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-bl-none'
                         }">
-                        ${this.formatMessage(m.content)}
+                        ${contentHtml}
                     </div>
                 </div>
-             `).join('') + (isThinking ? `
+             `;
+             }).join('') + (isThinking ? `
                 <div class="flex justify-start">
                     <div class="bg-white dark:bg-slate-800 p-3 rounded-2xl rounded-bl-none border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-1.5 w-16 justify-center">
                         <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
@@ -392,7 +445,7 @@ class ArborSage extends HTMLElement {
         
         let headerGradient = isArchitect ? 'from-amber-500 to-orange-600' : (isOllama ? 'from-orange-500 to-red-500' : 'from-teal-500 to-emerald-600');
         let providerName = isOllama ? 'Local (Ollama)' : 'Puter Cloud';
-        if (isArchitect) providerName += ' (Architect)';
+        if (isArchitect) providerName = 'Sage Constructor'; // Changed from '... (Architect)'
 
         this.innerHTML = `
             <div id="sage-backdrop" class="md:hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm pointer-events-auto transition-opacity"></div>
@@ -488,6 +541,10 @@ class ArborSage extends HTMLElement {
                 e.preventDefault();
                 store.setModal('privacy');
             }
+        });
+        
+        container.querySelectorAll('.btn-construct-blueprint').forEach(btn => {
+            btn.onclick = (e) => this.handleConstruct(e);
         });
     }
 
