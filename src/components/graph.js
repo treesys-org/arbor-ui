@@ -477,48 +477,32 @@ class ArborGraph extends HTMLElement {
         if (store.value.constructionMode) return;
 
         const theme = store.value.theme;
-        const color = theme === 'dark' ? '#1e293b' : '#22c55e';
-        const backColor = theme === 'dark' ? '#0f172a' : '#4ade80';
+        // COLORS: Solid pastel tones (No transparency)
+        // Dark: Slate-700
+        // Light: Green-200
+        const color = theme === 'dark' ? '#334155' : '#bbf7d0';
+        
         const cx = this.width / 2;
         const groundY = this.height;
         
-        // DYNAMIC WIDTH CALCULATION
-        // If contentWidth is provided (from updateGraph), use it to size the island.
-        // Add some padding (e.g., 200px) on each side so nodes aren't on the cliff edge.
-        // Ensure a minimum width so it doesn't look weird when empty.
-        let halfWidth;
-        if (contentWidth) {
-            halfWidth = (contentWidth / 2) + 200;
-            // Apply minimum just in case
-            if (halfWidth < 600) halfWidth = 600;
-        } else {
-            // Default "Claustrophobic" start
-            halfWidth = Math.min(this.width * 0.45, 600);
-        }
+        // DYNAMIC STRETCH: 
+        // Use a multiplier on the viewport or content width to ensure it goes way off screen
+        // This solves the "cliff" effect by making the horizon effectively infinite for the view.
+        const totalWidth = Math.max(this.width * 5, (contentWidth || 0) * 3);
+        const halfWidth = totalWidth / 2;
 
-        const groundDepth = 300; 
+        // SOLID: Opacity 1
+        this.groundGroup.style("opacity", 1);
 
-        // Background / Depth Layer (Darker)
+        // GEOMETRY: Simple, gentle curve
         this.groundGroup.append("path")
             .attr("d", `
                 M${cx - halfWidth},${groundY} 
-                C${cx - halfWidth / 3},${groundY - 100} ${cx + halfWidth / 3},${groundY - 50} ${cx + halfWidth},${groundY} 
-                L${cx + halfWidth},${groundY + groundDepth} 
-                Q${cx},${groundY + groundDepth * 1.5} ${cx - halfWidth},${groundY + groundDepth} 
+                Q${cx},${groundY - 120} ${cx + halfWidth},${groundY} 
                 Z
             `)
-            .attr("fill", backColor).style("opacity", 0.7);
-
-        // Foreground Layer (Lighter)
-        this.groundGroup.append("path")
-            .attr("d", `
-                M${cx - halfWidth},${groundY} 
-                Q${cx},${groundY - 80} ${cx + halfWidth},${groundY} 
-                L${cx + halfWidth},${groundY + groundDepth} 
-                Q${cx},${groundY + groundDepth * 1.5} ${cx - halfWidth},${groundY + groundDepth} 
-                Z
-            `)
-            .attr("fill", color);
+            .attr("fill", color)
+            .style("pointer-events", "none"); // Allow clicks to pass through to the SVG background handler
     }
 
     updateGraph() {
@@ -539,8 +523,7 @@ class ArborGraph extends HTMLElement {
             chartDiv.classList.add('bg-gradient-to-b');
             this.querySelector('.clouds-layer').style.display = 'block';
         }
-        // NOTE: Moved drawGround call down to after layout calculation
-
+        
         const root = d3.hierarchy(store.value.data, d => d.expanded ? d.children : null);
         let leaves = 0;
         root.each(d => { if (!d.children) leaves++; });
@@ -564,23 +547,20 @@ class ArborGraph extends HTMLElement {
         });
         
         // --- DYNAMIC GROUND DRAWING ---
-        // Now that we have minX and maxX, we can size the ground perfectly.
+        // Pass the actual tree width to ensure ground stretches enough
         const realTreeWidth = maxX - minX;
         this.drawGround(realTreeWidth);
 
-        // Update Zoom Extent to prevent "Teleporting" into empty space
+        // Update Zoom Extent
         if (this.zoom) {
-            // INSOLENT: No margin. You hit the wall immediately.
             const margin = 0; 
             const screenW = this.width;
             const screenH = this.height;
             
-            // We clamp the extent to exactly the node area plus half screen to allow centering
-            // but NOT allowing panning into void beyond that center point.
             const x0 = minX - (screenW / 2);
             const x1 = maxX + (screenW / 2);
             const y0 = minY - (screenH / 2);
-            const y1 = maxY + (screenH / 2); // Allow scrolling down a bit
+            const y1 = maxY + (screenH / 2); 
             
             this.zoom.translateExtent([[x0, y0], [x1, y1]]);
         }
