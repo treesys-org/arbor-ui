@@ -150,6 +150,10 @@ class ArborModalGamePlayer extends HTMLElement {
             },
             load: (key) => storageManager.loadGameData(storageId, key),
             
+            // --- MEMORY CORE API ---
+            getDue: () => store.userStore.getDueNodes(),
+            reportMemory: (nodeId, quality) => store.userStore.reportMemory(nodeId, quality),
+            
             close: () => this.close()
         };
     }
@@ -268,7 +272,11 @@ class ArborModalGamePlayer extends HTMLElement {
                     },
                     game: { addXP: (amount) => bridge.addXP(amount), exit: () => bridge.close() },
                     content: { getList: () => bridge.getCurriculum(), getNext: () => bridge.getNextLesson(), getAt: (idx) => bridge.getLessonAt(idx) },
-                    storage: { save: (key, value) => bridge.save(key, value), load: (key) => bridge.load(key) }
+                    storage: { save: (key, value) => bridge.save(key, value), load: (key) => bridge.load(key) },
+                    memory: {
+                        getDue: () => bridge.getDue(),
+                        report: (nodeId, quality) => bridge.reportMemory(nodeId, quality)
+                    }
                 };
             })();`;
             

@@ -15,6 +15,7 @@ export class UserStore {
             gameRepos: [], 
             gameData: {}, 
             localTrees: [], 
+            memory: {}, // ARBOR MEMORY CORE (SRS State)
             gamification: {
                 username: '',
                 avatar: '👤',
@@ -58,6 +59,9 @@ export class UserStore {
                     if (parsed.gameRepos) this.state.gameRepos = parsed.gameRepos;
                     if (parsed.gameData) this.state.gameData = parsed.gameData;
                     if (parsed.localTrees) this.state.localTrees = parsed.localTrees;
+                    
+                    // Memory Core Load
+                    if (parsed.memory) this.state.memory = parsed.memory;
                 }
             }
             
@@ -81,6 +85,7 @@ export class UserStore {
             gameRepos: this.state.gameRepos,
             gameData: this.state.gameData,
             localTrees: this.state.localTrees,
+            memory: this.state.memory, // Memory Core Persist
             timestamp: Date.now()
         };
     }
@@ -95,12 +100,91 @@ export class UserStore {
     
     getExportJson() {
         const data = { 
-            v: 2, ts: Date.now(), p: Array.from(this.state.completedNodes), 
+            v: 3, ts: Date.now(), p: Array.from(this.state.completedNodes), 
             g: this.state.gamification, b: this.state.bookmarks,
             games: this.state.installedGames, repos: this.state.gameRepos,
-            d: this.state.gameData, t: this.state.localTrees 
+            d: this.state.gameData, t: this.state.localTrees, m: this.state.memory 
         };
         return JSON.stringify(data, null, 2);
+    }
+
+    // --- MEMORY CORE (SRS LOGIC / SM-2) ---
+
+    // Quality: 0 (Forgot) to 5 (Perfect)
+    reportMemory(nodeId, quality) {
+        if (!nodeId) return;
+        
+        // Initialize if new or missing
+        let item = this.state.memory[nodeId] || {
+            lvl: 0,         // Streak/Interval Level
+            ease: 2.5,      // Easiness Factor
+            interval: 0,    // Days until next review
+            lastReview: 0,  // Timestamp
+            dueDate: 0      // Timestamp
+        };
+
+        const now = Date.now();
+        const oneDay = 24 * 60 * 60 * 1000;
+
+        if (quality < 3) {
+            // Failed: Reset interval, keep ease relatively same but lower
+            item.lvl = 0;
+            item.interval = 1;
+        } else {
+            // Success
+            if (item.lvl === 0) {
+                item.interval = 1;
+            } else if (item.lvl === 1) {
+                item.interval = 6; // Standard SM-2 jump
+            } else {
+                item.interval = Math.round(item.interval * item.ease);
+            }
+            item.lvl++;
+            
+            // Adjust Ease
+            // standard SM-2 formula: EF' = EF + (0.1 - (5-q)*(0.08+(5-q)*0.02))
+            item.ease = item.ease + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
+            if (item.ease < 1.3) item.ease = 1.3; // Minimum ease cap
+        }
+
+        item.lastReview = now;
+        item.dueDate = now + (item.interval * oneDay);
+
+        this.state.memory[nodeId] = item;
+        this.persist();
+        
+        return item;
+    }
+
+    getMemoryStatus(nodeId) {
+        const item = this.state.memory[nodeId];
+        // If completed but no memory data, assume fresh/legacy (Health 1.0)
+        if (!item) return { health: 1.0, isDue: false, interval: 0 };
+
+        const now = Date.now();
+        if (now >= item.dueDate) {
+            return { health: 0, isDue: true, interval: item.interval };
+        }
+
+        // Calculate linear decay for visualization
+        // Health goes from 1.0 (Review Date) to 0.0 (Due Date)
+        const totalDuration = item.dueDate - item.lastReview;
+        const elapsed = now - item.lastReview;
+        let health = 1.0 - (elapsed / totalDuration);
+        if (health < 0) health = 0;
+        
+        return { health, isDue: false, interval: item.interval };
+    }
+
+    getDueNodes() {
+        const dueIds = [];
+        const now = Date.now();
+        for (const [id, item] of Object.entries(this.state.memory)) {
+            if (now >= item.dueDate) {
+                dueIds.push(id);
+            }
+        }
+        return dueIds;
     }
 
     plantTree(name) {
@@ -227,12 +311,8 @@ export class UserStore {
         const oldName = pathParts.pop(); // Remove old name to get parent
         const parentPathStr = pathParts.join('/'); // Rebuild parent path (e.g. "My Tree / Module")
         
-        // Note: The 'path' passed here is likely "virtual path" string from Admin Panel
-        // e.g. "My Tree/Module/Lesson" (using slash separator)
-        
         let foundNode = null;
         
-        // 1. Find the node by path walking or name matching
         const findNode = (node, currentPath) => {
             const myPath = currentPath ? `${currentPath}/${node.name}` : node.name;
             if (myPath === path) return node;
@@ -252,11 +332,8 @@ export class UserStore {
         
         if (!foundNode) return false;
         
-        // 2. Update Name
         foundNode.name = newName;
         
-        // 3. Update Paths Recursively (for children)
-        // We need to re-traverse the whole tree or just this branch to update .path property
         const updatePaths = (node, currentPath) => {
             const newPath = currentPath ? `${currentPath} / ${node.name}` : node.name;
             node.path = newPath;
@@ -265,8 +342,6 @@ export class UserStore {
             }
         };
         
-        // We need to find the parent path string in "Arbor Format" (space padded slash)
-        // Or simply recalculate from root to be safe.
         for (const langKey in treeEntry.data.languages) {
             updatePaths(treeEntry.data.languages[langKey], '');
         }
@@ -341,7 +416,7 @@ export class UserStore {
         return created;
     }
 
-    // --- Bookmarks, Gamification, etc (unchanged) ---
+    // --- Bookmarks, Gamification, etc ---
     computeHash(str) {
         if (!str) return "0";
         let hash = 0;
@@ -451,7 +526,13 @@ export class UserStore {
         if (shouldAdd) {
              if (!isComplete) {
                  this.state.completedNodes.add(nodeId);
-                 xpMsg = this.addXP(10); 
+                 xpMsg = this.addXP(10);
+                 
+                 // Memory Core Integration: Initialize SRS
+                 // If never reviewed, start the forgetting curve now.
+                 if (!this.state.memory[nodeId]) {
+                     this.reportMemory(nodeId, 4); // Default "Good" rating for first completion
+                 }
              }
         } else {
              this.state.completedNodes.delete(nodeId);

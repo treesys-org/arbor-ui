@@ -573,6 +573,11 @@ class ArborGraph extends HTMLElement {
         nodeEnter.append("path").attr("class", "spinner").attr("d", "M-14,0 a14,14 0 0,1 28,0")
             .attr("fill", "none").attr("stroke", "#fff").attr("stroke-width", 4).style("display", "none")
             .append("animateTransform").attr("attributeName", "transform").attr("type", "rotate").attr("from", "0 0 0").attr("to", "360 0 0").attr("dur", "1s").attr("repeatCount", "indefinite");
+            
+        // 6. Memory Decay Icon (Water Droplet) - NEW
+        nodeEnter.append("text").attr("class", "memory-badge").attr("text-anchor", "middle")
+            .text("💧").attr("dy", "-2em")
+            .style("font-size", "20px").style("display", "none");
 
         // UPDATE MERGE
         const nodeMerged = nodeSelection.merge(nodeEnter);
@@ -684,7 +689,16 @@ class ArborGraph extends HTMLElement {
                 const isHarvested = harvestedSeeds.find(f => f.id === d.data.id);
                 if (isHarvested) return '#D97706'; 
                 if (d.data.type === 'root') return '#8D6E63';
-                if (store.isCompleted(d.data.id)) return '#22c55e'; 
+                
+                // MEMORY HEALTH CHECK (SRS)
+                if ((d.data.type === 'leaf' || d.data.type === 'exam') && store.isCompleted(d.data.id)) {
+                    const memory = store.userStore.getMemoryStatus(d.data.id);
+                    if (memory.isDue) {
+                        return '#eab308'; // WITHERED YELLOW/BROWN
+                    }
+                    return '#22c55e'; // FRESH GREEN
+                }
+                
                 if (d.data.type === 'exam') return '#ef4444'; 
                 if (d.data.type === 'leaf') return '#a855f7'; 
                 return '#F59E0B'; 
@@ -773,11 +787,21 @@ class ArborGraph extends HTMLElement {
             rect.attr('height', numLines > 1 ? 40 : 24).attr('width', textBBox.width + 24).attr('x', -(textBBox.width / 2) - 12).attr('y', numLines > 1 ? -8 : 0);
         });
 
-        // BADGE & SPINNER
+        // BADGE & SPINNER & MEMORY DROPS
         nodeUpdate.select(".badge-group").style("display", d => (d.data.type === 'leaf' || d.data.type === 'exam') ? 'none' : 'block').attr("transform", d => `translate(${isMobile ? 25 : 35}, -${isMobile ? 25 : 35})`);
         nodeUpdate.select(".badge-group circle").attr("fill", d => d.data.expanded ? "#ef4444" : "#22c55e");
         nodeUpdate.select(".badge-group text").text(d => d.data.expanded ? '-' : '+');
         nodeUpdate.select(".spinner").style("display", d => d.data.status === 'loading' ? 'block' : 'none');
+        
+        // Show Memory Droplet if Due (and completed)
+        nodeUpdate.select(".memory-badge").style("display", d => {
+            if (isConstruct) return "none";
+            if ((d.data.type === 'leaf' || d.data.type === 'exam') && store.isCompleted(d.data.id)) {
+                const mem = store.userStore.getMemoryStatus(d.data.id);
+                return mem.isDue ? "block" : "none";
+            }
+            return "none";
+        }).attr("dy", isMobile ? "-2.5em" : "-2em"); // Adjust position for mobile
 
         // EXIT
         nodeSelection.exit().transition().duration(this.duration).attr("transform", d => `translate(${findDest(d).x},${findDest(d).y}) scale(0)`).remove();
