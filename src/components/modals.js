@@ -8,10 +8,8 @@ import './modals/certificates.js';
 import './modals/preview.js';
 import './modals/welcome.js';
 import './modals/sources.js';
-import './modals/about.js'; // Now merged legal hub
+import './modals/about.js';
 import './modals/language.js';
-// impressum.js and privacy.js are merged into about.js but kept in codebase to avoid breaking imports if referenced elsewhere, 
-// though they are no longer used by the router below.
 import './modals/impressum.js';
 import './modals/export-pdf.js';
 import './modals/certificate-view.js';
@@ -24,7 +22,7 @@ import './modals/load-warning.js';
 import './modals/releases.js'; 
 import './modals/node-properties.js'; 
 import './modals/dialog.js';
-import './modals/manual.js'; // NEW: Extensive Manual
+import './modals/manual.js'; // Ensure this is present and correct
 
 // Admin Panel is essentially a modal
 import './modals/admin.js';
@@ -66,7 +64,6 @@ class ArborModals extends HTMLElement {
             if (this.innerHTML !== '') {
                 this.innerHTML = ''; 
                 this.lastRenderKey = null;
-                // Return focus to main if needed, though usually handled by user interaction flow
             }
             return; 
         }
@@ -83,7 +80,7 @@ class ArborModals extends HTMLElement {
         }
 
         // 5. Standard Modals Router
-        const type = modal.type || modal;
+        const type = modal.type || modal; // Handle string vs object
         const currentKey = `${type}-${modal.node?.id || modal.url || ''}`;
 
         // Don't skip render for generic 'dialog' type as its content changes without changing 'type' key
@@ -113,6 +110,7 @@ class ArborModals extends HTMLElement {
                 this.innerHTML = `<arbor-modal-welcome></arbor-modal-welcome>`; 
                 break;
             case 'manual':
+                // Explicit check for manual type
                 this.innerHTML = `<arbor-modal-manual></arbor-modal-manual>`;
                 break;
             case 'sources': 
@@ -140,11 +138,9 @@ class ArborModals extends HTMLElement {
                 this.innerHTML = `<arbor-modal-language></arbor-modal-language>`; 
                 break;
             case 'impressum': 
-                // Now handled by 'about' but kept for legacy calls if any
                 this.innerHTML = `<arbor-modal-about></arbor-modal-about>`; 
                 break;
             case 'privacy': 
-                // Now handled by 'about'
                 this.innerHTML = `<arbor-modal-about></arbor-modal-about>`; 
                 break;
             case 'emptyModule': 
@@ -166,9 +162,7 @@ class ArborModals extends HTMLElement {
     }
 
     setFocus() {
-        // Wait for DOM update
         setTimeout(() => {
-            // Attempt to find autofocus input or first button/input
             const focusable = this.querySelector('[autofocus], input, button, a[href]');
             if (focusable) {
                 focusable.focus();

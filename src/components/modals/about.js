@@ -9,6 +9,12 @@ class ArborModalAbout extends HTMLElement {
     }
 
     connectedCallback() {
+        // Handle direct linking to specific tabs (e.g. from Privacy modal)
+        const modalState = store.value.modal;
+        if (modalState && modalState.tab) {
+            this.activeTab = modalState.tab;
+        }
+        
         this.render();
         store.addEventListener('state-change', () => this.render());
     }
@@ -57,7 +63,6 @@ class ArborModalAbout extends HTMLElement {
                 </div>
             </div>`;
         } else if (this.activeTab === 'privacy') {
-            // Reusing privacy logic but injected here
             const privacyText = (ui.privacyText || "").replace('{impressum}', `<span class="text-slate-400 italic">[See Legal Tab]</span>`);
             contentHtml = `
             <div class="animate-in fade-in slide-in-from-bottom-2">
@@ -86,10 +91,11 @@ class ArborModalAbout extends HTMLElement {
                     <p class="text-slate-600 dark:text-slate-300 mb-4 leading-relaxed text-sm">${ui.impressumText}</p>
                     
                     ${!this.showImpressumDetails ? `
-                        <button id="btn-show-imp" class="w-full py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sky-500 hover:text-sky-600 dark:text-sky-400 font-bold text-sm flex items-center justify-center gap-2 transition-all hover:shadow-md">
-                            <span>👁️</span> <span>${ui.showImpressumDetails}</span>
-                        </button>
-                        <p class="text-[10px] text-center text-slate-400 mt-2">Click to reveal publisher details (Anti-spam).</p>
+                        <div class="mt-4 text-center">
+                            <button id="btn-show-imp" class="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors underline decoration-slate-300 dark:decoration-slate-700 underline-offset-4">
+                                ${ui.showImpressumDetails}
+                            </button>
+                        </div>
                     ` : `
                         <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 animate-in slide-in-from-top-2 fade-in">
                              <div class="flex flex-col items-center mb-4">
@@ -115,7 +121,8 @@ class ArborModalAbout extends HTMLElement {
                     <button class="tab-btn ${tabBtnClass(this.activeTab === 'legal')}" data-tab="legal">${ui.tabLegal || 'Legal'}</button>
                 </div>
 
-                <div class="p-8 overflow-y-auto custom-scrollbar flex-1">
+                <!-- Added min-h-0 and pb-12 to ensure proper scrolling and visibility of bottom content -->
+                <div class="p-8 overflow-y-auto custom-scrollbar flex-1 min-h-0 pb-12">
                     ${contentHtml}
                 </div>
             </div>

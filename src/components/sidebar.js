@@ -23,15 +23,12 @@ class ArborSidebar extends HTMLElement {
         // Debounce / Memoize Render
         const { theme, lang, viewMode, gamification, githubUser, constructionMode } = store.value;
         const g = gamification;
-        const canEdit = fileSystem.features.canWrite;
         
         const seedsCount = g.seeds ? g.seeds.length : (g.fruits ? g.fruits.length : 0);
         
-        // Calculate Due Nodes for Notification
         const dueNodes = store.userStore.getDueNodes();
         const dueCount = dueNodes.length;
         
-        // Anti-Flicker: Include ALL variables used in template in the key
         const currentKey = JSON.stringify({
             theme, lang, viewMode, 
             streak: g.streak, 
@@ -41,7 +38,6 @@ class ArborSidebar extends HTMLElement {
             username: g.username,
             avatar: g.avatar,
             constructionMode,
-            canEdit,
             dueCount 
         });
         
@@ -134,13 +130,11 @@ class ArborSidebar extends HTMLElement {
              </button>
              
              <div class="flex items-center gap-2">
-                <!-- Basket Mobile -->
                 <button class="js-btn-progress-mobile flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 dark:bg-orange-900/20 border border-orange-100 dark:border-orange-800/30 rounded-full active:scale-95 transition-transform" aria-label="${ui.gardenTitle}">
                     <span class="text-sm">🎒</span>
                     <span class="text-xs font-bold text-orange-700 dark:text-orange-400">${seedsCount}</span>
                 </button>
 
-                <!-- Sage Config Mobile -->
                 <button class="js-btn-sage w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 active:scale-95 transition-transform" aria-label="${ui.navSage}">🦉</button>
                 
                 <button class="js-btn-search w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 active:scale-95 transition-transform" aria-label="${ui.navSearch}">
@@ -189,7 +183,7 @@ class ArborSidebar extends HTMLElement {
                 
                 <div class="w-8 h-px bg-slate-200 dark:bg-slate-700 my-1"></div>
                 
-                <!-- NEW: Field Guide -->
+                <!-- FIELD GUIDE BUTTON (Manual) -->
                 <div class="relative group">
                      <button class="js-btn-manual w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-blue-500 hover:text-white transition-all" aria-label="${ui.navManual || 'Field Guide'}">
                         <span class="font-black text-lg">?</span>
@@ -207,8 +201,6 @@ class ArborSidebar extends HTMLElement {
             <!-- BOTTOM SECTION -->
             <div class="flex flex-col gap-3 items-center w-full">
                 
-                <!-- Removed standalone About/Privacy buttons -->
-
                 <div class="relative group"><button class="js-btn-lang w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 text-xl flex items-center justify-center" aria-label="${ui.languageTitle}">${store.currentLangInfo.flag}</button><span class="tooltip">${ui.languageTitle}</span></div>
                 <div class="relative group"><button class="js-btn-theme w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 text-xl flex items-center justify-center" aria-label="Toggle Theme">${store.value.theme === 'light' ? '🌙' : '☀️'}</button><span class="tooltip">Toggle Theme</span></div>
                 
@@ -219,7 +211,6 @@ class ArborSidebar extends HTMLElement {
                     <span class="tooltip">${g.username || ui.navProfile}</span>
                 </div>
                 
-                <!-- Unified Legal/About/Impressum Trigger -->
                 <div class="js-btn-about text-[9px] text-slate-400 font-bold opacity-60 hover:opacity-100 transition-opacity cursor-pointer mt-2 text-center">
                     ${ui.createdBy}<br><span class="text-sky-500">Treesys</span>
                 </div>
@@ -237,6 +228,7 @@ class ArborSidebar extends HTMLElement {
             };
         };
         
+        // --- EVENT BINDING ---
         this.querySelectorAll('.js-btn-theme').forEach(b => b.onclick = mobileMenuAction(() => store.toggleTheme()));
         this.querySelectorAll('.js-btn-search').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('search')));
         this.querySelectorAll('.js-btn-certs').forEach(b => b.onclick = mobileMenuAction(() => store.setViewMode('certificates')));
@@ -244,7 +236,12 @@ class ArborSidebar extends HTMLElement {
         this.querySelectorAll('.js-btn-arcade').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('arcade')));
         this.querySelectorAll('.js-btn-construct').forEach(b => b.onclick = mobileMenuAction(() => store.toggleConstructionMode()));
         this.querySelectorAll('.js-btn-about').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('about')));
-        this.querySelectorAll('.js-btn-manual').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('manual')));
+        
+        // MANUAL BINDING (CRITICAL FIX)
+        this.querySelectorAll('.js-btn-manual').forEach(b => b.onclick = mobileMenuAction(() => {
+            store.setModal('manual');
+        }));
+        
         this.querySelectorAll('.js-btn-lang').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('language')));
         this.querySelectorAll('.js-btn-profile').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('profile')));
         

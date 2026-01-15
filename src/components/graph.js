@@ -477,15 +477,29 @@ class ArborGraph extends HTMLElement {
         const backColor = theme === 'dark' ? '#0f172a' : '#4ade80';
         const cx = this.width / 2;
         const groundY = this.height;
-        const groundWidth = 10000; 
-        const groundDepth = 4000;
+        const groundWidth = 3000; // REDUCED from 10000
+        const groundDepth = 500;  // REDUCED from 4000 to prevent "infinite" floor effect
 
+        // Background / Depth Layer (Darker) - Curved at bottom to look like an island
         this.groundGroup.append("path")
-            .attr("d", `M${cx - groundWidth},${groundY} C${cx - 500},${groundY - 180} ${cx + 500},${groundY - 60} ${cx + groundWidth},${groundY} L${cx + groundWidth},${groundY + groundDepth} L${cx - groundWidth},${groundY + groundDepth} Z`)
+            .attr("d", `
+                M${cx - groundWidth},${groundY} 
+                C${cx - 500},${groundY - 180} ${cx + 500},${groundY - 60} ${cx + groundWidth},${groundY} 
+                L${cx + groundWidth},${groundY + groundDepth * 0.8} 
+                Q${cx},${groundY + groundDepth * 1.5} ${cx - groundWidth},${groundY + groundDepth * 0.8} 
+                Z
+            `)
             .attr("fill", backColor).style("opacity", 0.7);
 
+        // Foreground Layer (Lighter)
         this.groundGroup.append("path")
-            .attr("d", `M${cx - groundWidth},${groundY} Q${cx},${groundY - 120} ${cx + groundWidth},${groundY} L${cx + groundWidth},${groundY + groundDepth} L${cx - groundWidth},${groundY + groundDepth} Z`)
+            .attr("d", `
+                M${cx - groundWidth},${groundY} 
+                Q${cx},${groundY - 120} ${cx + groundWidth},${groundY} 
+                L${cx + groundWidth},${groundY + groundDepth * 0.8} 
+                Q${cx},${groundY + groundDepth * 1.5} ${cx - groundWidth},${groundY + groundDepth * 0.8} 
+                Z
+            `)
             .attr("fill", color);
     }
 
@@ -743,24 +757,45 @@ class ArborGraph extends HTMLElement {
 
         nodeUpdate.select(".node-icon")
             .text(d => {
+                // Construction Mode: Show actual icons if set, otherwise defaults
                 if (isConstruct) {
+                    if (d.data.icon && d.data.icon !== '📄' && d.data.icon !== '📁') return d.data.icon;
                     if (d.data.type === 'branch') return '📁';
                     if (d.data.type === 'root') return '🏗️';
                     return '📄';
                 }
+                
                 const seed = harvestedSeeds.find(f => f.id === d.data.id);
                 if (seed) return seed.icon;
                 if ((d.data.type === 'leaf' || d.data.type === 'exam') && store.isCompleted(d.data.id)) return '✓';
                 return d.data.icon || (d.data.type === 'exam' ? '⚔️' : '🌱');
             })
+            .attr("y", d => {
+                // FIX: Center icon inside the Leaf Teardrop shape (Explore Mode)
+                // Shape is 0 to 85. Center is approx 42.
+                if (!isConstruct && d.data.type === 'leaf') return 42; 
+                return 0; 
+            })
             .attr("fill", d => {
                  // Ensure white text on red background for selected node in construct mode
                  if (isConstruct && d.data.id === this.selectedNodeId) return "#fff";
                  return null; // Fallback to CSS
+            })
+            .style("font-size", d => {
+                if (isConstruct) return "20px"; // Smaller in edit mode
+                return isMobile ? "28px" : "38px";
             });
         
         // LABEL POSITIONING
-        nodeMerged.select(".label-group").attr("transform", d => `translate(0, ${isMobile ? 55 : (d.data.type === 'leaf' || d.data.type === 'exam') ? 65 : 55})`);
+        nodeMerged.select(".label-group").attr("transform", d => {
+            let y = isMobile ? 55 : 55;
+            // Push label down for leaves to clear the bottom tip (85px)
+            if (!isConstruct) {
+                if (d.data.type === 'leaf') y = 90;
+                else if (d.data.type === 'exam') y = 65;
+            }
+            return `translate(0, ${y})`;
+        });
         
         // LABEL COLORS via CSS Classes for better Theme adaptability
         const rectClass = isConstruct 

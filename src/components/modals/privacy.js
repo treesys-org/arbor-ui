@@ -12,7 +12,8 @@ class ArborModalPrivacy extends HTMLElement {
     }
 
     openImpressum() {
-        store.setModal('impressum');
+        // Redirect to the About Modal, specifically the Legal tab
+        store.setModal({ type: 'about', tab: 'legal' });
     }
 
     render() {
@@ -22,15 +23,13 @@ class ArborModalPrivacy extends HTMLElement {
         
         // REPLACEMENT LOGIC:
         // Instead of showing the full address here, we provide a link to the Impressum.
-        // This satisfies GDPR (identifying the controller) via reference, without exposing
-        // personal data visually in two places.
         const controllerReference = `
             <div class="mb-4 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
-                <p class="text-sm text-slate-600 dark:text-slate-300 mb-2">
+                <p class="text-sm text-slate-600 dark:text-slate-300 mb-2 font-medium">
                     ${ui.impressumText || "The data controller is the publisher of this application."}
                 </p>
                 <button id="btn-link-impressum" class="text-blue-600 dark:text-blue-400 hover:underline text-xs font-bold flex items-center gap-2 transition-colors">
-                    <span>👤</span> <span>${ui.showImpressumDetails || "View Publisher Details (Impressum)"}</span> ➜
+                    <span>⚖️</span> <span>Go to Legal Notice (Impressum)</span> ➜
                 </button>
             </div>
         `;
