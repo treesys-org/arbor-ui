@@ -24,10 +24,14 @@ class ArborSidebar extends HTMLElement {
         const { theme, lang, viewMode, gamification, githubUser, constructionMode } = store.value;
         const g = gamification;
         const canEdit = fileSystem.features.canWrite;
-        const isContributor = githubUser || fileSystem.isLocal;
         
         const seedsCount = g.seeds ? g.seeds.length : (g.fruits ? g.fruits.length : 0);
         
+        // Calculate Due Nodes for Notification
+        const dueNodes = store.userStore.getDueNodes();
+        const dueCount = dueNodes.length;
+        
+        // Anti-Flicker: Include ALL variables used in template in the key
         const currentKey = JSON.stringify({
             theme, lang, viewMode, 
             streak: g.streak, 
@@ -37,7 +41,8 @@ class ArborSidebar extends HTMLElement {
             username: g.username,
             avatar: g.avatar,
             constructionMode,
-            canEdit
+            canEdit,
+            dueCount 
         });
         
         if (currentKey === this.renderKey) return;
@@ -63,7 +68,12 @@ class ArborSidebar extends HTMLElement {
 
                 <!-- Menu Items -->
                 <nav class="flex flex-col">
-                    <button class="js-btn-arcade menu-item"><span>🎮</span> <span>${ui.navArcade || 'Arcade'}</span></button>
+                    <button class="js-btn-arcade menu-item justify-between">
+                        <div class="flex items-center gap-3">
+                            <span>🎮</span> <span>${ui.navArcade || 'Arcade'}</span>
+                        </div>
+                        ${dueCount > 0 ? `<span class="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">${dueCount}</span>` : ''}
+                    </button>
                     
                     <button class="js-btn-construct menu-item ${constructionMode ? 'bg-orange-50 text-orange-600' : ''}">
                         <span>${constructionMode ? '🏗️' : '👷'}</span> 
@@ -139,8 +149,9 @@ class ArborSidebar extends HTMLElement {
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
                 </button>
                 
-                <button class="js-btn-menu-mobile w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 active:scale-95 transition-transform" aria-label="Menu">
+                <button class="js-btn-menu-mobile w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 active:scale-95 transition-transform relative" aria-label="Menu">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" /></svg>
+                    ${dueCount > 0 ? '<span class="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-white dark:border-slate-800"></span>' : ''}
                 </button>
              </div>
         </header>
@@ -166,8 +177,11 @@ class ArborSidebar extends HTMLElement {
                 <div class="relative group"><button class="js-btn-sources w-10 h-10 rounded-xl flex items-center justify-center bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-600 hover:text-white transition-colors" aria-label="${ui.navSources}"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" /></svg></button><span class="tooltip">${ui.navSources}</span></div>
                 
                 <div class="relative group">
-                    <button class="js-btn-arcade w-10 h-10 rounded-xl flex items-center justify-center bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 hover:bg-orange-600 hover:text-white transition-colors" aria-label="${ui.navArcade || 'Arcade'}">🎮</button>
-                    <span class="tooltip">${ui.navArcade || 'Arcade'}</span>
+                    <button class="js-btn-arcade w-10 h-10 rounded-xl flex items-center justify-center bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 hover:bg-orange-600 hover:text-white transition-colors relative" aria-label="${ui.navArcade || 'Arcade'}">
+                        🎮
+                        ${dueCount > 0 ? '<span class="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-white dark:border-slate-900 animate-pulse"></span>' : ''}
+                    </button>
+                    <span class="tooltip">${ui.navArcade || 'Arcade'} ${dueCount > 0 ? `(${dueCount})` : ''}</span>
                 </div>
 
                 <div class="relative group">

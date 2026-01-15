@@ -6,6 +6,8 @@ class ArborModalSources extends HTMLElement {
         super();
         this.activeTab = 'global'; // 'global' | 'local'
         this.selectedVersionUrl = null;
+        this.overlay = null; // 'plant' | 'delete' | 'import'
+        this.targetId = null; // ID for delete
     }
 
     connectedCallback() {
@@ -42,9 +44,20 @@ class ArborModalSources extends HTMLElement {
         }
     }
     
-    plantNewTree() {
-        const ui = store.ui;
-        const name = prompt(ui.treeNamePlaceholder || "Name your tree:");
+    // UI Helpers
+    showOverlay(type, id = null) {
+        this.overlay = type;
+        this.targetId = id;
+        this.render();
+    }
+    
+    hideOverlay() {
+        this.overlay = null;
+        this.targetId = null;
+        this.render();
+    }
+
+    plantNewTree(name) {
         if (!name) return;
         
         // 1. Create the Local Tree (Basic Skeleton)
@@ -91,7 +104,7 @@ class ArborModalSources extends HTMLElement {
                     this.close();
 
                 } catch (err) {
-                    alert("Error importing tree: " + err.message);
+                    store.notify("Error importing tree: " + err.message, true);
                 }
             };
             reader.readAsText(file);
@@ -111,10 +124,10 @@ class ArborModalSources extends HTMLElement {
         this.close();
     }
     
-    deleteLocalTree(id) {
-        if(confirm(store.ui.deleteTreeConfirm)) {
-            store.userStore.deleteLocalTree(id);
-            this.render();
+    deleteLocalTree() {
+        if (this.targetId) {
+            store.userStore.deleteLocalTree(this.targetId);
+            this.hideOverlay();
         }
     }
     
@@ -139,7 +152,7 @@ class ArborModalSources extends HTMLElement {
         if (!url) return;
         const shareLink = `${window.location.origin}${window.location.pathname}?source=${encodeURIComponent(url)}`;
         navigator.clipboard.writeText(shareLink).then(() => {
-            alert("Share link copied to clipboard!");
+            store.notify("Share link copied to clipboard!");
         });
     }
 
@@ -346,12 +359,44 @@ class ArborModalSources extends HTMLElement {
             `;
         }
 
+        // --- INTERNAL OVERLAYS ---
+        let overlayHtml = '';
+        if (this.overlay === 'plant') {
+            overlayHtml = `
+            <div class="absolute inset-0 bg-white/95 dark:bg-slate-900/95 flex items-center justify-center z-20 animate-in fade-in">
+                <div class="w-full max-w-xs text-center">
+                    <h3 class="text-lg font-black mb-4 dark:text-white">Plant New Tree</h3>
+                    <input id="inp-new-tree-name" type="text" placeholder="${ui.treeNamePlaceholder || "Name your tree..."}" class="w-full bg-slate-100 dark:bg-slate-800 rounded-xl px-4 py-3 text-sm font-bold mb-4 focus:ring-2 focus:ring-green-500 outline-none dark:text-white" autofocus>
+                    <div class="flex gap-2">
+                        <button id="btn-cancel-overlay" class="flex-1 py-3 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs uppercase">Cancel</button>
+                        <button id="btn-confirm-plant" class="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold text-xs uppercase shadow-lg">Plant</button>
+                    </div>
+                </div>
+            </div>
+            `;
+        } else if (this.overlay === 'delete') {
+            overlayHtml = `
+            <div class="absolute inset-0 bg-white/95 dark:bg-slate-900/95 flex items-center justify-center z-20 animate-in fade-in">
+                <div class="w-full max-w-xs text-center">
+                    <div class="text-3xl mb-4">⚠️</div>
+                    <h3 class="text-lg font-black mb-2 dark:text-white">Delete Tree?</h3>
+                    <p class="text-xs text-slate-500 mb-6">This action cannot be undone.</p>
+                    <div class="flex gap-2">
+                        <button id="btn-cancel-overlay" class="flex-1 py-3 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs uppercase">Keep</button>
+                        <button id="btn-confirm-delete" class="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold text-xs uppercase shadow-lg">Delete</button>
+                    </div>
+                </div>
+            </div>
+            `;
+        }
+
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
             <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-xl w-full relative overflow-hidden flex flex-col max-h-[90vh] border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
                 <button class="btn-close absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 z-20 transition-colors">✕</button>
 
-                <div class="p-6 h-full flex flex-col">
+                <div class="p-6 h-full flex flex-col relative">
+                    ${overlayHtml}
                     <div class="flex items-center gap-3 mb-4 shrink-0">
                         <span class="text-3xl">🌳</span>
                         <div>
@@ -378,6 +423,21 @@ class ArborModalSources extends HTMLElement {
         
         const tabLocal = this.querySelector('#tab-local');
         if(tabLocal) tabLocal.onclick = () => { this.activeTab = 'local'; this.render(); };
+
+        // Overlay Events
+        const btnCancelOverlay = this.querySelector('#btn-cancel-overlay');
+        if(btnCancelOverlay) btnCancelOverlay.onclick = () => this.hideOverlay();
+        
+        const btnConfirmPlant = this.querySelector('#btn-confirm-plant');
+        if(btnConfirmPlant) {
+            btnConfirmPlant.onclick = () => {
+                const name = this.querySelector('#inp-new-tree-name').value.trim();
+                if(name) this.plantNewTree(name);
+            };
+        }
+        
+        const btnConfirmDelete = this.querySelector('#btn-confirm-delete');
+        if(btnConfirmDelete) btnConfirmDelete.onclick = () => this.deleteLocalTree();
 
         // Global Events
         if (this.activeTab === 'global') {
@@ -408,9 +468,11 @@ class ArborModalSources extends HTMLElement {
             });
             
             this.querySelectorAll('.btn-remove-source').forEach(btn => {
-                btn.onclick = (e) => {
-                    if(confirm('Delete tree?')) store.removeCommunitySource(btn.dataset.id);
-                    this.render(); 
+                btn.onclick = async (e) => {
+                    if(await store.confirm('Delete this community tree?')) {
+                        store.removeCommunitySource(btn.dataset.id);
+                        this.render(); 
+                    }
                 };
             });
             
@@ -428,7 +490,7 @@ class ArborModalSources extends HTMLElement {
         // Local Events
         if (this.activeTab === 'local') {
             const btnPlant = this.querySelector('#btn-plant-tree');
-            if (btnPlant) btnPlant.onclick = () => this.plantNewTree();
+            if (btnPlant) btnPlant.onclick = () => this.showOverlay('plant');
             
             const btnImport = this.querySelector('#btn-import-tree');
             if (btnImport) btnImport.onclick = () => this.importTreeFromFile();
@@ -442,7 +504,7 @@ class ArborModalSources extends HTMLElement {
             });
             
             this.querySelectorAll('.btn-delete-local').forEach(btn => {
-                btn.onclick = (e) => this.deleteLocalTree(e.currentTarget.dataset.id);
+                btn.onclick = (e) => this.showOverlay('delete', e.currentTarget.dataset.id);
             });
         }
     }

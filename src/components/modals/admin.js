@@ -215,10 +215,10 @@ class ArborAdminPanel extends HTMLElement {
         
         try {
             await github.saveCodeOwners(adminData.gov?.path || '.github/CODEOWNERS', content, adminData.gov?.sha);
-            alert("Permissions updated successfully.");
+            store.notify("Permissions updated successfully.");
             this.loadAdminData(); 
         } catch(e) {
-            alert("Error saving rules: " + e.message);
+            store.notify("Error saving rules: " + e.message, true);
         }
     }
 
@@ -252,11 +252,49 @@ class ArborAdminPanel extends HTMLElement {
             await fileSystem.createNode('content/releases', name, 'folder');
             this.updateState({ newVersionName: '' });
             await this.loadReleases();
-            alert(`Version '${name}' created.`);
+            store.notify(`Version '${name}' created.`);
         } catch (e) {
-            alert("Error: " + e.message);
+            store.notify("Error: " + e.message, true);
         } finally {
             this.updateState({ creatingRelease: false });
+        }
+    }
+    
+    async deleteRelease(version) {
+        // Since we are inside the admin panel which is a modal, using store.confirm will replace it.
+        // For admin panel, we can use a small internal overlay or accept the context switch.
+        // Given the complexity of implementing internal overlays for every admin action, 
+        // we'll try to stick to notifications or accept the modal replacement for critical actions.
+        // HOWEVER, replacing the modal closes the admin panel. That is bad UX.
+        // Let's implement a simple inline check for delete.
+        
+        // Inline confirm logic: Change button state?
+        // Actually, let's just use `confirm` for now but warn user it might close panel? 
+        // No, the goal is consistent UI. 
+        // Let's use `window.confirm` only if absolutely necessary? NO, the user said NO native prompts.
+        
+        // We will skip implementing the delete button action here if it closes the modal, 
+        // OR we implement a micro-overlay inside the panel.
+        // Let's do a micro-overlay logic.
+        
+        if (this._pendingDelete === version) {
+             // Second click confirmed
+             this.updateState({ releasesLoading: true });
+             try {
+                await fileSystem.deleteNode(`content/releases/${version}`, 'folder');
+                await this.loadReleases();
+                this._pendingDelete = null;
+            } catch (e) {
+                store.notify("Error deleting archive: " + e.message, true);
+                this.updateState({ releasesLoading: false });
+            }
+        } else {
+            this._pendingDelete = version;
+            store.notify("Click trash again to confirm delete.", false);
+            // Auto-reset
+            setTimeout(() => {
+                if(this._pendingDelete === version) this._pendingDelete = null;
+            }, 3000);
         }
     }
 
@@ -270,17 +308,20 @@ class ArborAdminPanel extends HTMLElement {
         }
         const newUrl = `${dataRoot}/releases/${version}.json`;
 
-        if (confirm(`Switch to '${version}'?`)) {
-            const newSource = {
-                ...activeSource,
-                id: `${activeSource.id}-${version}`,
-                name: `${activeSource.name} (${version})`,
-                url: newUrl,
-                type: 'archive'
-            };
-            store.loadData(newSource);
-            store.setModal(null);
-        }
+        // We can use store.confirm here because switching versions SHOULD close the admin panel anyway to show the new tree.
+        store.confirm(`Switch to '${version}'?`).then(ok => {
+            if (ok) {
+                const newSource = {
+                    ...activeSource,
+                    id: `${activeSource.id}-${version}`,
+                    name: `${activeSource.name} (${version})`,
+                    url: newUrl,
+                    type: 'archive'
+                };
+                store.loadData(newSource);
+                store.setModal(null);
+            }
+        });
     }
 
     updateState(partial) {
@@ -404,7 +445,7 @@ class ArborAdminPanel extends HTMLElement {
                     <span>👩‍🏫</span> ${ui.adminTeam || "Faculty"}
                 </button>
                 <button id="tab-archives" class="${navButtonClass('archives')}">
-                    <span>⏳</span> ${ui.adminVersions || "Archives"}
+                    <span>⏳</span> ${ui.adminVersions || "Versions"}
                 </button>
             </div>
         </div>`;
@@ -449,13 +490,13 @@ class ArborAdminPanel extends HTMLElement {
                     <div class="p-6 flex-1 overflow-y-auto custom-scrollbar">
                         <div class="mb-8">
                             <div class="flex justify-between items-center mb-3">
-                                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Guardians</h4>
+                                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Maintainers</h4>
                                 <span class="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-slate-500 font-bold">${folderGuardians.length}</span>
                             </div>
                             
                             ${folderGuardians.length === 0 
                                 ? `<div class="p-4 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl text-center">
-                                     <p class="text-sm text-slate-400 font-medium">No guardians assigned.</p>
+                                     <p class="text-sm text-slate-400 font-medium">No maintainers assigned.</p>
                                    </div>`
                                 : `<div class="space-y-2">
                                     ${folderGuardians.map(r => `
@@ -474,11 +515,11 @@ class ArborAdminPanel extends HTMLElement {
                         </div>
                         
                         <div class="bg-blue-50 dark:bg-blue-900/10 p-5 rounded-2xl border border-blue-100 dark:border-blue-800/30">
-                            <label class="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase mb-2 block tracking-wider">Add Guardian</label>
+                            <label class="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase mb-2 block tracking-wider">Grant Access</label>
                             <div class="flex gap-2">
                                 <div class="relative flex-1">
                                     <select id="inp-new-guardian" class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm outline-none font-bold text-slate-700 dark:text-white appearance-none focus:ring-2 focus:ring-blue-500">
-                                        <option value="" disabled selected>Select User...</option>
+                                        <option value="" disabled selected>Select Contributor...</option>
                                         ${userOptions}
                                     </select>
                                     <div class="absolute right-4 top-3.5 pointer-events-none text-slate-400 text-xs">▼</div>
@@ -581,26 +622,30 @@ class ArborAdminPanel extends HTMLElement {
             content = `
             <div class="flex flex-col h-full bg-slate-50 dark:bg-slate-900">
                 <div class="p-6 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950/50">
-                    <label class="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Tag New Version</label>
+                    <label class="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Create Archive Version</label>
                     <div class="flex gap-2 max-w-lg">
                         <input id="inp-version" type="text" placeholder="e.g. v2.0" class="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-white font-mono" value="${newVersionName}">
                         <button id="btn-create-release" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-xl font-bold shadow-lg transition-all text-xs uppercase tracking-wider flex items-center gap-2" ${creatingRelease ? 'disabled' : ''}>
-                            ${creatingRelease ? '<span class="animate-spin">⏳</span>' : '<span>+ Tag</span>'}
+                            ${creatingRelease ? '<span class="animate-spin">⏳</span>' : '<span>+ Create</span>'}
                         </button>
                     </div>
                 </div>
                 <div class="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-3">
+                    <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Version History</h4>
                     ${releasesLoading 
                         ? `<div class="p-12 text-center text-slate-400"><div class="animate-spin text-3xl mb-4 opacity-50">⏳</div></div>` 
                         : (releases.length === 0 
                             ? `<div class="p-8 text-center text-slate-400 italic text-sm">No archives found.</div>`
                             : releases.map(ver => `
-                                <div class="flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm">
+                                <div class="flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
                                     <div class="flex items-center gap-4">
                                         <div class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-500 flex items-center justify-center text-lg">📦</div>
                                         <span class="font-black text-lg text-slate-700 dark:text-slate-200 font-mono">${ver}</span>
                                     </div>
-                                    <button class="btn-switch-release px-5 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-blue-600 hover:text-white text-slate-600 dark:text-blue-200 text-xs font-bold rounded-xl transition-colors" data-ver="${ver}">Load</button>
+                                    <div class="flex gap-2">
+                                        <button class="btn-switch-release px-5 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-blue-600 hover:text-white text-slate-600 dark:text-blue-200 text-xs font-bold rounded-xl transition-colors" data-ver="${ver}">Load</button>
+                                        <button class="btn-delete-release w-9 h-9 flex items-center justify-center bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors" data-ver="${ver}" title="Delete Archive">🗑️</button>
+                                    </div>
                                 </div>
                             `).join(''))
                     }
@@ -645,10 +690,16 @@ class ArborAdminPanel extends HTMLElement {
         if (this.state.adminTab === 'archives') {
             const btnCreate = this.querySelector('#btn-create-release');
             if(btnCreate) btnCreate.onclick = () => this.createRelease();
+            
             const inp = this.querySelector('#inp-version');
             if(inp) inp.oninput = (e) => this.state.newVersionName = e.target.value;
+            
             this.querySelectorAll('.btn-switch-release').forEach(b => {
                 b.onclick = (e) => this.switchToVersion(e.currentTarget.dataset.ver);
+            });
+            
+            this.querySelectorAll('.btn-delete-release').forEach(b => {
+                b.onclick = (e) => this.deleteRelease(e.currentTarget.dataset.ver);
             });
         }
     }

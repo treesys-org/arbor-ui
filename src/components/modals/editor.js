@@ -21,6 +21,10 @@ class ArborEditor extends HTMLElement {
         this.isMetaJson = false;
         this.returnTo = null;
         this.historyStack = [];
+        
+        // Internal UI State
+        this.showAiPrompt = false;
+        this.isGenerating = false;
     }
 
     connectedCallback() {
@@ -34,6 +38,7 @@ class ArborEditor extends HTMLElement {
                 this.node = modal.node;
                 this.returnTo = modal.returnTo || null;
                 this.historyStack = []; 
+                this.showAiPrompt = false;
                 this.loadContent();
             }
         } else {
@@ -65,8 +70,6 @@ class ArborEditor extends HTMLElement {
         
         // Fallback for Local Nodes with missing sourcePath (Fix for "Cannot Save" error)
         if (!path && this.node.id && this.node.id.startsWith('local-')) {
-            // Generate a virtual path so validation passes. 
-            // Local saving uses node.id, so this path is cosmetic/metadata only.
             path = `${this.node.name}.md`;
         }
         
@@ -100,7 +103,7 @@ class ArborEditor extends HTMLElement {
             
             // ERROR CHECK: Rate Limit or Forbidden
             if (e.status === 403 || (e.message && e.message.includes('API rate limit'))) {
-                alert("GitHub API Rate Limit Exceeded.\n\nYou are in a Private Tab or not signed in. GitHub limits anonymous requests to 60/hr. Please sign in or try again later.");
+                store.notify("GitHub Rate Limit Exceeded. Try again later.", true);
                 this.closeEditor();
                 return;
             }
@@ -155,10 +158,10 @@ class ArborEditor extends HTMLElement {
                 this.renderEditor(visualHTML);
                 
                 if (isNotFound && !isNew) {
-                    console.info("Editor opened in Rescue Mode. Saving will repair the missing file.");
+                    store.notify("Rescue Mode: Saving will fix missing file.");
                 }
             } else {
-                alert("Critical Error loading content: " + e.message);
+                store.notify("Critical Error: " + e.message, true);
                 this.closeEditor();
             }
         }
@@ -256,10 +259,22 @@ class ArborEditor extends HTMLElement {
         }
     }
 
-    async draftWithAI() {
+    toggleAiPrompt() {
+        this.showAiPrompt = !this.showAiPrompt;
+        const overlay = this.querySelector('#ai-prompt-overlay');
+        if(overlay) {
+            if(this.showAiPrompt) {
+                overlay.classList.remove('hidden');
+                this.querySelector('#inp-ai-prompt').focus();
+            } else {
+                overlay.classList.add('hidden');
+            }
+        }
+    }
+
+    async runDraft(topic) {
         const ui = store.ui;
-        const topic = prompt(ui.editorMagicDraftPrompt || "What should this lesson be about?");
-        if (!topic) return;
+        this.toggleAiPrompt(); // Close overlay
         
         const editor = this.querySelector('#visual-editor');
         if (!editor) return;
@@ -267,6 +282,8 @@ class ArborEditor extends HTMLElement {
         this.pushHistory();
         const originalText = editor.innerHTML;
         editor.innerHTML = `<div class="p-4 text-center animate-pulse text-purple-500">✨ ${ui.sageThinking || "Thinking..."}</div>`;
+        
+        this.isGenerating = true;
         
         try {
             const promptText = `Create a comprehensive educational lesson in Markdown about: "${topic}". Include Title, Intro, Subheadings, List, and Summary.`;
@@ -279,8 +296,10 @@ class ArborEditor extends HTMLElement {
                 this.querySelector('#meta-title').value = titleMatch[1].trim();
             }
         } catch(e) {
-            alert("AI Error: " + e.message);
+            store.notify("AI Error: " + e.message, true);
             editor.innerHTML = originalText;
+        } finally {
+            this.isGenerating = false;
         }
     }
 
@@ -301,12 +320,10 @@ class ArborEditor extends HTMLElement {
             : "bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500";
             
         const editorBg = isConstruct ? "bg-[#34495e]/50 border-2 border-dashed border-slate-600" : "bg-white dark:bg-slate-900 shadow-inner";
-        // Centered prose column for better writing experience
         const proseClass = isConstruct ? "prose-invert font-mono prose-headings:text-yellow-400 prose-p:text-slate-300" : "prose-slate dark:prose-invert mx-auto max-w-3xl";
 
         const pathDisplay = this.node.sourcePath || 'New File';
         
-        // Smart Context Labels
         const panelTitle = this.isMetaJson ? "Folder Properties" : (ui.editorTitle || 'Arbor Studio');
         const saveLabel = this.isMetaJson ? "Save Props" : (ui.editorLocalSave || "Save");
 
@@ -318,8 +335,21 @@ class ArborEditor extends HTMLElement {
             : bodyHTML;
 
         this.innerHTML = `
-        <div class="flex flex-col w-full h-full md:rounded-2xl shadow-2xl overflow-hidden border border-slate-700 ${bgClass} ${textClass}">
+        <div class="flex flex-col w-full h-full md:rounded-2xl shadow-2xl overflow-hidden border border-slate-700 ${bgClass} ${textClass} relative">
             
+            <!-- AI PROMPT OVERLAY (Internal) -->
+            <div id="ai-prompt-overlay" class="hidden absolute inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm animate-in fade-in">
+                <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-2xl w-full max-w-md border border-purple-500/50">
+                    <h3 class="text-lg font-black text-slate-800 dark:text-white mb-2 flex items-center gap-2"><span class="text-2xl">✨</span> Magic Draft</h3>
+                    <p class="text-sm text-slate-500 mb-4">What should this lesson be about?</p>
+                    <input id="inp-ai-prompt" type="text" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold mb-4 focus:ring-2 focus:ring-purple-500 outline-none dark:text-white" placeholder="e.g. Introduction to Quantum Physics">
+                    <div class="flex gap-3">
+                        <button id="btn-cancel-ai" class="flex-1 py-2 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg font-bold text-xs uppercase">Cancel</button>
+                        <button id="btn-run-ai" class="flex-1 py-2 bg-purple-600 text-white rounded-lg font-bold text-xs uppercase hover:bg-purple-500">Draft</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- HEADER -->
             <div class="p-4 border-b border-slate-600/50 flex justify-between items-center shrink-0 bg-slate-900/10 backdrop-blur-md z-20">
                 <div class="flex items-center gap-3 overflow-hidden">
@@ -408,7 +438,16 @@ class ArborEditor extends HTMLElement {
         this.querySelector('#btn-submit').onclick = () => this.submitChanges();
         
         const btnDraft = this.querySelector('#btn-magic-draft');
-        if (btnDraft) btnDraft.onclick = () => this.draftWithAI();
+        if (btnDraft) btnDraft.onclick = () => this.toggleAiPrompt();
+        
+        const btnCancelAi = this.querySelector('#btn-cancel-ai');
+        if (btnCancelAi) btnCancelAi.onclick = () => this.toggleAiPrompt();
+        
+        const btnRunAi = this.querySelector('#btn-run-ai');
+        if (btnRunAi) btnRunAi.onclick = () => {
+            const val = this.querySelector('#inp-ai-prompt').value;
+            if(val) this.runDraft(val);
+        };
         
         const btnUndo = this.querySelector('#btn-undo');
         if (btnUndo) btnUndo.onclick = () => this.undo();
@@ -453,10 +492,8 @@ class ArborEditor extends HTMLElement {
         // Ensure we save to the corrected path (e.g. meta.json)
         const targetPath = this.getTargetPath();
         
-        // If targetPath is missing, getTargetPath() returns a fallback for local nodes.
-        // We double check here just in case.
         if (!targetPath) {
-             alert("Error: Cannot determine save path. Please ensure this is a valid node.");
+             store.notify("Error: Cannot determine save path.", true);
              btn.innerHTML = originalText;
              btn.disabled = false;
              return;
@@ -469,18 +506,17 @@ class ArborEditor extends HTMLElement {
             
             if (result.success) {
                 if (result.mode === 'instant') {
-                    // Quick flash instead of alert for better flow
                     btn.innerHTML = '✔ SAVED';
                     setTimeout(() => this.closeEditor(), 500);
                 } else {
-                    alert(store.ui.editorSuccessPublish);
+                    store.notify(store.ui.editorSuccessPublish);
                     this.closeEditor();
                 }
             } else {
                 throw new Error("Save operation reported failure.");
             }
         } catch(e) {
-            alert("Error: " + e.message);
+            store.notify("Error: " + e.message, true);
             btn.innerHTML = originalText;
             btn.disabled = false;
         }

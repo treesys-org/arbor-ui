@@ -20,7 +20,8 @@ import './modals/game-player.js';
 import './modals/security-warning.js';
 import './modals/load-warning.js';
 import './modals/releases.js'; 
-import './modals/node-properties.js'; // NEW
+import './modals/node-properties.js'; 
+import './modals/dialog.js'; // NEW
 
 // Admin Panel is essentially a modal
 import './modals/admin.js';
@@ -82,10 +83,14 @@ class ArborModals extends HTMLElement {
         const type = modal.type || modal;
         const currentKey = `${type}-${modal.node?.id || modal.url || ''}`;
 
-        if (currentKey === this.lastRenderKey) return;
+        // Don't skip render for generic 'dialog' type as its content changes without changing 'type' key
+        if (type !== 'dialog' && currentKey === this.lastRenderKey) return;
         this.lastRenderKey = currentKey;
 
         switch (type) {
+            case 'dialog':
+                this.innerHTML = `<arbor-modal-dialog></arbor-modal-dialog>`;
+                break;
             case 'search':
                 this.innerHTML = `<arbor-modal-search></arbor-modal-search>`;
                 break;

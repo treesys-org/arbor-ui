@@ -142,7 +142,7 @@ class ArborProgressWidget extends HTMLElement {
         this.innerHTML = `
         <div class="relative">
             <!-- Desktop Trigger Button: Seed Bag (Only visible on Desktop) -->
-            <div class="fixed top-4 right-4 z-30 hidden md:flex flex-col items-end">
+            <div class="fixed top-24 right-4 z-30 hidden md:flex flex-col items-end">
                 <button id="btn-toggle" class="flex items-center gap-2 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200 dark:border-slate-700 px-4 py-2 rounded-full shadow-sm hover:border-orange-400 dark:hover:border-orange-600 transition-colors">
                     <span class="text-2xl">🎒</span>
                     <span class="font-bold text-slate-600 dark:text-slate-300 text-sm">${itemCount}</span>
@@ -160,7 +160,7 @@ class ArborProgressWidget extends HTMLElement {
                 </div>
 
                 <!-- DESKTOP: Dropdown (positioned under the button) -->
-                <div class="hidden md:flex fixed top-20 right-4 z-[40] w-80 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-6 flex-col items-center animate-in fade-in slide-in-from-top-2 duration-200">
+                <div class="hidden md:flex fixed top-40 right-4 z-[40] w-80 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-6 flex-col items-center animate-in fade-in slide-in-from-top-2 duration-200">
                     ${widgetContentHtml}
                 </div>
             ` : ''}

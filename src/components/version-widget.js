@@ -1,4 +1,5 @@
 
+
 import { store } from '../store.js';
 
 class ArborVersionWidget extends HTMLElement {
@@ -76,9 +77,8 @@ class ArborVersionWidget extends HTMLElement {
     }
 
     render() {
-        // POSITIONING UPDATE: Moved to Bottom Left (HUD Style)
-        // left-24 accounts for the 80px sidebar + padding
-        this.className = "hidden md:flex fixed bottom-6 left-24 z-40 flex-col items-start pointer-events-none";
+        // POSITIONING: Top Right, below the banner
+        this.className = "hidden md:flex fixed top-10 right-4 z-40 flex-col items-end pointer-events-none";
 
         const { activeSource, availableReleases, theme } = store.value;
         const releases = availableReleases || [];
@@ -96,8 +96,18 @@ class ArborVersionWidget extends HTMLElement {
 
         if (isArchive) {
             label = "Snapshot";
-            const match = activeSource.name.match(/\((.*?)\)/);
-            subLabel = match ? match[1] : (activeSource.year || "Archive");
+            
+            // Try to find matching release metadata first for correct display name
+            const releaseInfo = releases.find(r => r.url === activeSource.url);
+            
+            if (releaseInfo) {
+                subLabel = releaseInfo.year || releaseInfo.name;
+            } else {
+                // Fallback regex if name was manually constructed
+                const match = activeSource.name.match(/\((.*?)\)/);
+                subLabel = match ? match[1] : (activeSource.year || "Archive");
+            }
+            
             icon = "🏛️";
             colorClass = "text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20";
         } else if (isLocal) {
@@ -117,9 +127,9 @@ class ArborVersionWidget extends HTMLElement {
         if (this.isOpen) {
             const archives = releases.filter(r => r.type === 'archive').sort((a,b) => b.url.localeCompare(a.url));
             
-            // CHANGED: absolute bottom-full (Opens UP) + slide-in-from-bottom
+            // Positioning: Open downwards
             dropdownHtml = `
-            <div class="absolute bottom-full left-0 mb-2 w-64 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 pointer-events-auto flex flex-col">
+            <div class="absolute top-full right-0 mt-2 w-64 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 pointer-events-auto flex flex-col origin-top">
                 <div class="p-2 border-b border-slate-100 dark:border-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                     Select Version
                 </div>
@@ -177,7 +187,7 @@ class ArborVersionWidget extends HTMLElement {
                     </div>
                     <div class="w-px h-6 bg-current opacity-20 mx-1"></div>
                     <span class="text-[10px] font-bold opacity-60 group-hover:opacity-100 transition-opacity">
-                        ${this.isOpen ? '▼' : '▲'}
+                        ${this.isOpen ? '▲' : '▼'}
                     </span>
                 </button>
                 ${dropdownHtml}

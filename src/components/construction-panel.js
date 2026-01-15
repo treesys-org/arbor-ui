@@ -18,8 +18,9 @@ class ArborConstructionPanel extends HTMLElement {
     }
 
     connectedCallback() {
+        // Initial Render
         this.render();
-        store.addEventListener('state-change', () => this.render());
+        store.addEventListener('state-change', () => this.checkRender());
         document.addEventListener('click', this.clickOutsideHandler);
         
         if (store.value.constructionMode && store.value.githubUser) {
@@ -36,6 +37,13 @@ class ArborConstructionPanel extends HTMLElement {
             this.state.activePopover = null;
             this.render();
         }
+    }
+
+    checkRender() {
+        // Optimization: Only render if visibility or key data changes
+        const { constructionMode } = store.value;
+        if (!constructionMode && this.style.display === 'none') return;
+        this.render();
     }
 
     async fetchData() {
@@ -93,6 +101,24 @@ class ArborConstructionPanel extends HTMLElement {
         this.render();
     }
 
+    handleSave() {
+        // For local trees, persist to disk immediately
+        if (fileSystem.isLocal) {
+            store.userStore.persist();
+            store.notify("✅ Local Garden Saved");
+        } else {
+            // For GitHub, we usually save per-file, but we can notify
+            store.notify("ℹ️ Remote changes are saved per-file.");
+        }
+    }
+
+    async handleRevert() {
+        if (await store.confirm("Revert to last saved state? Unsaved changes will be lost.", "Revert Changes")) {
+            store.loadData(store.value.activeSource, store.value.lang, true);
+            store.notify("↩️ Changes Reverted");
+        }
+    }
+
     render() {
         const { constructionMode, activeSource, githubUser } = store.value;
         
@@ -107,9 +133,11 @@ class ArborConstructionPanel extends HTMLElement {
         const isLocal = fileSystem.isLocal;
         const isContributor = isLocal || !!githubUser;
 
+        // Anti-Flicker: Ensure strict equality on state that affects UI
         const renderKey = JSON.stringify({
             activePopover, loading, isLoggingIn, loginError,
-            source: activeSource?.id,
+            sourceId: activeSource?.id,
+            sourceName: activeSource?.name,
             user: githubUser?.login,
             isLocal
         });
@@ -125,6 +153,7 @@ class ArborConstructionPanel extends HTMLElement {
         const itemBaseClass = "relative w-10 h-10 rounded-full flex items-center justify-center text-xl transition-all duration-200 cursor-pointer border group";
         const itemSpecialClass = "bg-orange-600 hover:bg-orange-500 text-white border-orange-400 shadow-lg shadow-orange-900/50";
         const itemBlueClass = "bg-blue-600 hover:bg-blue-500 text-white border-blue-400 shadow-lg shadow-blue-900/50";
+        const itemActionClass = "bg-slate-700 hover:bg-slate-600 text-white border-slate-500";
         
         // Auth Button Styles (Pill shaped)
         const btnLoginClass = "px-4 h-10 rounded-full bg-green-600 hover:bg-green-500 text-white font-bold text-xs uppercase tracking-wider border border-green-400 shadow-lg shadow-green-900/50 transition-all flex items-center gap-2";
@@ -144,7 +173,20 @@ class ArborConstructionPanel extends HTMLElement {
             </div>
         `;
 
-        // 2. ARCHITECT BUTTON (Always Visible, now with Hat)
+        // 2. SAVE / UNDO (New Features)
+        if (isContributor) {
+            dockItemsHtml += `
+                <button id="btn-save-all" class="${itemBaseClass} ${itemActionClass}" title="Save Changes (Persist)">
+                    <span>💾</span>
+                </button>
+                <button id="btn-revert" class="${itemBaseClass} ${itemActionClass}" title="Undo / Revert to Saved">
+                    <span>↩️</span>
+                </button>
+                <div class="w-px h-6 bg-white/10 mx-1"></div>
+            `;
+        }
+
+        // 3. ARCHITECT BUTTON (Always Visible)
         dockItemsHtml += `
             <button id="btn-architect" class="${itemBaseClass} ${itemSpecialClass}" title="AI Architect">
                 <span class="relative">
@@ -154,7 +196,7 @@ class ArborConstructionPanel extends HTMLElement {
             </button>
         `;
 
-        // 3. GOVERNANCE BUTTON (Only if Contributor/Local)
+        // 4. GOVERNANCE BUTTON (Only if Contributor/Local)
         if (isContributor) {
             dockItemsHtml += `
                 <button id="btn-governance" class="${itemBaseClass} ${itemBlueClass}" title="Governance & Permissions">
@@ -163,14 +205,13 @@ class ArborConstructionPanel extends HTMLElement {
             `;
         }
 
-        // 4. AUTH BUTTON (Login/Logout)
+        // 5. AUTH BUTTON (Login/Logout)
         if (isLocal) {
             // No auth needed for local mode
         } else {
             const isActive = activePopover === 'login';
             
             if (!githubUser) {
-                // LOGIN BUTTON (GREEN)
                 dockItemsHtml += `
                     <button id="btn-login-toggle" class="${btnLoginClass}">
                         <span>Login</span>
@@ -190,7 +231,6 @@ class ArborConstructionPanel extends HTMLElement {
                     </div>`;
                 }
             } else {
-                // LOGOUT BUTTON (RED)
                 dockItemsHtml += `
                     <button id="btn-logout" class="${btnLogoutClass}">
                         <span>Logout</span>
@@ -217,6 +257,8 @@ class ArborConstructionPanel extends HTMLElement {
         
         if (isContributor) {
             bind('#btn-governance', () => store.setModal({ type: 'contributor', tab: 'access' }));
+            bind('#btn-save-all', () => this.handleSave());
+            bind('#btn-revert', () => this.handleRevert());
         }
 
         if (!isLocal) {

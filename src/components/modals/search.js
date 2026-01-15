@@ -212,12 +212,24 @@ class ArborModalSearch extends HTMLElement {
                 
                 // Bind Delete Buttons Logic
                 list.querySelectorAll('.btn-delete-bookmark').forEach(btn => {
-                    btn.onclick = (e) => {
+                    btn.onclick = async (e) => {
                         e.stopPropagation();
-                        // Native confirm as per requirement
-                        if(confirm('Delete this bookmark?')) {
+                        // Close search modal to show confirmation dialog
+                        // then re-open search modal is a bit clunky.
+                        // For bookmarks, instant delete is acceptable OR we accept the modal switch.
+                        // But to be consistent with "No native prompts", we use store.confirm
+                        
+                        // NOTE: store.confirm will replace current modal (Search). 
+                        // We will allow it for now.
+                        if(await store.confirm('Delete this bookmark?', 'Remove Bookmark')) {
                             store.removeBookmark(btn.dataset.id);
-                            this.updateResultsDOM(); // Refresh instantly
+                            // We lost context because confirm closed. 
+                            // Re-open search? Or leave closed?
+                            // Let's re-open search for better UX
+                            store.setModal('search');
+                        } else {
+                            // Cancelled, restore search
+                            store.setModal('search');
                         }
                     };
                 });

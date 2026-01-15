@@ -227,7 +227,7 @@ class ArborGraph extends HTMLElement {
         if (state.constructionMode) {
             html += `
             <div class="absolute top-0 left-0 w-full h-8 bg-yellow-500 text-black font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 z-[60] shadow-md striped-bg animate-in slide-in-from-top-full pointer-events-none">
-                <span>🚧 ARCHITECT MODE 🚧</span>
+                <span>🚧 CONSTRUCTION MODE 🚧</span>
             </div>
             <style>.striped-bg { background-image: repeating-linear-gradient(45deg, #f59e0b, #f59e0b 10px, #fbbf24 10px, #fbbf24 20px); }</style>
             `;
@@ -352,29 +352,43 @@ class ArborGraph extends HTMLElement {
         }
     }
     
-    handleDockAction(action) {
+    async handleDockAction(action) {
         const node = store.findNode(this.selectedNodeId);
         if (!node) return;
         
         const parentPath = node.sourcePath || node.path;
 
         if (action === 'delete') {
-            if(confirm(`Delete '${node.name}' and all its children?`)) {
+            const confirmDel = await store.confirm(
+                `Are you sure you want to delete '${node.name}' and all its children? This cannot be undone.`,
+                'Delete Node',
+                true // Danger style
+            );
+            
+            if(confirmDel) {
                 const type = (node.type === 'branch' || node.type === 'root') ? 'folder' : 'file';
-                fileSystem.deleteNode(parentPath, type).then(() => {
+                try {
+                    await fileSystem.deleteNode(parentPath, type);
                     this.selectedNodeId = null; 
                     this.isMoveMode = false;
                     store.loadData(store.value.activeSource, false);
-                }).catch(err => alert("Error: " + err.message));
+                } catch(err) {
+                    store.alert("Error: " + err.message);
+                }
             }
         }
         else if (action === 'new-file' || action === 'new-folder') {
-            const name = prompt(action === 'new-folder' ? "Folder Name:" : "Lesson Name:");
+            const label = action === 'new-folder' ? "Folder Name:" : "Lesson Name:";
+            const name = await store.prompt(label, "Untitled", "New Node");
+            
             if(name) {
                 const type = action === 'new-folder' ? 'folder' : 'file';
-                fileSystem.createNode(parentPath, name, type).then(() => {
+                try {
+                    await fileSystem.createNode(parentPath, name, type);
                     store.loadData(store.value.activeSource, false);
-                }).catch(err => alert("Error: " + err.message));
+                } catch(err) {
+                    store.alert("Error: " + err.message);
+                }
             }
         }
     }

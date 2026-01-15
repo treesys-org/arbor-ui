@@ -22,6 +22,9 @@ class Store extends EventTarget {
             initialLang = supportedLang ? supportedLang.code : 'EN'; // Default to English
         }
         
+        // Internal Promise resolvers for Dialogs
+        this._dialogResolver = null;
+
         // 2. Initial State (Moved up to fix initialization race condition)
         this.state = {
             theme: localStorage.getItem('arbor-theme') || 'light',
@@ -173,9 +176,54 @@ class Store extends EventTarget {
         }
     }
     
-    notify(msg) {
-        this.update({ lastActionMessage: msg });
-        setTimeout(() => this.update({ lastActionMessage: null }), 3000);
+    notify(msg, isError = false) {
+        if (isError) {
+            this.update({ lastErrorMessage: msg });
+            setTimeout(() => this.update({ lastErrorMessage: null }), 4000);
+        } else {
+            this.update({ lastActionMessage: msg });
+            setTimeout(() => this.update({ lastActionMessage: null }), 3000);
+        }
+    }
+
+    // --- DIALOG SYSTEM (Replaces Alert/Confirm/Prompt) ---
+    // Returns a Promise that resolves when the user interacts with the dialog
+    showDialog({ type = 'alert', title = '', body = '', placeholder = '', confirmText = 'OK', cancelText = 'Cancel', danger = false }) {
+        return new Promise((resolve) => {
+            this._dialogResolver = resolve;
+            this.setModal({
+                type: 'dialog',
+                dialogType: type, // 'alert', 'confirm', 'prompt'
+                title,
+                body,
+                placeholder,
+                confirmText,
+                cancelText,
+                danger
+            });
+        });
+    }
+
+    closeDialog(result) {
+        // Resolve the promise waiting in showDialog
+        if (this._dialogResolver) {
+            this._dialogResolver(result);
+            this._dialogResolver = null;
+        }
+        this.setModal(null);
+    }
+
+    // Shorthands
+    async alert(body, title = 'Notice') {
+        return this.showDialog({ type: 'alert', title, body });
+    }
+
+    async confirm(body, title = 'Confirm', danger = false) {
+        return this.showDialog({ type: 'confirm', title, body, danger });
+    }
+
+    async prompt(body, placeholder = '', title = 'Input') {
+        return this.showDialog({ type: 'prompt', title, body, placeholder });
     }
 
     // --- SOURCE & DATA DELEGATION ---
@@ -566,7 +614,6 @@ class Store extends EventTarget {
             // But we need the parent's sourcePath to construct the new path.
             
             const parentPath = newParent.sourcePath;
-            const newPath = `${parentPath}/${node.name}`; // Naive construction
             
             // Call FileSystem
             await fileSystem.moveNode(oldPath, parentPath);

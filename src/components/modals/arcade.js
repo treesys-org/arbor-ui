@@ -4,7 +4,7 @@ import { store } from '../../store.js';
 class ArborModalArcade extends HTMLElement {
     constructor() {
         super();
-        this.activeTab = 'games'; // 'games' | 'storage'
+        this.activeTab = 'games'; // 'games' | 'storage' | 'garden'
         this.discoveredGames = [];
         this.isLoading = false;
         this.isPreparingContext = false;
@@ -12,6 +12,10 @@ class ArborModalArcade extends HTMLElement {
         // Setup State
         this.selectedGame = null;
         this.selectedNodeId = null;
+        
+        // New State for "Watering Mode"
+        this.wateringTargetId = null; 
+        
         this.filterText = '';
         this.lastRenderKey = null;
     }
@@ -85,7 +89,7 @@ class ArborModalArcade extends HTMLElement {
     }
 
     // Enter Setup Mode
-    async prepareLaunch(game) {
+    async prepareLaunch(game, preSelectedNodeId = null) {
         this.selectedGame = game;
         this.isPreparingContext = true;
         this.render(); // Show loading state
@@ -96,25 +100,42 @@ class ArborModalArcade extends HTMLElement {
             await this.ensureTreeLoaded(root);
         }
 
-        // 2. Auto-select current context
-        const current = this.getCurrentContext();
-        if (current) {
-            if (current.type === 'exam') {
-                this.selectedNodeId = current.parentId;
-            } else {
-                this.selectedNodeId = current.id;
-            }
+        // 2. Select Node (Explicit or Auto)
+        if (preSelectedNodeId) {
+            this.selectedNodeId = preSelectedNodeId;
         } else {
-            this.selectedNodeId = root ? root.id : null;
+            const current = this.getCurrentContext();
+            if (current) {
+                if (current.type === 'exam') {
+                    this.selectedNodeId = current.parentId;
+                } else {
+                    this.selectedNodeId = current.id;
+                }
+            } else {
+                this.selectedNodeId = root ? root.id : null;
+            }
         }
         
         this.isPreparingContext = false;
+        this.render();
+    }
+    
+    launchWateringSession(nodeId) {
+        // Instead of auto-launching, we switch to the games tab with a target set
+        this.wateringTargetId = nodeId;
+        this.activeTab = 'games';
+        this.render();
+    }
+    
+    cancelWatering() {
+        this.wateringTargetId = null;
         this.render();
     }
 
     cancelLaunch() {
         this.selectedGame = null;
         this.selectedNodeId = null;
+        this.wateringTargetId = null; // Clear watering target if user backs out of setup
         this.filterText = '';
         this.render();
     }
@@ -197,6 +218,9 @@ class ArborModalArcade extends HTMLElement {
         
         // Storage Stats
         const stats = store.storage.getStats();
+        
+        // Garden Care (Withered Nodes)
+        const dueIds = store.userStore.getDueNodes();
 
         // Anti-Flicker Key
         const renderKey = JSON.stringify({
@@ -210,7 +234,9 @@ class ArborModalArcade extends HTMLElement {
             selGameId: this.selectedGame ? this.selectedGame.id : null,
             selNode: this.selectedNodeId,
             filter: this.filterText,
-            storageUsed: stats.arcade.usedBytes
+            storageUsed: stats.arcade.usedBytes,
+            dueCount: dueIds.length,
+            wateringId: this.wateringTargetId
         });
 
         if (renderKey === this.lastRenderKey) return;
@@ -226,7 +252,7 @@ class ArborModalArcade extends HTMLElement {
             this.renderSetup(ui);
         } else {
             // 2. MAIN ARCADE VIEW
-            this.renderMain(ui, stats);
+            this.renderMain(ui, stats, dueIds);
         }
 
         // Restore Focus
@@ -241,7 +267,7 @@ class ArborModalArcade extends HTMLElement {
         }
     }
 
-    renderMain(ui, stats) {
+    renderMain(ui, stats, dueIds) {
         const manualGames = store.userStore.state.installedGames.map(g => ({
             ...g, repoName: 'Manual Install', isManual: true, path: g.url 
         }));
@@ -254,7 +280,10 @@ class ArborModalArcade extends HTMLElement {
                 <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${this.activeTab === 'games' ? 'border-orange-500 text-orange-600 dark:text-orange-400' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-games">
                     🎮 ${ui.arcadeFeatured || "Games"}
                 </button>
-                <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${this.activeTab === 'storage' ? 'border-red-500 text-red-600 dark:text-red-400' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-storage">
+                <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${this.activeTab === 'garden' ? 'border-red-500 text-red-600 dark:text-red-400' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-garden">
+                    🍂 Care ${dueIds.length > 0 ? `<span class="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full ml-1">${dueIds.length}</span>` : ''}
+                </button>
+                <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${this.activeTab === 'storage' ? 'border-purple-500 text-purple-600 dark:text-purple-400' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-storage">
                     💾 Data
                 </button>
             </div>
@@ -264,13 +293,34 @@ class ArborModalArcade extends HTMLElement {
         let contentHtml = '';
         
         if (this.activeTab === 'games') {
+            
+            // WATERING MODE BANNER
+            let wateringBanner = '';
+            if (this.wateringTargetId) {
+                const targetNode = store.findNode(this.wateringTargetId);
+                const targetName = targetNode ? targetNode.name : "Unknown Lesson";
+                
+                wateringBanner = `
+                <div class="bg-blue-600 text-white p-4 rounded-xl shadow-lg mb-4 flex items-center justify-between animate-in slide-in-from-top-2">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center text-xl">💧</div>
+                        <div>
+                            <p class="text-[10px] uppercase font-bold opacity-80">Watering Mission</p>
+                            <p class="font-bold text-sm">Select a game to review: <span class="underline">${targetName}</span></p>
+                        </div>
+                    </div>
+                    <button id="btn-cancel-watering" class="bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">Cancel</button>
+                </div>
+                `;
+            }
+
             if (this.isLoading) {
                 contentHtml = `<div class="p-12 text-center text-slate-400 animate-pulse">Loading Arcade...</div>`;
             } else if (allGames.length === 0) {
                 contentHtml = `<div class="p-8 text-center text-slate-400 italic">No games found. Check your sources.</div>`;
             } else {
-                contentHtml = allGames.map((g, idx) => `
-                    <div class="flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl hover:shadow-md transition-shadow group mb-3">
+                contentHtml = wateringBanner + allGames.map((g, idx) => `
+                    <div class="flex items-center justify-between p-4 bg-white dark:bg-slate-800 border ${this.wateringTargetId ? 'border-blue-200 dark:border-blue-900/30' : 'border-slate-200 dark:border-slate-700'} rounded-2xl hover:shadow-md transition-shadow group mb-3">
                         <div class="flex items-center gap-4 min-w-0">
                             <div class="w-12 h-12 rounded-xl bg-orange-100 dark:bg-orange-900/30 text-2xl flex items-center justify-center border border-orange-200 dark:border-orange-800">
                                 ${g.icon || '🕹️'}
@@ -285,9 +335,9 @@ class ArborModalArcade extends HTMLElement {
                             </div>
                         </div>
                         <div class="flex gap-2">
-                            <button class="btn-prepare px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold rounded-xl shadow-lg hover:scale-105 active:scale-95 transition-transform" 
+                            <button class="btn-prepare px-4 py-2 ${this.wateringTargetId ? 'bg-blue-600 hover:bg-blue-500' : 'bg-slate-900 dark:bg-white hover:scale-105'} text-white dark:text-slate-900 text-xs font-bold rounded-xl shadow-lg transition-all active:scale-95" 
                                     data-idx="${idx}" data-manual="${g.isManual}">
-                                ${ui.arcadePlay || "Play"}
+                                ${this.wateringTargetId ? "Water Here" : (ui.arcadePlay || "Play")}
                             </button>
                             ${g.isManual ? `
                             <button class="btn-remove-game px-2 py-2 text-slate-400 hover:text-red-500 transition-colors" data-id="${g.id}">✕</button>
@@ -309,6 +359,50 @@ class ArborModalArcade extends HTMLElement {
                 `;
             }
         } 
+        else if (this.activeTab === 'garden') {
+            if (dueIds.length === 0) {
+                contentHtml = `
+                <div class="p-12 text-center flex flex-col items-center">
+                    <div class="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center text-5xl mb-4">🌻</div>
+                    <h3 class="text-lg font-black text-slate-700 dark:text-white mb-2">Garden is Healthy!</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 max-w-xs">All your lessons are fresh. Come back later to water (review) them when they start to wither.</p>
+                </div>`;
+            } else {
+                contentHtml = `
+                <div class="bg-red-50 dark:bg-red-900/10 p-4 rounded-xl border border-red-100 dark:border-red-900/30 mb-4 flex items-center gap-3">
+                    <span class="text-2xl">🍂</span>
+                    <p class="text-xs text-red-800 dark:text-red-300 font-medium">These lessons are fading from memory. Play a quick game to refresh them!</p>
+                </div>
+                <div class="space-y-2">
+                    ${dueIds.map(id => {
+                        const node = store.findNode(id);
+                        const mem = store.userStore.state.memory[id];
+                        const daysOverdue = Math.ceil((Date.now() - mem.dueDate) / (1000 * 60 * 60 * 24));
+                        
+                        // Fallback if node not found in current view (e.g. unloaded)
+                        const name = node ? node.name : `Module ${id.substring(0, 8)}...`;
+                        const icon = node ? (node.icon || '📄') : '📄';
+                        
+                        return `
+                        <div class="flex items-center justify-between p-3 bg-white dark:bg-slate-900 border border-red-200 dark:border-red-900/30 rounded-xl group hover:border-red-400 transition-colors">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <div class="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center text-xl">
+                                    ${icon}
+                                </div>
+                                <div class="min-w-0">
+                                    <h4 class="font-bold text-sm text-slate-800 dark:text-white truncate">${name}</h4>
+                                    <p class="text-[10px] text-red-500 font-bold">Withered ${daysOverdue} days ago</p>
+                                </div>
+                            </div>
+                            <button class="btn-water-node px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg shadow-md hover:scale-105 active:scale-95 transition-all flex items-center gap-2" data-id="${id}">
+                                <span>💧</span> Water
+                            </button>
+                        </div>
+                        `;
+                    }).join('')}
+                </div>`;
+            }
+        }
         else if (this.activeTab === 'storage') {
             const usagePercent = stats.arcade.percent;
             const barColor = usagePercent > 90 ? 'bg-red-500' : (usagePercent > 70 ? 'bg-orange-500' : 'bg-purple-500');
@@ -493,6 +587,10 @@ class ArborModalArcade extends HTMLElement {
         this.querySelector('.btn-close').onclick = () => this.close();
         this.querySelector('#tab-games').onclick = () => { this.activeTab = 'games'; this.render(); };
         this.querySelector('#tab-storage').onclick = () => { this.activeTab = 'storage'; this.render(); };
+        this.querySelector('#tab-garden').onclick = () => { this.activeTab = 'garden'; this.render(); };
+        
+        const btnCancelWatering = this.querySelector('#btn-cancel-watering');
+        if (btnCancelWatering) btnCancelWatering.onclick = () => this.cancelWatering();
         
         const btnAddCustom = this.querySelector('#btn-add-custom');
         if(btnAddCustom) btnAddCustom.onclick = () => this.addCustomGame();
@@ -503,7 +601,12 @@ class ArborModalArcade extends HTMLElement {
                 const idx = parseInt(e.currentTarget.dataset.idx);
                 const manualGames = store.userStore.state.installedGames.map(g => ({...g, isManual: true, path: g.url}));
                 const allGames = [...this.discoveredGames, ...manualGames];
-                this.prepareLaunch(allGames[idx]);
+                
+                // CRITICAL: Pass the watering ID if present to lock context
+                this.prepareLaunch(allGames[idx], this.wateringTargetId);
+                
+                // Reset watering target once we enter setup mode
+                this.wateringTargetId = null;
             };
         });
 
@@ -511,6 +614,13 @@ class ArborModalArcade extends HTMLElement {
             b.onclick = (e) => {
                 store.userStore.removeGame(e.currentTarget.dataset.id);
                 this.render();
+            };
+        });
+        
+        // GARDEN WATERING
+        this.querySelectorAll('.btn-water-node').forEach(b => {
+            b.onclick = (e) => {
+                this.launchWateringSession(e.currentTarget.dataset.id);
             };
         });
         
