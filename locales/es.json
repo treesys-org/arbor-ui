@@ -1,4 +1,3 @@
-
 {
   "appTitle": "ARBOR",
   "appSubtitle": "Open University",
@@ -57,12 +56,13 @@
   "navLearn": "Aprender",
   "navPractice": "Práctica",
   "navProfile": "Perfil y Jardín",
-  "navAbout": "Misión Open Source",
+  "navAbout": "Legal y Misión",
   "navSearch": "Buscar",
   "navCertificates": "Certificados",
   "navSources": "Árboles",
   "navArcade": "Arcade",
   "navHelp": "Tutorial",
+  "navManual": "Manual de Campo",
   "navContributor": "Modo Editor",
   "navSage": "Preguntar al Sabio",
   "lessonComplete": "MARCAR COMO VISTO",
@@ -374,5 +374,10 @@
   "editorMagicDraft": "Borrador Mágico (IA)",
   "editorMagicDraftPrompt": "¿De qué quieres que trate esta lección?",
   "sourceExport": "Exportar",
-  "adminSelectPath": "Seleccionar Ruta"
+  "adminSelectPath": "Seleccionar Ruta",
+  "manualTitle": "Manual de Campo Arbor",
+  "manualDesc": "La guía completa para el Guardián del Conocimiento.",
+  "tabManifesto": "Manifiesto",
+  "tabPrivacy": "Privacidad",
+  "tabLegal": "Legal"
 }

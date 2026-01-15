@@ -1,4 +1,3 @@
-
 {
   "appTitle": "ARBOR",
   "appSubtitle": "Open University",
@@ -57,12 +56,13 @@
   "navLearn": "Learn",
   "navPractice": "Practice",
   "navProfile": "Profile & Garden",
-  "navAbout": "Open Source Mission",
+  "navAbout": "About & Legal",
   "navSearch": "Search",
   "navCertificates": "Certificates",
   "navSources": "Trees",
   "navArcade": "Arcade",
   "navHelp": "Tutorial",
+  "navManual": "Field Guide",
   "navContributor": "Editor Mode",
   "navSage": "Ask the Sage",
   "lessonComplete": "MARK COMPLETE",
@@ -368,5 +368,10 @@
   "editorMagicDraft": "Magic Draft (AI)",
   "editorMagicDraftPrompt": "What should this lesson be about?",
   "sourceExport": "Export",
-  "adminSelectPath": "Select Path"
+  "adminSelectPath": "Select Path",
+  "manualTitle": "Arbor Field Guide",
+  "manualDesc": "The complete manual for the Knowledge Guardian.",
+  "tabManifesto": "Manifesto",
+  "tabPrivacy": "Privacy",
+  "tabLegal": "Legal"
 }

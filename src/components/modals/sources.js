@@ -8,163 +8,158 @@ class ArborModalSources extends HTMLElement {
         this.selectedVersionUrl = null;
         this.overlay = null; // 'plant' | 'delete' | 'import'
         this.targetId = null; // ID for delete
+        this.isInitialized = false;
     }
 
     connectedCallback() {
-        this.render();
-        store.addEventListener('state-change', () => this.render());
+        // Initial Render of the Skeleton
+        if (!this.isInitialized) {
+            this.renderSkeleton();
+            this.isInitialized = true;
+        }
+        
+        // Initial Content Load
+        this.updateContent();
+        
+        // Bind to store
+        this.storeListener = () => this.updateContent();
+        store.addEventListener('state-change', this.storeListener);
+    }
+    
+    disconnectedCallback() {
+        store.removeEventListener('state-change', this.storeListener);
     }
 
     close() {
         store.setModal(null);
     }
 
-    handleVersionSelect(e) {
-        this.selectedVersionUrl = e.target.value;
-        this.render();
-    }
+    // --- RENDER SKELETON (Run Once) ---
+    renderSkeleton() {
+        const ui = store.ui;
+        
+        this.innerHTML = `
+        <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-xl w-full relative overflow-hidden flex flex-col h-[550px] max-h-[90vh] border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
+                <button class="btn-close absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 z-20 transition-colors">✕</button>
 
-    handleSwitch() {
-        if (this.selectedVersionUrl) {
-            const releases = store.value.availableReleases || [];
-            const target = releases.find(r => r.url === this.selectedVersionUrl);
-            
-            if (target) {
-                const active = store.value.activeSource;
-                const newSource = {
-                    ...active,
-                    id: target.id || `release-${Date.now()}`,
-                    url: target.url,
-                    type: target.type,
-                    name: target.name || active.name
-                };
-                store.loadData(newSource);
-                this.close();
-            }
-        }
-    }
-    
-    // UI Helpers
-    showOverlay(type, id = null) {
-        this.overlay = type;
-        this.targetId = id;
-        this.render();
-    }
-    
-    hideOverlay() {
-        this.overlay = null;
-        this.targetId = null;
-        this.render();
-    }
-
-    plantNewTree(name) {
-        if (!name) return;
-        
-        // 1. Create the Local Tree (Basic Skeleton)
-        const newTree = store.userStore.plantTree(name);
-        
-        // 2. Load it immediately
-        const source = {
-            id: newTree.id,
-            name: newTree.name,
-            url: `local://${newTree.id}`,
-            type: 'local',
-            isTrusted: true
-        };
-        
-        store.loadData(source);
-        
-        // 3. Switch Context to "Editor Mode" (Construction + Architect)
-        store.update({ constructionMode: true });
-        store.setModal({ type: 'sage', mode: 'architect' });
-        
-        // 4. Prime the Architect with a greeting
-        setTimeout(() => {
-            store.chatWithSage(`I just planted a new empty tree called "${name}". I am ready to build. What do you suggest?`);
-        }, 500);
-    }
-
-    importTreeFromFile() {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.json,application/json';
-        input.onchange = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                try {
-                    const jsonData = JSON.parse(event.target.result);
-                    const newTree = store.userStore.importLocalTree(jsonData);
+                <div class="p-6 h-full flex flex-col relative">
                     
-                    // Optional: auto-load the newly imported tree
-                    const source = { id: newTree.id, name: newTree.name, url: `local://${newTree.id}`, type: 'local' };
-                    store.loadData(source);
-                    this.activeTab = 'local';
-                    this.close();
+                    <!-- Overlay Container -->
+                    <div id="overlay-container" class="absolute inset-0 z-20 hidden"></div>
 
-                } catch (err) {
-                    store.notify("Error importing tree: " + err.message, true);
-                }
-            };
-            reader.readAsText(file);
-        };
-        input.click();
-    }
-    
-    loadLocalTree(id, name) {
-        const source = {
-            id: id,
-            name: name,
-            url: `local://${id}`,
-            type: 'local',
-            isTrusted: true
-        };
-        store.loadData(source);
-        this.close();
-    }
-    
-    deleteLocalTree() {
-        if (this.targetId) {
-            store.userStore.deleteLocalTree(this.targetId);
-            this.hideOverlay();
-        }
-    }
-    
-    exportLocalTree(id, name) {
-        const treeData = store.userStore.getLocalTreeData(id);
-        if (!treeData) return;
+                    <!-- Header -->
+                    <div class="flex items-center gap-3 mb-4 shrink-0">
+                        <span class="text-3xl">🌳</span>
+                        <div>
+                            <h2 class="text-xl font-black dark:text-white leading-none">${ui.sourceManagerTitle}</h2>
+                            <p class="text-xs text-slate-500 mt-1">${ui.sourceManagerDesc}</p>
+                        </div>
+                    </div>
+
+                    <!-- Tabs -->
+                    <div class="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 shrink-0 mb-2">
+                        <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors border-transparent text-slate-400 hover:text-slate-600" id="tab-global">
+                            🌍 ${ui.tabGlobal || 'Global Forest'}
+                        </button>
+                        <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors border-transparent text-slate-400 hover:text-slate-600" id="tab-local">
+                            🌱 ${ui.tabGarden || 'My Garden'}
+                        </button>
+                    </div>
+
+                    <!-- Scrollable Content -->
+                    <div id="tab-content" class="flex-1 overflow-y-auto custom-scrollbar pr-1 pb-4">
+                        <!-- Dynamic Content Injected Here -->
+                    </div>
+                </div>
+            </div>
+        </div>`;
+
+        // Static Event Binding (Delegation)
+        this.querySelector('.btn-close').onclick = () => this.close();
         
-        const blob = new Blob([JSON.stringify(treeData, null, 2)], {type: 'application/json'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        const safeName = name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-        a.download = `arbor-tree-${safeName}-${new Date().toISOString().slice(0, 10)}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }
-    
-    shareActiveTree() {
-        const url = store.value.activeSource?.url;
-        if (!url) return;
-        const shareLink = `${window.location.origin}${window.location.pathname}?source=${encodeURIComponent(url)}`;
-        navigator.clipboard.writeText(shareLink).then(() => {
-            store.notify("Share link copied to clipboard!");
-        });
+        this.querySelector('#tab-global').onclick = () => { this.activeTab = 'global'; this.updateContent(); };
+        this.querySelector('#tab-local').onclick = () => { this.activeTab = 'local'; this.updateContent(); };
+        
+        // Delegate Clicks for dynamic content
+        this.addEventListener('click', (e) => this.handleDelegatedClick(e));
+        this.addEventListener('change', (e) => this.handleDelegatedChange(e));
     }
 
-    render() {
+    // --- DYNAMIC CONTENT UPDATE ---
+    updateContent() {
+        if (!this.isInitialized) return;
+
         const ui = store.ui;
         const state = store.value;
         const activeSource = state.activeSource || { name: 'Unknown', url: '' };
         
-        // Determine if current source is local or global
-        const isLocalActive = activeSource.type === 'local' || (activeSource.url && activeSource.url.startsWith('local://'));
+        // 1. Update Tabs Visuals
+        const tabGlobal = this.querySelector('#tab-global');
+        const tabLocal = this.querySelector('#tab-local');
+        
+        if (this.activeTab === 'global') {
+            tabGlobal.className = "flex-1 py-3 text-sm font-bold border-b-2 transition-colors border-purple-500 text-purple-600 dark:text-purple-400";
+            tabLocal.className = "flex-1 py-3 text-sm font-bold border-b-2 transition-colors border-transparent text-slate-400 hover:text-slate-600";
+        } else {
+            tabGlobal.className = "flex-1 py-3 text-sm font-bold border-b-2 transition-colors border-transparent text-slate-400 hover:text-slate-600";
+            tabLocal.className = "flex-1 py-3 text-sm font-bold border-b-2 transition-colors border-green-500 text-green-600 dark:text-green-400";
+        }
 
-        // GLOBAL DATA
+        // 2. Render Overlay (if any)
+        this.renderOverlay(ui);
+
+        // 3. Render Tab Content
+        const container = this.querySelector('#tab-content');
+        if (this.activeTab === 'global') {
+            container.innerHTML = this.getGlobalContent(ui, state, activeSource);
+        } else {
+            container.innerHTML = this.getLocalContent(ui, state, activeSource);
+        }
+    }
+
+    renderOverlay(ui) {
+        const container = this.querySelector('#overlay-container');
+        if (!this.overlay) {
+            container.classList.add('hidden');
+            container.innerHTML = '';
+            return;
+        }
+        
+        container.classList.remove('hidden');
+        container.className = "absolute inset-0 bg-white/95 dark:bg-slate-900/95 flex items-center justify-center z-20 animate-in fade-in";
+        
+        if (this.overlay === 'plant') {
+            container.innerHTML = `
+                <div class="w-full max-w-xs text-center">
+                    <h3 class="text-lg font-black mb-4 dark:text-white">Plant New Tree</h3>
+                    <input id="inp-new-tree-name" type="text" placeholder="${ui.treeNamePlaceholder || "Name your tree..."}" class="w-full bg-slate-100 dark:bg-slate-800 rounded-xl px-4 py-3 text-sm font-bold mb-4 focus:ring-2 focus:ring-green-500 outline-none dark:text-white" autofocus>
+                    <div class="flex gap-2">
+                        <button data-action="cancel-overlay" class="flex-1 py-3 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs uppercase">Cancel</button>
+                        <button data-action="confirm-plant" class="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold text-xs uppercase shadow-lg">Plant</button>
+                    </div>
+                </div>`;
+            // Autofocus
+            setTimeout(() => {
+                const inp = container.querySelector('input');
+                if(inp) inp.focus();
+            }, 50);
+        } else if (this.overlay === 'delete') {
+            container.innerHTML = `
+                <div class="w-full max-w-xs text-center">
+                    <div class="text-3xl mb-4">⚠️</div>
+                    <h3 class="text-lg font-black mb-2 dark:text-white">Delete Tree?</h3>
+                    <p class="text-xs text-slate-500 mb-6">This action cannot be undone.</p>
+                    <div class="flex gap-2">
+                        <button data-action="cancel-overlay" class="flex-1 py-3 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs uppercase">Keep</button>
+                        <button data-action="confirm-delete" class="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold text-xs uppercase shadow-lg">Delete</button>
+                    </div>
+                </div>`;
+        }
+    }
+
+    getGlobalContent(ui, state, activeSource) {
+        const isLocalActive = activeSource.type === 'local' || (activeSource.url && activeSource.url.startsWith('local://'));
         const releases = state.availableReleases || [];
         const normalize = (u) => { try { return new URL(u, window.location.href).href; } catch(e) { return u; } };
         const activeUrl = normalize(activeSource.url);
@@ -177,31 +172,11 @@ class ArborModalSources extends HTMLElement {
         }];
         const selectedUrl = this.selectedVersionUrl || activeSource.url;
         const isDifferent = normalize(selectedUrl) !== activeUrl;
-        
-        // Always show community sources, even if a local tree is active
         const otherSources = (state.communitySources || []).filter(s => s.id !== activeSource.id);
 
-        // LOCAL DATA
-        const localTrees = store.userStore.state.localTrees || [];
-
-        // TABS
-        const tabsHtml = `
-            <div class="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 shrink-0">
-                <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${this.activeTab === 'global' ? 'border-purple-500 text-purple-600 dark:text-purple-400' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-global">
-                    🌍 ${ui.tabGlobal || 'Global Forest'}
-                </button>
-                <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${this.activeTab === 'local' ? 'border-green-500 text-green-600 dark:text-green-400' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-local">
-                    🌱 ${ui.tabGarden || 'My Garden'}
-                </button>
-            </div>`;
-
-        let contentHtml = '';
-
-        // --- TAB: GLOBAL ---
-        if (this.activeTab === 'global') {
-            contentHtml = `
-            <div class="space-y-6">
-                <!-- ACTIVE TREE CARD (Only if Remote/Global is active) -->
+        return `
+            <div class="space-y-6 pt-4">
+                <!-- ACTIVE TREE CARD -->
                 ${!isLocalActive ? `
                 <div class="bg-slate-50 dark:bg-slate-950/50 p-5 rounded-2xl border-2 border-purple-500/30 relative overflow-hidden">
                     <div class="absolute top-0 right-0 bg-purple-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl uppercase tracking-widest">
@@ -226,11 +201,11 @@ class ArborModalSources extends HTMLElement {
                             </div>
                         </div>
                         ${isDifferent ? `
-                        <button id="btn-switch-version" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-lg active:scale-95 transition-all animate-in fade-in slide-in-from-right-2">
+                        <button data-action="switch-version" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-lg active:scale-95 transition-all animate-in fade-in slide-in-from-right-2">
                             Switch
                         </button>
                         ` : `
-                        <button id="btn-share-tree" class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 px-3 py-2.5 rounded-xl font-bold text-sm transition-colors" title="Copy Share Link">
+                        <button data-action="share-tree" class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 px-3 py-2.5 rounded-xl font-bold text-sm transition-colors" title="Copy Share Link">
                            🔗
                         </button>
                         `}
@@ -250,19 +225,16 @@ class ArborModalSources extends HTMLElement {
                         <span>📡</span> Community Trees
                     </h3>
                     
-                    <!-- Always show official/default tree option if not active -->
                     ${isLocalActive ? `
-                    <div class="flex items-center justify-between p-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl group hover:border-purple-300 dark:hover:border-purple-600 transition-colors mb-2 cursor-pointer btn-load-default">
-                        <div class="flex items-center gap-3 overflow-hidden">
+                    <div class="flex items-center justify-between p-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl group hover:border-purple-300 dark:hover:border-purple-600 transition-colors mb-2 cursor-pointer" data-action="load-default">
+                        <div class="flex items-center gap-3 overflow-hidden pointer-events-none">
                             <div class="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-600 flex items-center justify-center text-lg">🌳</div>
                             <div class="min-w-0">
                                 <h4 class="font-bold text-sm text-slate-700 dark:text-slate-200 truncate">Official Arbor Knowledge</h4>
                                 <p class="text-[10px] text-slate-400 truncate">Default Repository</p>
                             </div>
                         </div>
-                        <button class="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-lg transition-colors">
-                            Load
-                        </button>
+                        <button class="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-lg transition-colors pointer-events-none">Load</button>
                     </div>
                     ` : ''}
 
@@ -279,10 +251,8 @@ class ArborModalSources extends HTMLElement {
                                         </div>
                                     </div>
                                     <div class="flex gap-2">
-                                        <button class="btn-load-source px-3 py-1.5 bg-slate-50 dark:bg-slate-800 hover:bg-green-50 dark:hover:bg-green-900/30 text-slate-600 dark:text-green-400 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 transition-colors" data-id="${s.id}">
-                                            Load
-                                        </button>
-                                        <button class="btn-remove-source px-2 py-1.5 hover:bg-red-50 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 rounded-lg transition-colors" data-id="${s.id}">✕</button>
+                                        <button data-action="load-source" data-id="${s.id}" class="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 hover:bg-green-50 dark:hover:bg-green-900/30 text-slate-600 dark:text-green-400 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 transition-colors">Load</button>
+                                        <button data-action="remove-source" data-id="${s.id}" class="px-2 py-1.5 hover:bg-red-50 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 rounded-lg transition-colors">✕</button>
                                     </div>
                                 </div>
                             `).join('')}
@@ -295,33 +265,31 @@ class ArborModalSources extends HTMLElement {
                     <label class="text-[10px] font-bold text-slate-400 uppercase mb-2 block">${ui.sourceAdd}</label>
                     <div class="flex gap-2">
                         <input id="inp-source-url" type="text" placeholder="https://.../data/data.json" class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-purple-500 dark:text-white">
-                        <button id="btn-add-source" class="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-2 rounded-xl font-bold shadow-lg hover:opacity-90 active:scale-95 transition-transform">
-                            +
-                        </button>
+                        <button data-action="add-source" class="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-2 rounded-xl font-bold shadow-lg hover:opacity-90 active:scale-95 transition-transform">+</button>
                     </div>
                 </div>
             </div>`;
-        }
+    }
 
-        // --- TAB: LOCAL GARDEN ---
-        if (this.activeTab === 'local') {
-            contentHtml = `
-            <div class="flex flex-col h-full">
+    getLocalContent(ui, state, activeSource) {
+        const localTrees = store.userStore.state.localTrees || [];
+        return `
+            <div class="flex flex-col h-full pt-4">
                 <!-- Action Buttons -->
                 <div class="grid grid-cols-1 gap-3 mb-6">
-                    <button id="btn-plant-tree" class="py-4 px-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 font-bold rounded-xl active:scale-95 transition-all flex flex-col items-center gap-1 group shadow-sm hover:shadow-md">
-                        <span class="text-2xl group-hover:-translate-y-0.5 transition-transform">🌱</span> 
-                        <span class="text-sm uppercase tracking-wide">${ui.plantTree || 'Plant New Tree'}</span>
+                    <button data-action="show-plant" class="py-4 px-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 font-bold rounded-xl active:scale-95 transition-all flex flex-col items-center gap-1 group shadow-sm hover:shadow-md">
+                        <span class="text-2xl group-hover:-translate-y-0.5 transition-transform pointer-events-none">🌱</span> 
+                        <span class="text-sm uppercase tracking-wide pointer-events-none">${ui.plantTree || 'Plant New Tree'}</span>
                     </button>
                 </div>
                 
-                <button id="btn-import-tree" class="w-full py-3 px-4 mb-6 bg-white dark:bg-slate-900 border-2 border-dashed border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 font-bold rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2 group hover:border-sky-500 hover:text-sky-500 dark:hover:border-sky-400 dark:hover:text-sky-400">
-                    <span class="text-lg">📥</span> 
-                    <span class="text-sm">${ui.importBtn || 'Import Tree'}</span>
+                <button data-action="import-tree" class="w-full py-3 px-4 mb-6 bg-white dark:bg-slate-900 border-2 border-dashed border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 font-bold rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2 group hover:border-sky-500 hover:text-sky-500 dark:hover:border-sky-400 dark:hover:text-sky-400">
+                    <span class="text-lg pointer-events-none">📥</span> 
+                    <span class="text-sm pointer-events-none">${ui.importBtn || 'Import Tree'}</span>
                 </button>
 
                 <!-- Local Trees List -->
-                <div class="flex-1 overflow-y-auto custom-scrollbar space-y-3 pb-4">
+                <div class="flex-1 space-y-3 pb-4">
                     ${localTrees.length === 0 
                         ? `<div class="text-center p-8 text-slate-400 italic text-sm">Your garden is empty. Plant your first tree!</div>` 
                         : localTrees.map(t => {
@@ -329,184 +297,179 @@ class ArborModalSources extends HTMLElement {
                             return `
                             <div class="bg-white dark:bg-slate-900 border ${isActive ? 'border-green-500 ring-1 ring-green-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl p-4 flex items-center justify-between group hover:border-green-300 dark:hover:border-green-700 transition-colors">
                                 <div class="flex items-center gap-4 min-w-0">
-                                    <div class="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 flex items-center justify-center text-xl">
-                                        🌳
-                                    </div>
+                                    <div class="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 flex items-center justify-center text-xl">🌳</div>
                                     <div class="min-w-0">
                                         <h4 class="font-bold text-slate-800 dark:text-white truncate">${t.name}</h4>
                                         <p class="text-[10px] text-slate-400">Last updated: ${new Date(t.updated).toLocaleDateString()}</p>
                                     </div>
                                 </div>
                                 <div class="flex gap-2 shrink-0 items-center">
-                                    <button class="btn-export-local px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-slate-600 dark:text-blue-300 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 transition-colors flex items-center gap-1.5" data-id="${t.id}" data-name="${t.name}">
+                                    <button data-action="export-local" data-id="${t.id}" data-name="${t.name}" class="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-slate-600 dark:text-blue-300 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 transition-colors flex items-center gap-1.5">
                                         <span>📤</span>
                                         <span>${ui.sourceExport || 'Export'}</span>
                                     </button>
                                     
                                     ${isActive 
                                         ? `<span class="px-3 py-1.5 bg-green-100 text-green-700 text-xs font-bold rounded-lg border border-green-200 cursor-default">✔ ${ui.sourceActive}</span>`
-                                        : `<button class="btn-load-local px-4 py-1.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold rounded-lg shadow hover:opacity-90 transition-opacity" data-id="${t.id}" data-name="${t.name}">Open</button>`
+                                        : `<button data-action="load-local" data-id="${t.id}" data-name="${t.name}" class="px-4 py-1.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold rounded-lg shadow hover:opacity-90 transition-opacity">Open</button>`
                                     }
                                     
-                                    <button class="btn-delete-local w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" data-id="${t.id}" title="${ui.sourceRemove}">✕</button>
+                                    <button data-action="show-delete" data-id="${t.id}" class="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" title="${ui.sourceRemove}">✕</button>
                                 </div>
                             </div>
                             `;
                         }).join('')
                     }
                 </div>
-            </div>
-            `;
+            </div>`;
+    }
+
+    // --- EVENT HANDLERS ---
+    handleDelegatedChange(e) {
+        if (e.target.id === 'version-select') {
+            this.selectedVersionUrl = e.target.value;
+            this.updateContent();
+        }
+    }
+
+    handleDelegatedClick(e) {
+        const btn = e.target.closest('button') || e.target.closest('.cursor-pointer');
+        if (!btn) return;
+        
+        const action = btn.dataset.action;
+        const id = btn.dataset.id;
+        const name = btn.dataset.name;
+
+        // Overlay Actions
+        if (action === 'cancel-overlay') { this.overlay = null; this.targetId = null; this.updateContent(); }
+        if (action === 'show-plant') { this.overlay = 'plant'; this.updateContent(); }
+        if (action === 'show-delete') { this.overlay = 'delete'; this.targetId = id; this.updateContent(); }
+        
+        if (action === 'confirm-plant') {
+            const inp = this.querySelector('#inp-new-tree-name');
+            if (inp && inp.value.trim()) this.plantNewTree(inp.value.trim());
+        }
+        
+        if (action === 'confirm-delete') {
+            if (this.targetId) {
+                store.userStore.deleteLocalTree(this.targetId);
+                this.overlay = null;
+                this.targetId = null;
+                this.updateContent();
+            }
         }
 
-        // --- INTERNAL OVERLAYS ---
-        let overlayHtml = '';
-        if (this.overlay === 'plant') {
-            overlayHtml = `
-            <div class="absolute inset-0 bg-white/95 dark:bg-slate-900/95 flex items-center justify-center z-20 animate-in fade-in">
-                <div class="w-full max-w-xs text-center">
-                    <h3 class="text-lg font-black mb-4 dark:text-white">Plant New Tree</h3>
-                    <input id="inp-new-tree-name" type="text" placeholder="${ui.treeNamePlaceholder || "Name your tree..."}" class="w-full bg-slate-100 dark:bg-slate-800 rounded-xl px-4 py-3 text-sm font-bold mb-4 focus:ring-2 focus:ring-green-500 outline-none dark:text-white" autofocus>
-                    <div class="flex gap-2">
-                        <button id="btn-cancel-overlay" class="flex-1 py-3 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs uppercase">Cancel</button>
-                        <button id="btn-confirm-plant" class="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold text-xs uppercase shadow-lg">Plant</button>
-                    </div>
-                </div>
-            </div>
-            `;
-        } else if (this.overlay === 'delete') {
-            overlayHtml = `
-            <div class="absolute inset-0 bg-white/95 dark:bg-slate-900/95 flex items-center justify-center z-20 animate-in fade-in">
-                <div class="w-full max-w-xs text-center">
-                    <div class="text-3xl mb-4">⚠️</div>
-                    <h3 class="text-lg font-black mb-2 dark:text-white">Delete Tree?</h3>
-                    <p class="text-xs text-slate-500 mb-6">This action cannot be undone.</p>
-                    <div class="flex gap-2">
-                        <button id="btn-cancel-overlay" class="flex-1 py-3 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs uppercase">Keep</button>
-                        <button id="btn-confirm-delete" class="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold text-xs uppercase shadow-lg">Delete</button>
-                    </div>
-                </div>
-            </div>
-            `;
+        // Global Actions
+        if (action === 'switch-version') this.handleSwitch();
+        if (action === 'share-tree') this.shareActiveTree();
+        if (action === 'load-default') {
+            store.sourceManager.getDefaultSource().then(s => {
+                store.loadData(s);
+                this.close();
+            });
+        }
+        if (action === 'load-source') {
+            store.loadAndSmartMerge(id);
+            this.close();
+        }
+        if (action === 'remove-source') {
+            if (confirm('Delete this tree link?')) {
+                store.removeCommunitySource(id);
+                this.updateContent();
+            }
+        }
+        if (action === 'add-source') {
+            const url = this.querySelector('#inp-source-url').value.trim();
+            if (url) store.requestAddCommunitySource(url);
         }
 
-        this.innerHTML = `
-        <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
-            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-xl w-full relative overflow-hidden flex flex-col max-h-[90vh] border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
-                <button class="btn-close absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 z-20 transition-colors">✕</button>
+        // Local Actions
+        if (action === 'import-tree') this.importTreeFromFile();
+        if (action === 'load-local') this.loadLocalTree(id, name);
+        if (action === 'export-local') this.exportLocalTree(id, name);
+    }
 
-                <div class="p-6 h-full flex flex-col relative">
-                    ${overlayHtml}
-                    <div class="flex items-center gap-3 mb-4 shrink-0">
-                        <span class="text-3xl">🌳</span>
-                        <div>
-                            <h2 class="text-xl font-black dark:text-white leading-none">${ui.sourceManagerTitle}</h2>
-                            <p class="text-xs text-slate-500 mt-1">${ui.sourceManagerDesc}</p>
-                        </div>
-                    </div>
+    // --- LOGIC METHODS (Copied from original) ---
+    
+    handleSwitch() {
+        if (this.selectedVersionUrl) {
+            const releases = store.value.availableReleases || [];
+            const target = releases.find(r => r.url === this.selectedVersionUrl);
+            if (target) {
+                const active = store.value.activeSource;
+                const newSource = {
+                    ...active,
+                    id: target.id || `release-${Date.now()}`,
+                    url: target.url,
+                    type: target.type,
+                    name: target.name || active.name
+                };
+                store.loadData(newSource);
+                this.close();
+            }
+        }
+    }
 
-                    ${tabsHtml}
+    plantNewTree(name) {
+        if (!name) return;
+        const newTree = store.userStore.plantTree(name);
+        const source = { id: newTree.id, name: newTree.name, url: `local://${newTree.id}`, type: 'local', isTrusted: true };
+        store.loadData(source);
+        store.update({ constructionMode: true });
+        store.setModal({ type: 'sage', mode: 'architect' });
+        setTimeout(() => store.chatWithSage(`I just planted a new empty tree called "${name}". I am ready to build. What do you suggest?`), 500);
+    }
 
-                    <div class="flex-1 overflow-y-auto custom-scrollbar pr-1 pb-4 pt-4">
-                        ${contentHtml}
-                    </div>
-                </div>
-            </div>
-        </div>`;
-
-        // Event Bindings
-        this.querySelector('.btn-close').onclick = () => this.close();
-        
-        // Tab Switching
-        const tabGlobal = this.querySelector('#tab-global');
-        if(tabGlobal) tabGlobal.onclick = () => { this.activeTab = 'global'; this.render(); };
-        
-        const tabLocal = this.querySelector('#tab-local');
-        if(tabLocal) tabLocal.onclick = () => { this.activeTab = 'local'; this.render(); };
-
-        // Overlay Events
-        const btnCancelOverlay = this.querySelector('#btn-cancel-overlay');
-        if(btnCancelOverlay) btnCancelOverlay.onclick = () => this.hideOverlay();
-        
-        const btnConfirmPlant = this.querySelector('#btn-confirm-plant');
-        if(btnConfirmPlant) {
-            btnConfirmPlant.onclick = () => {
-                const name = this.querySelector('#inp-new-tree-name').value.trim();
-                if(name) this.plantNewTree(name);
+    importTreeFromFile() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json,application/json';
+        input.onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const jsonData = JSON.parse(event.target.result);
+                    const newTree = store.userStore.importLocalTree(jsonData);
+                    const source = { id: newTree.id, name: newTree.name, url: `local://${newTree.id}`, type: 'local' };
+                    store.loadData(source);
+                    this.activeTab = 'local';
+                    this.close();
+                } catch (err) {
+                    store.notify("Error importing tree: " + err.message, true);
+                }
             };
-        }
-        
-        const btnConfirmDelete = this.querySelector('#btn-confirm-delete');
-        if(btnConfirmDelete) btnConfirmDelete.onclick = () => this.deleteLocalTree();
-
-        // Global Events
-        if (this.activeTab === 'global') {
-            const sel = this.querySelector('#version-select');
-            if (sel) sel.onchange = (e) => this.handleVersionSelect(e);
-            
-            const btnSwitch = this.querySelector('#btn-switch-version');
-            if (btnSwitch) btnSwitch.onclick = () => this.handleSwitch();
-            
-            const btnShare = this.querySelector('#btn-share-tree');
-            if (btnShare) btnShare.onclick = () => this.shareActiveTree();
-
-            // Explicit Default Load
-            const btnDefault = this.querySelector('.btn-load-default');
-            if (btnDefault) {
-                btnDefault.onclick = async () => {
-                    const defaultSource = await store.sourceManager.getDefaultSource();
-                    store.loadData(defaultSource);
-                    this.close();
-                };
-            }
-
-            this.querySelectorAll('.btn-load-source').forEach(btn => {
-                btn.onclick = () => {
-                    store.loadAndSmartMerge(btn.dataset.id);
-                    this.close();
-                };
-            });
-            
-            this.querySelectorAll('.btn-remove-source').forEach(btn => {
-                btn.onclick = async (e) => {
-                    if(await store.confirm('Delete this community tree?')) {
-                        store.removeCommunitySource(btn.dataset.id);
-                        this.render(); 
-                    }
-                };
-            });
-            
-            const btnAdd = this.querySelector('#btn-add-source');
-            if (btnAdd) {
-                btnAdd.onclick = () => {
-                    const url = this.querySelector('#inp-source-url').value.trim();
-                    if (url) {
-                        store.requestAddCommunitySource(url);
-                    }
-                };
-            }
-        }
-
-        // Local Events
-        if (this.activeTab === 'local') {
-            const btnPlant = this.querySelector('#btn-plant-tree');
-            if (btnPlant) btnPlant.onclick = () => this.showOverlay('plant');
-            
-            const btnImport = this.querySelector('#btn-import-tree');
-            if (btnImport) btnImport.onclick = () => this.importTreeFromFile();
-            
-            this.querySelectorAll('.btn-load-local').forEach(btn => {
-                btn.onclick = (e) => this.loadLocalTree(e.currentTarget.dataset.id, e.currentTarget.dataset.name);
-            });
-            
-            this.querySelectorAll('.btn-export-local').forEach(btn => {
-                btn.onclick = (e) => this.exportLocalTree(e.currentTarget.dataset.id, e.currentTarget.dataset.name);
-            });
-            
-            this.querySelectorAll('.btn-delete-local').forEach(btn => {
-                btn.onclick = (e) => this.showOverlay('delete', e.currentTarget.dataset.id);
-            });
-        }
+            reader.readAsText(file);
+        };
+        input.click();
+    }
+    
+    loadLocalTree(id, name) {
+        store.loadData({ id: id, name: name, url: `local://${id}`, type: 'local', isTrusted: true });
+        this.close();
+    }
+    
+    exportLocalTree(id, name) {
+        const treeData = store.userStore.getLocalTreeData(id);
+        if (!treeData) return;
+        const blob = new Blob([JSON.stringify(treeData, null, 2)], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const safeName = name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        a.download = `arbor-tree-${safeName}-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+    
+    shareActiveTree() {
+        const url = store.value.activeSource?.url;
+        if (!url) return;
+        const shareLink = `${window.location.origin}${window.location.pathname}?source=${encodeURIComponent(url)}`;
+        navigator.clipboard.writeText(shareLink).then(() => store.notify("Share link copied to clipboard!"));
     }
 }
 customElements.define('arbor-modal-sources', ArborModalSources);

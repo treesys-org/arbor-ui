@@ -494,7 +494,6 @@ class ArborGraph extends HTMLElement {
 
         const isMobile = this.width < 768;
         const harvestedSeeds = store.value.gamification.seeds;
-        const isDark = store.value.theme === 'dark';
         const isConstruct = store.value.constructionMode;
 
         // Toggle Blueprint CSS
@@ -575,8 +574,8 @@ class ArborGraph extends HTMLElement {
 
         // 3. Labels
         const labelGroup = nodeEnter.append("g").attr("class", "label-group");
-        labelGroup.append("rect").attr("rx", 10).attr("ry", 10).attr("height", 24).attr("fill", "rgba(255,255,255,0.9)").attr("stroke", "#e2e8f0");
-        labelGroup.append("text").attr("class", "label-text").attr("dy", 17).attr("fill", "#334155").attr("font-size", "12px").attr("font-weight", "800").style("pointer-events", "none");
+        labelGroup.append("rect").attr("rx", 10).attr("ry", 10).attr("height", 24).style("pointer-events", "none");
+        labelGroup.append("text").attr("class", "label-text").attr("dy", 17).attr("font-size", "12px").attr("font-weight", "800").style("pointer-events", "none");
 
         // 4. Badges (Expand/Collapse)
         const badge = nodeEnter.append("g").attr("class", "badge-group").style("display", "none");
@@ -763,13 +762,24 @@ class ArborGraph extends HTMLElement {
         // LABEL POSITIONING
         nodeMerged.select(".label-group").attr("transform", d => `translate(0, ${isMobile ? 55 : (d.data.type === 'leaf' || d.data.type === 'exam') ? 65 : 55})`);
         
-        // LABEL COLORS
+        // LABEL COLORS via CSS Classes for better Theme adaptability
+        const rectClass = isConstruct 
+            ? "fill-slate-800 stroke-slate-500" 
+            : "fill-white/90 dark:fill-slate-900/95 stroke-slate-200 dark:stroke-slate-700";
+            
+        const textClass = isConstruct 
+            ? "fill-slate-400 font-mono" 
+            : "fill-slate-700 dark:fill-slate-200 font-sans";
+
         nodeMerged.select(".label-group rect")
-            .attr("fill", isConstruct ? "#1e293b" : (isDark ? "rgba(15, 23, 42, 0.95)" : "rgba(255,255,255,0.9)"))
-            .attr("stroke", isConstruct ? "#64748b" : (isDark ? "#334155" : "#e2e8f0"));
+            .attr("class", `transition-colors duration-300 ${rectClass}`)
+            .attr("fill", null)
+            .attr("stroke", null);
+
         nodeMerged.select(".label-group text")
-            .attr("fill", isConstruct ? "#94a3b8" : (isDark ? "#f1f5f9" : "#334155"))
-            .style("font-family", isConstruct ? "monospace" : "inherit");
+            .attr("class", `label-text transition-colors duration-300 ${textClass}`)
+            .attr("fill", null)
+            .style("font-family", null);
 
         // LABEL TEXT RE-RENDERING (Standardized)
         nodeMerged.select(".label-text").attr("text-anchor", "middle");

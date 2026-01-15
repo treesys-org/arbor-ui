@@ -83,10 +83,8 @@ class ArborSidebar extends HTMLElement {
                     <button class="js-btn-lang menu-item"><span>${store.currentLangInfo.flag}</span> <span>${ui.languageTitle}</span></button>
                     <button class="js-btn-theme menu-item"><span>${store.value.theme === 'light' ? '🌙' : '☀️'}</span> <span>Toggle Theme</span></button>
                     <div class="h-px bg-slate-100 dark:bg-slate-700 my-1 mx-2"></div>
+                    <button class="js-btn-manual menu-item"><span>📖</span> <span>${ui.navManual || 'Field Guide'}</span></button>
                     <button class="js-btn-about menu-item"><span>ℹ️</span> <span>${ui.navAbout}</span></button>
-                    <div class="h-px bg-slate-100 dark:bg-slate-700 my-1 mx-2"></div>
-                    <button class="js-btn-privacy menu-item"><span>🛡️</span> <span>${ui.privacyTitle || 'Privacy'}</span></button>
-                    <button class="js-btn-impressum menu-item"><span>⚖️</span> <span>${ui.impressumTitle}</span></button>
                 </nav>
             </div>
             `;
@@ -191,6 +189,14 @@ class ArborSidebar extends HTMLElement {
                 
                 <div class="w-8 h-px bg-slate-200 dark:bg-slate-700 my-1"></div>
                 
+                <!-- NEW: Field Guide -->
+                <div class="relative group">
+                     <button class="js-btn-manual w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-blue-500 hover:text-white transition-all" aria-label="${ui.navManual || 'Field Guide'}">
+                        <span class="font-black text-lg">?</span>
+                     </button>
+                     <span class="tooltip">${ui.navManual || 'Field Guide'}</span>
+                </div>
+
                 <!-- CONSTRUCTION MODE -->
                 <div class="relative group">
                      <button class="js-btn-construct w-10 h-10 rounded-xl flex items-center justify-center transition-all ${constructionMode ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30 animate-pulse' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-orange-500 hover:text-white'}" aria-label="Construction Mode">🏗️</button>
@@ -201,17 +207,8 @@ class ArborSidebar extends HTMLElement {
             <!-- BOTTOM SECTION -->
             <div class="flex flex-col gap-3 items-center w-full">
                 
-                <div class="relative group"><button class="js-btn-about w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="${ui.navAbout}"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 15" /></svg></button><span class="tooltip">${ui.navAbout}</span></div>
-                
-                <div class="relative group">
-                    <button class="js-btn-privacy w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors" title="${ui.privacyTitle || 'Privacy'}" aria-label="${ui.privacyTitle}">
-                        🛡️
-                    </button>
-                    <span class="tooltip">${ui.privacyTitle || 'Privacy'}</span>
-                </div>
+                <!-- Removed standalone About/Privacy buttons -->
 
-                <div class="w-8 h-px bg-slate-200 dark:bg-slate-700 my-1"></div>
-                
                 <div class="relative group"><button class="js-btn-lang w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 text-xl flex items-center justify-center" aria-label="${ui.languageTitle}">${store.currentLangInfo.flag}</button><span class="tooltip">${ui.languageTitle}</span></div>
                 <div class="relative group"><button class="js-btn-theme w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 text-xl flex items-center justify-center" aria-label="Toggle Theme">${store.value.theme === 'light' ? '🌙' : '☀️'}</button><span class="tooltip">Toggle Theme</span></div>
                 
@@ -222,7 +219,8 @@ class ArborSidebar extends HTMLElement {
                     <span class="tooltip">${g.username || ui.navProfile}</span>
                 </div>
                 
-                <div class="js-btn-impressum text-[9px] text-slate-400 font-bold opacity-60 hover:opacity-100 transition-opacity cursor-pointer mt-2 text-center">
+                <!-- Unified Legal/About/Impressum Trigger -->
+                <div class="js-btn-about text-[9px] text-slate-400 font-bold opacity-60 hover:opacity-100 transition-opacity cursor-pointer mt-2 text-center">
                     ${ui.createdBy}<br><span class="text-sky-500">Treesys</span>
                 </div>
             </div>
@@ -246,10 +244,8 @@ class ArborSidebar extends HTMLElement {
         this.querySelectorAll('.js-btn-arcade').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('arcade')));
         this.querySelectorAll('.js-btn-construct').forEach(b => b.onclick = mobileMenuAction(() => store.toggleConstructionMode()));
         this.querySelectorAll('.js-btn-about').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('about')));
+        this.querySelectorAll('.js-btn-manual').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('manual')));
         this.querySelectorAll('.js-btn-lang').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('language')));
-        this.querySelectorAll('.js-btn-help').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('tutorial')));
-        this.querySelectorAll('.js-btn-impressum').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('impressum')));
-        this.querySelectorAll('.js-btn-privacy').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('privacy'))); 
         this.querySelectorAll('.js-btn-profile').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('profile')));
         
         this.querySelectorAll('.js-btn-progress-mobile').forEach(b => b.onclick = mobileMenuAction(() => {

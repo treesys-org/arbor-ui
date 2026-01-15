@@ -8,8 +8,10 @@ import './modals/certificates.js';
 import './modals/preview.js';
 import './modals/welcome.js';
 import './modals/sources.js';
-import './modals/about.js';
+import './modals/about.js'; // Now merged legal hub
 import './modals/language.js';
+// impressum.js and privacy.js are merged into about.js but kept in codebase to avoid breaking imports if referenced elsewhere, 
+// though they are no longer used by the router below.
 import './modals/impressum.js';
 import './modals/export-pdf.js';
 import './modals/certificate-view.js';
@@ -21,7 +23,8 @@ import './modals/security-warning.js';
 import './modals/load-warning.js';
 import './modals/releases.js'; 
 import './modals/node-properties.js'; 
-import './modals/dialog.js'; // NEW
+import './modals/dialog.js';
+import './modals/manual.js'; // NEW: Extensive Manual
 
 // Admin Panel is essentially a modal
 import './modals/admin.js';
@@ -109,6 +112,9 @@ class ArborModals extends HTMLElement {
             case 'tutorial': 
                 this.innerHTML = `<arbor-modal-welcome></arbor-modal-welcome>`; 
                 break;
+            case 'manual':
+                this.innerHTML = `<arbor-modal-manual></arbor-modal-manual>`;
+                break;
             case 'sources': 
                 this.innerHTML = `<arbor-modal-sources></arbor-modal-sources>`; 
                 break;
@@ -134,10 +140,12 @@ class ArborModals extends HTMLElement {
                 this.innerHTML = `<arbor-modal-language></arbor-modal-language>`; 
                 break;
             case 'impressum': 
-                this.innerHTML = `<arbor-modal-impressum></arbor-modal-impressum>`; 
+                // Now handled by 'about' but kept for legacy calls if any
+                this.innerHTML = `<arbor-modal-about></arbor-modal-about>`; 
                 break;
             case 'privacy': 
-                this.innerHTML = `<arbor-modal-privacy></arbor-modal-privacy>`; 
+                // Now handled by 'about'
+                this.innerHTML = `<arbor-modal-about></arbor-modal-about>`; 
                 break;
             case 'emptyModule': 
                 this.innerHTML = `<arbor-modal-empty-module></arbor-modal-empty-module>`; 
