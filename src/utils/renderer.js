@@ -219,7 +219,7 @@ export const AdminRenderer = {
 
     // New specialized renderer for Governance Mode
     renderGovernanceTree(nodes, depth, context) {
-        const { getOwner, selectedPath } = context;
+        const { getOwner, selectedPath, expandedPaths } = context;
         
         // Filter only Folders for Governance View
         const folders = nodes.filter(n => n.type === 'tree').sort((a,b) => a.path.localeCompare(b.path));
@@ -229,11 +229,16 @@ export const AdminRenderer = {
         folders.forEach(node => {
              const name = node.path.split('/').pop().replace(/_/g, ' ');
              const isSelected = selectedPath === node.path;
+             const isExpanded = expandedPaths.has(node.path);
              const owner = getOwner(node.path);
-             const padding = depth * 16 + 12;
+             
+             // Use consistent indentation relative to nesting
+             const padding = depth * 12 + 10;
              
              let childrenHtml = '';
-             if (node.children && node.children.length > 0) {
+             let hasChildren = node.children && node.children.some(c => c.type === 'tree');
+
+             if (hasChildren && isExpanded) {
                  childrenHtml = AdminRenderer.renderGovernanceTree(node.children, depth + 1, context);
              }
              
@@ -244,6 +249,8 @@ export const AdminRenderer = {
                     👤 ${owner.replace('@', '')}
                  </div>`;
              }
+             
+             const icon = hasChildren ? (isExpanded ? '📂' : '📁') : '📁';
 
              html += `
              <div>
@@ -253,7 +260,9 @@ export const AdminRenderer = {
                      onclick="window.selectGovNode('${node.path}')">
                     
                     <div class="flex items-center gap-2 overflow-hidden min-w-0">
-                        <span class="text-slate-400 text-lg">📁</span>
+                        <button class="text-slate-400 text-lg hover:text-slate-600 p-1 -ml-1 transition-transform" onclick="event.stopPropagation(); window.toggleFolder('${node.path}')">
+                            ${icon}
+                        </button>
                         <span class="font-bold ${isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-300'} truncate select-none">${name}</span>
                     </div>
                     
@@ -261,7 +270,7 @@ export const AdminRenderer = {
                         ${ownerBadge}
                     </div>
                 </div>
-                ${childrenHtml ? `<div class="border-l-2 border-slate-100 dark:border-slate-800 ml-[${padding + 6}px]">${childrenHtml}</div>` : ''}
+                ${childrenHtml ? `<div class="border-l border-slate-100 dark:border-slate-800 ml-4">${childrenHtml}</div>` : ''}
              </div>`;
         });
 

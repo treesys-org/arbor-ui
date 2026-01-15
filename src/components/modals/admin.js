@@ -166,8 +166,12 @@ class ArborAdminPanel extends HTMLElement {
             // Format: /path/to/folder @owner
             const parts = clean.split(/\s+/);
             if (parts.length >= 2) {
+                let path = parts[0];
+                // NORMALIZE: Ensure path starts with / for consistency
+                if (!path.startsWith('/')) path = '/' + path;
+                
                 rules.push({
-                    path: parts[0],
+                    path: path,
                     owner: parts[1] // Includes the @
                 });
             }
@@ -332,13 +336,14 @@ class ArborAdminPanel extends HTMLElement {
     }
 
     updateGovRule(path, owner) {
+        // Normalize for storage
+        const formattedPath = path.startsWith('/') ? path : '/' + path;
+        
         // 1. Remove existing rule for this path if any
-        let newRules = this.state.parsedRules.filter(r => r.path !== '/' + path && r.path !== path);
+        let newRules = this.state.parsedRules.filter(r => r.path !== formattedPath);
         
         // 2. Add new rule if owner is set (not empty)
         if (owner) {
-            // Ensure path starts with / for standard codeowners format
-            const formattedPath = path.startsWith('/') ? path : '/' + path;
             newRules.push({ path: formattedPath, owner: owner });
         }
         
@@ -363,7 +368,7 @@ class ArborAdminPanel extends HTMLElement {
             return;
         }
 
-        const { adminTab, isAdmin, canWrite, adminData, treeNodes, treeFilter, parsedRules, selectedGovPath } = this.state;
+        const { adminTab, isAdmin, canWrite, adminData, treeNodes, treeFilter, parsedRules, selectedGovPath, expandedPaths } = this.state;
         const sourceName = store.value.activeSource?.name || 'Unknown Source';
         
         const header = `
@@ -438,7 +443,7 @@ class ArborAdminPanel extends HTMLElement {
                 `).join('')}
             </div>`;
         }
-        // --- TEAM & GOVERNANCE TAB (NEW SPLIT VIEW) ---
+        // --- TEAM & GOVERNANCE TAB (SPLIT VIEW) ---
         else if (adminTab === 'team') {
             
             // Helper to get owner of a path from parsed rules
@@ -464,7 +469,8 @@ class ArborAdminPanel extends HTMLElement {
                         ${treeNodes.length === 0 ? '<div class="p-4 text-xs text-slate-400 text-center">Loading Tree...</div>' : 
                           AdminRenderer.renderGovernanceTree(treeNodes, 0, {
                               getOwner: getOwner,
-                              selectedPath: selectedGovPath
+                              selectedPath: selectedGovPath,
+                              expandedPaths: expandedPaths // Fix: Pass expanded state
                           })
                         }
                     </div>
@@ -503,7 +509,7 @@ class ArborAdminPanel extends HTMLElement {
                                         <select id="sel-gov-owner" class="w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 font-bold text-sm">
                                             <option value="">-- No specific rule (Inherit) --</option>
                                             ${adminData.users.map(u => `
-                                                <option value="@${u.login}" ${selectedOwner === '@' + u.login ? 'selected' : ''}>
+                                                <option value="@${u.login}" ${selectedOwner && selectedOwner.toLowerCase() === '@' + u.login.toLowerCase() ? 'selected' : ''}>
                                                     @${u.login} (${u.role})
                                                 </option>
                                             `).join('')}
@@ -517,7 +523,9 @@ class ArborAdminPanel extends HTMLElement {
                                     <div class="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center shrink-0 border-2 border-slate-200 dark:border-slate-600 overflow-hidden">
                                         ${(() => {
                                             if (!selectedOwner) return '<span class="text-2xl opacity-30">👤</span>';
-                                            const u = adminData.users.find(user => '@' + user.login === selectedOwner);
+                                            // Ensure we match case-insensitive for avatar finding
+                                            const login = selectedOwner.replace('@', '');
+                                            const u = adminData.users.find(user => user.login.toLowerCase() === login.toLowerCase());
                                             return u ? `<img src="${u.avatar}" class="w-full h-full object-cover">` : '<span class="text-xl">?</span>';
                                         })()}
                                     </div>
@@ -605,6 +613,8 @@ class ArborAdminPanel extends HTMLElement {
         if (tabTeam) tabTeam.onclick = () => {
             this.updateState({ adminTab: 'team' });
             this.loadAdminData();
+            // Critical: Ensure file structure is fresh when managing governance
+            this.loadTreeData();
         };
 
         // Explorer Events

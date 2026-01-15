@@ -43,9 +43,10 @@ class ArborGraph extends HTMLElement {
             
             /* Selection State */
             .node.selected .node-body { 
-                stroke: #f59e0b; 
+                /* Note: Fill color is handled in JS for transition smoothness, 
+                   but we add stroke/filter here for extra emphasis */
                 stroke-width: 4px; 
-                filter: drop-shadow(0 0 15px rgba(245, 158, 11, 0.5));
+                filter: drop-shadow(0 0 15px rgba(239, 68, 68, 0.4)); /* Red glow */
                 stroke-dasharray: 0;
             }
             .node.selected text { font-weight: bold; fill: #fff; }
@@ -675,7 +676,11 @@ class ArborGraph extends HTMLElement {
         // --- NODE STYLING (Colors & Shapes) ---
         nodeUpdate.select(".node-body")
             .attr("fill", d => {
-                if (isConstruct) return '#34495e'; // Dark blueprint color
+                if (isConstruct) {
+                    // CONSTRUCTION MODE: High Contrast Selection
+                    if (d.data.id === this.selectedNodeId) return '#dc2626'; // ACTIVE RED
+                    return '#34495e'; // INACTIVE BLUEPRINT
+                }
                 const isHarvested = harvestedSeeds.find(f => f.id === d.data.id);
                 if (isHarvested) return '#D97706'; 
                 if (d.data.type === 'root') return '#8D6E63';
@@ -684,7 +689,13 @@ class ArborGraph extends HTMLElement {
                 if (d.data.type === 'leaf') return '#a855f7'; 
                 return '#F59E0B'; 
             })
-            .attr("stroke", d => isConstruct ? "#f59e0b" : "#fff") // Orange stroke in construct mode
+            .attr("stroke", d => {
+                if (isConstruct) {
+                    if (d.data.id === this.selectedNodeId) return "#fff"; // White stroke for selected
+                    return "#f59e0b"; // Orange dashed for inactive
+                }
+                return "#fff";
+            }) 
             .attr("d", d => {
                 const isHarvested = harvestedSeeds.find(f => f.id === d.data.id);
                 let r = d.data.type === 'root' ? 60 : (isHarvested ? 50 : 45); 
@@ -703,17 +714,23 @@ class ArborGraph extends HTMLElement {
                 return "url(#drop-shadow)";
             });
 
-        nodeUpdate.select(".node-icon").text(d => {
-            if (isConstruct) {
-                if (d.data.type === 'branch') return '📁';
-                if (d.data.type === 'root') return '🏗️';
-                return '📄';
-            }
-            const seed = harvestedSeeds.find(f => f.id === d.data.id);
-            if (seed) return seed.icon;
-            if ((d.data.type === 'leaf' || d.data.type === 'exam') && store.isCompleted(d.data.id)) return '✓';
-            return d.data.icon || (d.data.type === 'exam' ? '⚔️' : '🌱');
-        });
+        nodeUpdate.select(".node-icon")
+            .text(d => {
+                if (isConstruct) {
+                    if (d.data.type === 'branch') return '📁';
+                    if (d.data.type === 'root') return '🏗️';
+                    return '📄';
+                }
+                const seed = harvestedSeeds.find(f => f.id === d.data.id);
+                if (seed) return seed.icon;
+                if ((d.data.type === 'leaf' || d.data.type === 'exam') && store.isCompleted(d.data.id)) return '✓';
+                return d.data.icon || (d.data.type === 'exam' ? '⚔️' : '🌱');
+            })
+            .attr("fill", d => {
+                 // Ensure white text on red background for selected node in construct mode
+                 if (isConstruct && d.data.id === this.selectedNodeId) return "#fff";
+                 return null; // Fallback to CSS
+            });
         
         // LABEL POSITIONING
         nodeMerged.select(".label-group").attr("transform", d => `translate(0, ${isMobile ? 55 : (d.data.type === 'leaf' || d.data.type === 'exam') ? 65 : 55})`);
