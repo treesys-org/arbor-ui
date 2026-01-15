@@ -272,46 +272,111 @@ class ArborModalArcade extends HTMLElement {
     }
 
     renderGarden(container, ui) {
-        const dueIds = store.userStore.getDueNodes();
-        if (dueIds.length === 0) {
-            container.innerHTML = `
+        const memoryData = store.userStore.state.memory || {};
+        const dueIds = [];
+        const healthyIds = [];
+        const now = Date.now();
+
+        // Sort items into buckets
+        for (const [id, item] of Object.entries(memoryData)) {
+            if (now >= item.dueDate) {
+                dueIds.push(id);
+            } else {
+                healthyIds.push({ id, ...item });
+            }
+        }
+        
+        // Sort healthy by next due date (soonest first)
+        healthyIds.sort((a, b) => a.dueDate - b.dueDate);
+
+        let html = '';
+
+        if (dueIds.length === 0 && healthyIds.length === 0) {
+            html += `
             <div class="p-12 text-center flex flex-col items-center">
-                <div class="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center text-5xl mb-4">🌻</div>
-                <h3 class="text-lg font-black text-slate-700 dark:text-white mb-2">Garden is Healthy!</h3>
-                <p class="text-sm text-slate-500 dark:text-slate-400 max-w-xs">All your lessons are fresh. Come back later to water (review) them when they start to wither.</p>
+                <div class="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-5xl mb-4">🪴</div>
+                <h3 class="text-lg font-black text-slate-700 dark:text-white mb-2">Garden is Empty</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400 max-w-xs">Complete lessons to start cultivating your memory garden.</p>
             </div>`;
         } else {
-            container.innerHTML = `
-            <div class="bg-red-50 dark:bg-red-900/10 p-4 rounded-xl border border-red-100 dark:border-red-900/30 mb-4 flex items-center gap-3">
-                <span class="text-2xl">🍂</span>
-                <p class="text-xs text-red-800 dark:text-red-300 font-medium">These lessons are fading from memory. Play a quick game to refresh them!</p>
-            </div>
-            <div class="space-y-2">
-                ${dueIds.map(id => {
-                    const node = store.findNode(id);
-                    const mem = store.userStore.state.memory[id];
-                    const daysOverdue = Math.ceil((Date.now() - mem.dueDate) / (1000 * 60 * 60 * 24));
-                    const name = node ? node.name : `Module ${id.substring(0, 8)}...`;
-                    const icon = node ? (node.icon || '📄') : '📄';
-                    
-                    return `
-                    <div class="flex items-center justify-between p-3 bg-white dark:bg-slate-900 border border-red-200 dark:border-red-900/30 rounded-xl group hover:border-red-400 transition-colors">
-                        <div class="flex items-center gap-3 min-w-0">
-                            <div class="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center text-xl">
-                                ${icon}
+            // Withered Section
+            if (dueIds.length > 0) {
+                html += `
+                <div class="bg-red-50 dark:bg-red-900/10 p-4 rounded-xl border border-red-100 dark:border-red-900/30 mb-4 flex items-center gap-3">
+                    <span class="text-2xl">🍂</span>
+                    <p class="text-xs text-red-800 dark:text-red-300 font-medium">These lessons are fading from memory. Play to refresh them!</p>
+                </div>
+                <div class="space-y-2 mb-6">
+                    ${dueIds.map(id => {
+                        const node = store.findNode(id);
+                        const mem = memoryData[id];
+                        const daysOverdue = Math.ceil((now - mem.dueDate) / (1000 * 60 * 60 * 24));
+                        const name = node ? node.name : `Module ${id.substring(0, 8)}...`;
+                        const icon = node ? (node.icon || '📄') : '📄';
+                        
+                        return `
+                        <div class="flex items-center justify-between p-3 bg-white dark:bg-slate-900 border border-red-200 dark:border-red-900/30 rounded-xl group hover:border-red-400 transition-colors">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <div class="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center text-xl">
+                                    ${icon}
+                                </div>
+                                <div class="min-w-0">
+                                    <h4 class="font-bold text-sm text-slate-800 dark:text-white truncate">${name}</h4>
+                                    <p class="text-[10px] text-red-500 font-bold">Withered ${daysOverdue} days ago</p>
+                                </div>
                             </div>
-                            <div class="min-w-0">
-                                <h4 class="font-bold text-sm text-slate-800 dark:text-white truncate">${name}</h4>
-                                <p class="text-[10px] text-red-500 font-bold">Withered ${daysOverdue} days ago</p>
+                            <button data-action="water-node" data-id="${id}" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg shadow-md hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
+                                <span>💧</span> Water
+                            </button>
+                        </div>`;
+                    }).join('')}
+                </div>`;
+            } else {
+                html += `
+                <div class="bg-green-50 dark:bg-green-900/10 p-4 rounded-xl border border-green-100 dark:border-green-900/30 mb-6 flex items-center gap-3">
+                    <span class="text-2xl">🌻</span>
+                    <div>
+                        <p class="text-sm font-black text-green-700 dark:text-green-300">Garden is Healthy!</p>
+                        <p class="text-xs text-green-600 dark:text-green-400">All memories are fresh.</p>
+                    </div>
+                </div>`;
+            }
+
+            // Thriving Section
+            if (healthyIds.length > 0) {
+                html += `<h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Thriving Plants (${healthyIds.length})</h4>`;
+                html += `<div class="space-y-2 opacity-80">
+                    ${healthyIds.map(item => {
+                        const node = store.findNode(item.id);
+                        const daysLeft = Math.ceil((item.dueDate - now) / (1000 * 60 * 60 * 24));
+                        const name = node ? node.name : `Module ${item.id.substring(0, 8)}...`;
+                        const icon = node ? (node.icon || '📄') : '📄';
+                        
+                        // Strength indicator based on interval
+                        let strength = "🌱 Sprout";
+                        if (item.interval > 30) strength = "🌳 Tree";
+                        else if (item.interval > 14) strength = "🌿 Bush";
+                        else if (item.interval > 7) strength = "🪴 Plant";
+
+                        return `
+                        <div class="flex items-center justify-between p-3 bg-white dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 rounded-xl">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <div class="w-8 h-8 rounded-lg bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 flex items-center justify-center text-lg">
+                                    ${icon}
+                                </div>
+                                <div class="min-w-0">
+                                    <h4 class="font-bold text-sm text-slate-700 dark:text-slate-300 truncate">${name}</h4>
+                                    <p class="text-[10px] text-slate-400">Next rain in ${daysLeft} days</p>
+                                </div>
                             </div>
-                        </div>
-                        <button data-action="water-node" data-id="${id}" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg shadow-md hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
-                            <span>💧</span> Water
-                        </button>
-                    </div>`;
-                }).join('')}
-            </div>`;
+                            <span class="text-[9px] bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-slate-500 font-medium">${strength}</span>
+                        </div>`;
+                    }).join('')}
+                </div>`;
+            }
         }
+        
+        container.innerHTML = html;
     }
 
     renderStorage(container, ui) {

@@ -479,8 +479,8 @@ class ArborGraph extends HTMLElement {
         const theme = store.value.theme;
         // COLORS: Solid pastel tones (No transparency)
         // Dark: Slate-700
-        // Light: Green-200
-        const color = theme === 'dark' ? '#334155' : '#bbf7d0';
+        // Light: Vibrant Green (Updated from pale green)
+        const color = theme === 'dark' ? '#334155' : '#22c55e'; // green-500
         
         const cx = this.width / 2;
         const groundY = this.height;

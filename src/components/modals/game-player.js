@@ -13,9 +13,15 @@ class ArborModalGamePlayer extends HTMLElement {
         this.needsConsent = false;
         this.error = null;
         this.scriptCache = new Map();
+        
+        // Tracking for notification
+        this.sessionXP = 0;
     }
 
     async connectedCallback() {
+        // Reset session stats
+        this.sessionXP = 0;
+        
         // Check for unified AI consent key
         const hasConsent = localStorage.getItem('arbor-ai-consent') === 'true';
         
@@ -47,6 +53,12 @@ class ArborModalGamePlayer extends HTMLElement {
     }
 
     close() {
+        // Notification Logic
+        if (this.sessionXP > 0) {
+            const ui = store.ui;
+            // "Session Complete: +50 XP"
+            store.notify(`+${this.sessionXP} ${ui.xpUnit || 'XP'} - Session Complete`);
+        }
         store.setModal('arcade'); 
     }
     
@@ -113,7 +125,10 @@ class ArborModalGamePlayer extends HTMLElement {
         } catch(e) { storageId = gameId; }
 
         window.__ARBOR_GAME_BRIDGE__ = {
-            addXP: (amount) => store.userStore.addXP(amount, true),
+            addXP: (amount) => {
+                this.sessionXP += amount;
+                store.addXP(amount, true); // Silent update
+            },
             getCurriculum: () => this.playlist.map(l => ({ id: l.id, title: l.name })),
             
             getNextLesson: async () => {
