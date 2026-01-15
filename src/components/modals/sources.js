@@ -38,31 +38,32 @@ class ArborModalSources extends HTMLElement {
     renderSkeleton() {
         const ui = store.ui;
         
+        // Increased to max-w-4xl and h-[85vh] for better visibility without scrolling
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
-            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-xl w-full relative overflow-hidden flex flex-col h-[550px] max-h-[90vh] border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-4xl w-full relative overflow-hidden flex flex-col h-[85vh] max-h-[900px] border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
                 <button class="btn-close absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 z-20 transition-colors">✕</button>
 
-                <div class="p-6 h-full flex flex-col relative">
+                <div class="p-6 md:p-8 h-full flex flex-col relative">
                     
                     <!-- Overlay Container -->
                     <div id="overlay-container" class="absolute inset-0 z-20 hidden"></div>
 
                     <!-- Header -->
-                    <div class="flex items-center gap-3 mb-4 shrink-0">
-                        <span class="text-3xl">🌳</span>
+                    <div class="flex items-center gap-4 mb-6 shrink-0">
+                        <span class="text-4xl">🌳</span>
                         <div>
-                            <h2 class="text-xl font-black dark:text-white leading-none">${ui.sourceManagerTitle}</h2>
-                            <p class="text-xs text-slate-500 mt-1">${ui.sourceManagerDesc}</p>
+                            <h2 class="text-2xl font-black dark:text-white leading-none">${ui.sourceManagerTitle}</h2>
+                            <p class="text-sm text-slate-500 mt-1">${ui.sourceManagerDesc}</p>
                         </div>
                     </div>
 
                     <!-- Tabs -->
-                    <div class="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 shrink-0 mb-2">
-                        <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors border-transparent text-slate-400 hover:text-slate-600" id="tab-global">
+                    <div class="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 shrink-0 mb-4 rounded-xl overflow-hidden p-1 gap-1">
+                        <button class="flex-1 py-2.5 rounded-lg text-sm font-bold transition-all" id="tab-global">
                             🌍 ${ui.tabGlobal || 'Global Forest'}
                         </button>
-                        <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors border-transparent text-slate-400 hover:text-slate-600" id="tab-local">
+                        <button class="flex-1 py-2.5 rounded-lg text-sm font-bold transition-all" id="tab-local">
                             🌱 ${ui.tabGarden || 'My Garden'}
                         </button>
                     </div>
@@ -99,11 +100,11 @@ class ArborModalSources extends HTMLElement {
         const tabLocal = this.querySelector('#tab-local');
         
         if (this.activeTab === 'global') {
-            tabGlobal.className = "flex-1 py-3 text-sm font-bold border-b-2 transition-colors border-purple-500 text-purple-600 dark:text-purple-400";
-            tabLocal.className = "flex-1 py-3 text-sm font-bold border-b-2 transition-colors border-transparent text-slate-400 hover:text-slate-600";
+            tabGlobal.className = "flex-1 py-2.5 rounded-lg text-sm font-bold transition-all bg-white dark:bg-slate-800 text-purple-600 dark:text-purple-400 shadow-sm";
+            tabLocal.className = "flex-1 py-2.5 rounded-lg text-sm font-bold transition-all text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-800/50";
         } else {
-            tabGlobal.className = "flex-1 py-3 text-sm font-bold border-b-2 transition-colors border-transparent text-slate-400 hover:text-slate-600";
-            tabLocal.className = "flex-1 py-3 text-sm font-bold border-b-2 transition-colors border-green-500 text-green-600 dark:text-green-400";
+            tabGlobal.className = "flex-1 py-2.5 rounded-lg text-sm font-bold transition-all text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-800/50";
+            tabLocal.className = "flex-1 py-2.5 rounded-lg text-sm font-bold transition-all bg-white dark:bg-slate-800 text-green-600 dark:text-green-400 shadow-sm";
         }
 
         // 2. Render Overlay (if any)
@@ -127,16 +128,16 @@ class ArborModalSources extends HTMLElement {
         }
         
         container.classList.remove('hidden');
-        container.className = "absolute inset-0 bg-white/95 dark:bg-slate-900/95 flex items-center justify-center z-20 animate-in fade-in";
+        container.className = "absolute inset-0 bg-white/95 dark:bg-slate-900/95 flex items-center justify-center z-20 animate-in fade-in rounded-3xl";
         
         if (this.overlay === 'plant') {
             container.innerHTML = `
                 <div class="w-full max-w-xs text-center">
-                    <h3 class="text-lg font-black mb-4 dark:text-white">Plant New Tree</h3>
-                    <input id="inp-new-tree-name" type="text" placeholder="${ui.treeNamePlaceholder || "Name your tree..."}" class="w-full bg-slate-100 dark:bg-slate-800 rounded-xl px-4 py-3 text-sm font-bold mb-4 focus:ring-2 focus:ring-green-500 outline-none dark:text-white" autofocus>
-                    <div class="flex gap-2">
+                    <h3 class="text-xl font-black mb-4 dark:text-white">Plant New Tree</h3>
+                    <input id="inp-new-tree-name" type="text" placeholder="${ui.treeNamePlaceholder || "Name your tree..."}" class="w-full bg-slate-100 dark:bg-slate-800 rounded-xl px-4 py-4 text-base font-bold mb-4 focus:ring-2 focus:ring-green-500 outline-none dark:text-white" autofocus>
+                    <div class="flex gap-3">
                         <button data-action="cancel-overlay" class="flex-1 py-3 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs uppercase">Cancel</button>
-                        <button data-action="confirm-plant" class="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold text-xs uppercase shadow-lg">Plant</button>
+                        <button data-action="confirm-plant" class="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold text-xs uppercase shadow-lg hover:scale-105 transition-transform">Plant</button>
                     </div>
                 </div>`;
             // Autofocus
@@ -147,12 +148,12 @@ class ArborModalSources extends HTMLElement {
         } else if (this.overlay === 'delete') {
             container.innerHTML = `
                 <div class="w-full max-w-xs text-center">
-                    <div class="text-3xl mb-4">⚠️</div>
-                    <h3 class="text-lg font-black mb-2 dark:text-white">Delete Tree?</h3>
-                    <p class="text-xs text-slate-500 mb-6">This action cannot be undone.</p>
-                    <div class="flex gap-2">
+                    <div class="text-4xl mb-4">⚠️</div>
+                    <h3 class="text-xl font-black mb-2 dark:text-white">Delete Tree?</h3>
+                    <p class="text-sm text-slate-500 mb-6">This action cannot be undone.</p>
+                    <div class="flex gap-3">
                         <button data-action="cancel-overlay" class="flex-1 py-3 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs uppercase">Keep</button>
-                        <button data-action="confirm-delete" class="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold text-xs uppercase shadow-lg">Delete</button>
+                        <button data-action="confirm-delete" class="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold text-xs uppercase shadow-lg hover:scale-105 transition-transform">Delete</button>
                     </div>
                 </div>`;
         }
@@ -175,21 +176,23 @@ class ArborModalSources extends HTMLElement {
         const otherSources = (state.communitySources || []).filter(s => s.id !== activeSource.id);
 
         return `
-            <div class="space-y-6 pt-4">
+            <div class="space-y-8 pt-2">
                 <!-- ACTIVE TREE CARD -->
                 ${!isLocalActive ? `
-                <div class="bg-slate-50 dark:bg-slate-950/50 p-5 rounded-2xl border-2 border-purple-500/30 relative overflow-hidden">
-                    <div class="absolute top-0 right-0 bg-purple-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl uppercase tracking-widest">
+                <div class="bg-slate-50 dark:bg-slate-950/50 p-6 rounded-2xl border-2 border-purple-500/30 relative overflow-hidden shadow-sm">
+                    <div class="absolute top-0 right-0 bg-purple-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl uppercase tracking-widest shadow-sm">
                         ${ui.sourceActive}
                     </div>
-                    <h3 class="font-bold text-lg text-slate-800 dark:text-white mb-1">${activeSource.name}</h3>
-                    <p class="text-xs text-slate-400 font-mono truncate mb-4 opacity-70">${activeSource.url}</p>
+                    <h3 class="font-black text-xl text-slate-800 dark:text-white mb-1 flex items-center gap-2">
+                        <span>🌳</span> ${activeSource.name}
+                    </h3>
+                    <p class="text-xs text-slate-400 font-mono truncate mb-6 opacity-70 border-b border-slate-200 dark:border-slate-800 pb-4">${activeSource.url}</p>
                     
-                    <div class="flex gap-2 items-end">
+                    <div class="flex gap-3 items-end">
                         <div class="flex-1">
-                            <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1">Version</label>
+                            <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1.5">Version</label>
                             <div class="relative">
-                                <select id="version-select" class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-purple-500 appearance-none">
+                                <select id="version-select" class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-purple-500 appearance-none transition-shadow hover:shadow-sm cursor-pointer">
                                     ${effectiveReleases.map(r => `
                                         <option value="${r.url}" ${normalize(r.url) === normalize(selectedUrl) ? 'selected' : ''}>
                                             ${r.type === 'rolling' ? '🌊 ' : (r.type === 'archive' ? '🏛️ ' : '📄 ')} 
@@ -197,62 +200,62 @@ class ArborModalSources extends HTMLElement {
                                         </option>
                                     `).join('')}
                                 </select>
-                                <div class="absolute right-3 top-2.5 pointer-events-none text-slate-400 text-xs">▼</div>
+                                <div class="absolute right-4 top-3.5 pointer-events-none text-slate-400 text-xs">▼</div>
                             </div>
                         </div>
                         ${isDifferent ? `
-                        <button data-action="switch-version" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-lg active:scale-95 transition-all animate-in fade-in slide-in-from-right-2">
+                        <button data-action="switch-version" class="bg-purple-600 hover:bg-purple-500 text-white px-5 py-3.5 rounded-xl font-bold text-sm shadow-lg active:scale-95 transition-all animate-in fade-in slide-in-from-right-2">
                             Switch
                         </button>
                         ` : `
-                        <button data-action="share-tree" class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 px-3 py-2.5 rounded-xl font-bold text-sm transition-colors" title="Copy Share Link">
+                        <button data-action="share-tree" class="bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 px-4 py-3.5 rounded-xl font-bold text-lg border border-slate-200 dark:border-slate-700 transition-colors shadow-sm" title="Copy Share Link">
                            🔗
                         </button>
                         `}
                     </div>
                 </div>
                 ` : `
-                <div class="p-4 bg-purple-50 dark:bg-purple-900/10 rounded-xl border border-purple-100 dark:border-purple-800 text-center flex flex-col items-center gap-2">
-                    <span class="text-2xl">🌱</span>
-                    <p class="text-xs text-purple-600 dark:text-purple-400 font-bold">You are currently in your local garden.</p>
-                    <p class="text-[10px] text-slate-400">Select a tree below to return to the global forest.</p>
+                <div class="p-6 bg-purple-50 dark:bg-purple-900/10 rounded-2xl border border-purple-100 dark:border-purple-800 text-center flex flex-col items-center gap-3">
+                    <span class="text-4xl">🌱</span>
+                    <p class="text-sm text-purple-700 dark:text-purple-300 font-bold">You are currently tending your local garden.</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Select a tree below to return to the global forest.</p>
                 </div>
                 `}
 
                 <!-- SAVED TREES -->
                 <div>
-                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                         <span>📡</span> Community Trees
                     </h3>
                     
                     ${isLocalActive ? `
-                    <div class="flex items-center justify-between p-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl group hover:border-purple-300 dark:hover:border-purple-600 transition-colors mb-2 cursor-pointer" data-action="load-default">
-                        <div class="flex items-center gap-3 overflow-hidden pointer-events-none">
-                            <div class="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-600 flex items-center justify-center text-lg">🌳</div>
+                    <div class="flex items-center justify-between p-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl group hover:border-purple-300 dark:hover:border-purple-600 transition-colors mb-3 cursor-pointer shadow-sm" data-action="load-default">
+                        <div class="flex items-center gap-4 overflow-hidden pointer-events-none">
+                            <div class="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-900/30 text-purple-600 flex items-center justify-center text-xl">🌳</div>
                             <div class="min-w-0">
                                 <h4 class="font-bold text-sm text-slate-700 dark:text-slate-200 truncate">Official Arbor Knowledge</h4>
                                 <p class="text-[10px] text-slate-400 truncate">Default Repository</p>
                             </div>
                         </div>
-                        <button class="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-lg transition-colors pointer-events-none">Load</button>
+                        <button class="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-lg transition-colors pointer-events-none">Load</button>
                     </div>
                     ` : ''}
 
                     ${otherSources.length === 0 
-                        ? `<div class="p-6 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-xl text-center text-slate-400 text-xs">No other trees added.</div>`
-                        : `<div class="space-y-2">
+                        ? `<div class="p-8 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-2xl text-center text-slate-400 text-sm">No other trees added.</div>`
+                        : `<div class="space-y-3">
                             ${otherSources.map(s => `
-                                <div class="flex items-center justify-between p-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl group hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
-                                    <div class="flex items-center gap-3 overflow-hidden">
-                                        <div class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-lg">🌐</div>
+                                <div class="flex items-center justify-between p-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl group hover:border-slate-300 dark:hover:border-slate-600 transition-colors shadow-sm">
+                                    <div class="flex items-center gap-4 overflow-hidden">
+                                        <div class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xl">🌐</div>
                                         <div class="min-w-0">
                                             <h4 class="font-bold text-sm text-slate-700 dark:text-slate-200 truncate">${s.name}</h4>
-                                            <p class="text-[10px] text-slate-400 truncate">${s.url}</p>
+                                            <p class="text-[10px] text-slate-400 truncate font-mono">${s.url}</p>
                                         </div>
                                     </div>
                                     <div class="flex gap-2">
-                                        <button data-action="load-source" data-id="${s.id}" class="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 hover:bg-green-50 dark:hover:bg-green-900/30 text-slate-600 dark:text-green-400 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 transition-colors">Load</button>
-                                        <button data-action="remove-source" data-id="${s.id}" class="px-2 py-1.5 hover:bg-red-50 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 rounded-lg transition-colors">✕</button>
+                                        <button data-action="load-source" data-id="${s.id}" class="px-4 py-2 bg-slate-50 dark:bg-slate-800 hover:bg-green-50 dark:hover:bg-green-900/30 text-slate-600 dark:text-green-400 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition-colors hover:border-green-300">Load</button>
+                                        <button data-action="remove-source" data-id="${s.id}" class="w-9 h-9 flex items-center justify-center hover:bg-red-50 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 rounded-xl transition-colors">✕</button>
                                     </div>
                                 </div>
                             `).join('')}
@@ -261,11 +264,11 @@ class ArborModalSources extends HTMLElement {
                 </div>
 
                 <!-- ADD NEW -->
-                <div class="pt-4 border-t border-slate-100 dark:border-slate-800 mt-2">
-                    <label class="text-[10px] font-bold text-slate-400 uppercase mb-2 block">${ui.sourceAdd}</label>
-                    <div class="flex gap-2">
-                        <input id="inp-source-url" type="text" placeholder="https://.../data/data.json" class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-purple-500 dark:text-white">
-                        <button data-action="add-source" class="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-2 rounded-xl font-bold shadow-lg hover:opacity-90 active:scale-95 transition-transform">+</button>
+                <div class="pt-6 border-t border-slate-100 dark:border-slate-800 mt-4">
+                    <label class="text-[10px] font-bold text-slate-400 uppercase mb-3 block">Add by URL</label>
+                    <div class="flex gap-3">
+                        <input id="inp-source-url" type="text" placeholder="https://.../data/data.json" class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-purple-500 dark:text-white font-mono">
+                        <button data-action="add-source" class="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-6 py-2 rounded-xl font-bold shadow-lg hover:opacity-90 active:scale-95 transition-transform text-lg">+</button>
                     </div>
                 </div>
             </div>`;
@@ -276,45 +279,45 @@ class ArborModalSources extends HTMLElement {
         return `
             <div class="flex flex-col h-full pt-4">
                 <!-- Action Buttons -->
-                <div class="grid grid-cols-1 gap-3 mb-6">
-                    <button data-action="show-plant" class="py-4 px-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 font-bold rounded-xl active:scale-95 transition-all flex flex-col items-center gap-1 group shadow-sm hover:shadow-md">
-                        <span class="text-2xl group-hover:-translate-y-0.5 transition-transform pointer-events-none">🌱</span> 
-                        <span class="text-sm uppercase tracking-wide pointer-events-none">${ui.plantTree || 'Plant New Tree'}</span>
+                <div class="grid grid-cols-1 gap-4 mb-8">
+                    <button data-action="show-plant" class="py-6 px-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 font-bold rounded-2xl active:scale-95 transition-all flex flex-col items-center gap-2 group shadow-sm hover:shadow-md">
+                        <span class="text-4xl group-hover:-translate-y-1 transition-transform pointer-events-none">🌱</span> 
+                        <span class="text-sm uppercase tracking-wide pointer-events-none font-black">${ui.plantTree || 'Plant New Tree'}</span>
+                        <span class="text-[10px] opacity-70 pointer-events-none font-normal">Start fresh from scratch</span>
                     </button>
                 </div>
                 
-                <button data-action="import-tree" class="w-full py-3 px-4 mb-6 bg-white dark:bg-slate-900 border-2 border-dashed border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 font-bold rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2 group hover:border-sky-500 hover:text-sky-500 dark:hover:border-sky-400 dark:hover:text-sky-400">
-                    <span class="text-lg pointer-events-none">📥</span> 
-                    <span class="text-sm pointer-events-none">${ui.importBtn || 'Import Tree'}</span>
+                <button data-action="import-tree" class="w-full py-4 px-4 mb-8 bg-white dark:bg-slate-900 border-2 border-dashed border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 font-bold rounded-2xl active:scale-95 transition-all flex items-center justify-center gap-3 group hover:border-sky-500 hover:text-sky-500 dark:hover:border-sky-400 dark:hover:text-sky-400">
+                    <span class="text-2xl pointer-events-none group-hover:scale-110 transition-transform">📥</span> 
+                    <span class="text-sm pointer-events-none uppercase tracking-wider">${ui.importBtn || 'Import Tree'}</span>
                 </button>
 
                 <!-- Local Trees List -->
-                <div class="flex-1 space-y-3 pb-4">
+                <div class="flex-1 space-y-4 pb-4">
                     ${localTrees.length === 0 
-                        ? `<div class="text-center p-8 text-slate-400 italic text-sm">Your garden is empty. Plant your first tree!</div>` 
+                        ? `<div class="text-center p-12 text-slate-400 italic text-sm border-2 border-slate-100 dark:border-slate-800 rounded-2xl border-dashed">Your garden is empty. Plant your first tree!</div>` 
                         : localTrees.map(t => {
                             const isActive = activeSource.id === t.id;
                             return `
-                            <div class="bg-white dark:bg-slate-900 border ${isActive ? 'border-green-500 ring-1 ring-green-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl p-4 flex items-center justify-between group hover:border-green-300 dark:hover:border-green-700 transition-colors">
-                                <div class="flex items-center gap-4 min-w-0">
-                                    <div class="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 flex items-center justify-center text-xl">🌳</div>
+                            <div class="bg-white dark:bg-slate-900 border ${isActive ? 'border-green-500 ring-1 ring-green-500 shadow-md' : 'border-slate-200 dark:border-slate-700'} rounded-2xl p-5 flex items-center justify-between group hover:border-green-300 dark:hover:border-green-700 transition-all">
+                                <div class="flex items-center gap-5 min-w-0">
+                                    <div class="w-12 h-12 rounded-xl bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 flex items-center justify-center text-2xl shadow-sm">🌳</div>
                                     <div class="min-w-0">
-                                        <h4 class="font-bold text-slate-800 dark:text-white truncate">${t.name}</h4>
-                                        <p class="text-[10px] text-slate-400">Last updated: ${new Date(t.updated).toLocaleDateString()}</p>
+                                        <h4 class="font-bold text-slate-800 dark:text-white truncate text-base">${t.name}</h4>
+                                        <p class="text-xs text-slate-400 font-mono mt-0.5">Updated: ${new Date(t.updated).toLocaleDateString()}</p>
                                     </div>
                                 </div>
                                 <div class="flex gap-2 shrink-0 items-center">
-                                    <button data-action="export-local" data-id="${t.id}" data-name="${t.name}" class="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-slate-600 dark:text-blue-300 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 transition-colors flex items-center gap-1.5">
+                                    <button data-action="export-local" data-id="${t.id}" data-name="${t.name}" class="px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-slate-600 dark:text-blue-300 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center gap-2 hover:border-blue-300" title="Export JSON">
                                         <span>📤</span>
-                                        <span>${ui.sourceExport || 'Export'}</span>
                                     </button>
                                     
                                     ${isActive 
-                                        ? `<span class="px-3 py-1.5 bg-green-100 text-green-700 text-xs font-bold rounded-lg border border-green-200 cursor-default">✔ ${ui.sourceActive}</span>`
-                                        : `<button data-action="load-local" data-id="${t.id}" data-name="${t.name}" class="px-4 py-1.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold rounded-lg shadow hover:opacity-90 transition-opacity">Open</button>`
+                                        ? `<span class="px-4 py-2 bg-green-100 text-green-700 text-xs font-black rounded-xl border border-green-200 cursor-default uppercase tracking-wider">Active</span>`
+                                        : `<button data-action="load-local" data-id="${t.id}" data-name="${t.name}" class="px-6 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold rounded-xl shadow hover:opacity-90 transition-opacity uppercase tracking-wider">Open</button>`
                                     }
                                     
-                                    <button data-action="show-delete" data-id="${t.id}" class="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" title="${ui.sourceRemove}">✕</button>
+                                    <button data-action="show-delete" data-id="${t.id}" class="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors ml-1" title="${ui.sourceRemove}">✕</button>
                                 </div>
                             </div>
                             `;

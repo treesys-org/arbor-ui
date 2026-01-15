@@ -22,7 +22,7 @@ import './modals/load-warning.js';
 import './modals/releases.js'; 
 import './modals/node-properties.js'; 
 import './modals/dialog.js';
-import './modals/manual.js'; // Ensure this is present and correct
+import './modals/manual.js';
 
 // Admin Panel is essentially a modal
 import './modals/admin.js';
@@ -110,7 +110,6 @@ class ArborModals extends HTMLElement {
                 this.innerHTML = `<arbor-modal-welcome></arbor-modal-welcome>`; 
                 break;
             case 'manual':
-                // Explicit check for manual type
                 this.innerHTML = `<arbor-modal-manual></arbor-modal-manual>`;
                 break;
             case 'sources': 
