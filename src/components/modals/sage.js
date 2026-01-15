@@ -112,15 +112,46 @@ class ArborSage extends HTMLElement {
         if (prompt) store.chatWithSage(prompt);
     }
     
+    extractBlueprint(text) {
+        if (!text) return null;
+        
+        // 1. Try Markdown Code Block (with or without json tag, case insensitive)
+        // Matches ```json { ... } ``` or ``` { ... } ```
+        const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+        
+        if (codeBlockMatch) {
+            try {
+                const potentialJson = codeBlockMatch[1];
+                const json = JSON.parse(potentialJson);
+                // Validate structure to ensure it's a blueprint and not random code
+                if (json.modules || (json.title && Array.isArray(json.lessons)) || json.languages) {
+                    return json;
+                }
+            } catch (e) {
+                // Not valid JSON inside the block
+            }
+        }
+        
+        // 2. Try Raw JSON (if the model outputted just the JSON without fences)
+        const trimmed = text.trim();
+        if ((trimmed.startsWith('{') && trimmed.endsWith('}'))) {
+            try {
+                const json = JSON.parse(trimmed);
+                if (json.modules || json.languages) return json;
+            } catch (e) {}
+        }
+        
+        return null;
+    }
+    
     async handleConstruct(e) {
         const idx = e.currentTarget.dataset.msgIndex;
         const msg = store.value.ai.messages[idx];
         if(!msg) return;
 
-        const jsonMatch = msg.content.match(/```json\s*([\s\S]*?)\s*```/);
-        if(jsonMatch) {
+        const json = this.extractBlueprint(msg.content);
+        if(json) {
             try {
-                const json = JSON.parse(jsonMatch[1]);
                 const activeSource = store.value.activeSource;
                 if(activeSource.type !== 'local') {
                     alert("You can only build in a Local Garden.");
@@ -136,8 +167,10 @@ class ArborSage extends HTMLElement {
                 this.close(); 
                 
             } catch(err) {
-                alert("Invalid Blueprint JSON: " + err.message);
+                alert("Blueprint Error: " + err.message);
             }
+        } else {
+            alert("Could not parse blueprint structure.");
         }
     }
 
@@ -387,40 +420,75 @@ class ArborSage extends HTMLElement {
         const displayStatus = aiState.status;
         const isOllama = aiService.config.provider === 'ollama';
         const isThinking = displayStatus === 'thinking';
+        
+        // --- BUTTON STATE LOGIC (Send vs Stop) ---
         let sendBtnColor = isArchitect ? 'bg-orange-600' : (isOllama ? 'bg-orange-600' : 'bg-teal-600');
+        let btnIcon = `<svg class="w-5 h-5 translate-x-0.5 -translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>`;
+        let btnClass = `w-11 h-11 ${sendBtnColor} text-white rounded-xl hover:opacity-90 transition-all flex items-center justify-center shadow-lg active:scale-95`;
+
+        if (isThinking) {
+            btnClass = "w-11 h-11 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-all flex items-center justify-center shadow-lg active:scale-95 animate-pulse";
+            btnIcon = `<div class="w-4 h-4 bg-white rounded-sm"></div>`; // Stop Square
+        }
 
         const getMessagesHTML = () => {
              return displayMessages.map(m => {
-                let contentHtml = this.formatMessage(m.content);
+                let displayContent = m.content;
+                let blueprintCard = '';
                 
-                // Check for Blueprint JSON and if role is assistant
-                const jsonMatch = m.content.match(/```json\s*([\s\S]*?)\s*```/);
-                if (jsonMatch && m.role === 'assistant') {
-                    // Embed the build button and a friendly hardcoded message
-                    const msgReady = store.value.lang === 'ES' 
-                        ? "He creado una estructura para ti. ¿Quieres construirla?" 
-                        : "I have created a structure for you. Do you want to build it?";
+                // CRITICAL: REMOVE JSON FROM DISPLAY IF BLUEPRINT DETECTED
+                const blueprint = this.extractBlueprint(m.content);
+                
+                if (blueprint && m.role === 'assistant') {
+                    // Strip the JSON block (Markdown or raw) from display
+                    displayContent = displayContent.replace(/```(?:json)?\s*[\s\S]*?\s*```/ig, '');
+                    
+                    // If it was raw JSON (starts with { ends with }), clear text
+                    if (displayContent.trim().startsWith('{') && displayContent.trim().endsWith('}')) {
+                        displayContent = ""; 
+                    }
+                    
+                    // Fallback friendly text if message is now empty
+                    if (!displayContent.trim()) {
+                        displayContent = store.value.lang === 'ES' 
+                            ? "Aquí está la estructura que pediste." 
+                            : "Here is the structure you requested.";
+                    }
 
-                    contentHtml += `
-                        <div class="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-100 dark:border-green-800">
-                            <p class="font-bold text-green-800 dark:text-green-300 mb-3 text-sm flex items-center gap-2">
-                                <span>👷</span> ${msgReady}
-                            </p>
-                            <button class="btn-construct-blueprint w-full py-3 bg-green-600 hover:bg-green-500 text-white rounded-lg font-bold text-xs shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95" data-msg-index="${displayMessages.indexOf(m)}">
-                                <span>🏗️</span> Build Structure
+                    // Build the Card
+                    const cardTitle = blueprint.title || 'Custom Course';
+                    const msgReady = store.value.lang === 'ES' ? "Plano Listo" : "Blueprint Ready";
+                    const btnLabel = store.value.lang === 'ES' ? "Construir Ahora" : "Build Structure";
+
+                    blueprintCard = `
+                        <div class="mt-3 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm animate-in fade-in zoom-in duration-300">
+                            <div class="bg-slate-50 dark:bg-slate-900 p-3 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 text-orange-600 flex items-center justify-center text-xl">🏗️</div>
+                                <div>
+                                    <p class="font-bold text-slate-800 dark:text-slate-200 text-xs uppercase tracking-wider">${msgReady}</p>
+                                    <p class="text-[10px] text-slate-500 truncate max-w-[150px]">${cardTitle}</p>
+                                </div>
+                            </div>
+                            <button class="btn-construct-blueprint w-full py-3 bg-green-600 hover:bg-green-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors active:bg-green-700" data-msg-index="${displayMessages.indexOf(m)}">
+                                <span>🔨</span> ${btnLabel}
                             </button>
                         </div>
                     `;
                 }
 
+                let contentHtml = this.formatMessage(displayContent);
+
                 return `
                 <div class="flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 fade-in duration-300">
-                    <div class="max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed shadow-sm relative group text-left
-                        ${m.role === 'user' 
-                            ? (sendBtnColor + ' text-white rounded-br-none') 
-                            : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-bl-none'
-                        }">
-                        ${contentHtml}
+                    <div class="max-w-[85%] relative group text-left">
+                        <div class="p-3 rounded-2xl text-sm leading-relaxed shadow-sm 
+                            ${m.role === 'user' 
+                                ? (sendBtnColor + ' text-white rounded-br-none') 
+                                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-bl-none'
+                            }">
+                            ${contentHtml}
+                        </div>
+                        ${blueprintCard}
                     </div>
                 </div>
              `;
@@ -438,6 +506,22 @@ class ArborSage extends HTMLElement {
             chatArea.innerHTML = getMessagesHTML();
             chatArea.scrollTop = chatArea.scrollHeight;
             this.bindMessageEvents(chatArea);
+            
+            // Update button directly for existing DOM
+            const btnSubmit = this.querySelector('button[type="submit"]');
+            if(btnSubmit) {
+                btnSubmit.className = btnClass;
+                btnSubmit.innerHTML = btnIcon;
+            }
+            
+            // Update input state
+            const inp = this.querySelector('#sage-input');
+            if(inp) {
+                inp.disabled = isThinking;
+                inp.style.opacity = isThinking ? '0.5' : '1';
+                inp.style.cursor = isThinking ? 'not-allowed' : 'text';
+                if(!isThinking) inp.focus();
+            }
             return;
         }
 
@@ -445,7 +529,7 @@ class ArborSage extends HTMLElement {
         
         let headerGradient = isArchitect ? 'from-amber-500 to-orange-600' : (isOllama ? 'from-orange-500 to-red-500' : 'from-teal-500 to-emerald-600');
         let providerName = isOllama ? 'Local (Ollama)' : 'Puter Cloud';
-        if (isArchitect) providerName = 'Sage Constructor'; // Changed from '... (Architect)'
+        if (isArchitect) providerName = 'Sage Constructor'; 
 
         this.innerHTML = `
             <div id="sage-backdrop" class="md:hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm pointer-events-auto transition-opacity"></div>
@@ -492,9 +576,9 @@ class ArborSage extends HTMLElement {
                 ` : ''}
 
                 <form id="sage-form" class="p-3 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex gap-2 shrink-0 pb-[calc(0.75rem+env(safe-area-inset-bottom,20px))] md:pb-3">
-                    <input id="sage-input" type="text" class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 ${isOllama || isArchitect ? 'focus:ring-orange-500' : 'focus:ring-teal-500'} dark:text-white placeholder:text-slate-400 disabled:opacity-50" placeholder="${isArchitect ? 'Instruct the Architect...' : ui.sageInputPlaceholder}" autocomplete="off">
-                    <button type="submit" class="w-11 h-11 ${sendBtnColor} text-white rounded-xl hover:opacity-90 transition-all flex items-center justify-center shadow-lg active:scale-95">
-                        <svg class="w-5 h-5 translate-x-0.5 -translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>
+                    <input id="sage-input" type="text" class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 ${isOllama || isArchitect ? 'focus:ring-orange-500' : 'focus:ring-teal-500'} dark:text-white placeholder:text-slate-400 disabled:opacity-50" placeholder="${isArchitect ? 'Instruct the Architect...' : ui.sageInputPlaceholder}" autocomplete="off" ${isThinking ? 'disabled style="cursor:not-allowed; opacity:0.5"' : ''}>
+                    <button type="submit" class="${btnClass}">
+                        ${btnIcon}
                     </button>
                 </form>
             </div>
@@ -510,6 +594,13 @@ class ArborSage extends HTMLElement {
         const form = this.querySelector('#sage-form');
         form.onsubmit = (e) => {
              e.preventDefault();
+             
+             // INTERCEPT: Stop Generation if Thinking
+             if (isThinking) {
+                 store.abortSage();
+                 return;
+             }
+
              const inp = this.querySelector('#sage-input');
              if (inp.value.trim()) {
                  // Pass context to chat if in architect mode
