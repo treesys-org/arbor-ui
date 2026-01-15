@@ -1,5 +1,4 @@
 
-
 import { store } from '../../store.js';
 import { fileSystem } from '../../services/filesystem.js';
 import { github } from '../../services/github.js'; 
@@ -9,30 +8,38 @@ class ArborAdminPanel extends HTMLElement {
     constructor() {
         super();
         this.state = {
-            adminTab: 'explorer', // 'explorer' | 'prs' | 'team'
+            adminTab: 'explorer', // 'explorer' | 'faculty' | 'proposals' | 'archives'
             isAdmin: false,
             canWrite: false,
             isRepoHealthy: true, 
             adminData: { prs: [], users: [], gov: null },
-            parsedRules: [], // Visual representation of CODEOWNERS
+            parsedRules: [], 
             treeNodes: [], 
             treeFilter: '',
             expandedPaths: new Set(['content', 'content/EN', 'content/ES']),
-            selectedGovPath: null, // For Team Split View
-            activeUserFilter: null, // NEW: Filter tree by user login
+            
+            // MASTER-DETAIL STATE
+            selectedPath: null,
+            selectedType: null, // 'folder' | 'file'
+            
+            activeUserFilter: null,
             isLoggingIn: false,
-            loginError: null
+            loginError: null,
+            
+            // VERSIONS STATE
+            releases: [],
+            releasesLoading: false,
+            newVersionName: '',
+            creatingRelease: false
         };
     }
 
     connectedCallback() {
-        // Check for deep-link tab in modal state
         const modalState = store.value.modal;
         if (modalState && modalState.tab) {
             this.state.adminTab = modalState.tab;
         }
 
-        // Subscribe to state changes to react to login/logout events
         this.subscription = (e) => {
             this.render();
             if(store.value.activeSource) this.initData();
@@ -52,12 +59,9 @@ class ArborAdminPanel extends HTMLElement {
     }
 
     async initData() {
-        // If not logged in and not local, stop here (Render handles the login screen)
         if (!fileSystem.isLocal && !store.value.githubUser) return;
 
         const features = fileSystem.features;
-        
-        // Only run expensive admin checks if we are actually connected
         const isAdmin = features.hasGovernance && store.value.githubUser ? await github.isAdmin() : false;
 
         this.updateState({ 
@@ -65,16 +69,20 @@ class ArborAdminPanel extends HTMLElement {
             isAdmin: isAdmin
         });
 
-        this.loadTreeData();
+        if (this.state.adminTab === 'explorer') {
+            this.loadTreeData();
+        }
+        
+        if (this.state.adminTab === 'archives') {
+            this.loadReleases();
+        }
 
         if (!fileSystem.isLocal && features.canWrite) {
             const isHealthy = await github.checkHealth();
             this.updateState({ isRepoHealthy: isHealthy });
             
-            // Auto-load data if we started on a data-heavy tab
-            if (this.state.adminTab !== 'explorer') {
-                this.loadAdminData();
-            }
+            // Always load admin data if we can, needed for autocomplete/governance in Explorer too
+            this.loadAdminData();
         }
     }
 
@@ -95,16 +103,13 @@ class ArborAdminPanel extends HTMLElement {
 
         flatNodes.forEach(n => {
             const node = map[n.path];
-            // Handle different path separators if necessary, mostly '/'
             const parts = n.path.split('/'); 
-            if (parts.length === 1) {
-                root.push(node);
-            } else {
+            if (parts.length >= 1) {
                 const parentPath = parts.slice(0, -1).join('/');
                 if (map[parentPath]) {
                     map[parentPath].children.push(node);
                 } else {
-                    root.push(node);
+                    if (n.path.startsWith('content')) root.push(node); // Root at content
                 }
             }
         });
@@ -134,7 +139,6 @@ class ArborAdminPanel extends HTMLElement {
             github.getCollaborators()
         ];
         
-        // Only fetch governance if supported
         if (fileSystem.features.hasGovernance) {
             promises.push(github.getCodeOwners());
         }
@@ -145,7 +149,6 @@ class ArborAdminPanel extends HTMLElement {
         const users = results[1] || [];
         const gov = results.length > 2 ? results[2] : null;
 
-        // Parse CodeOwners into visual rules
         const parsedRules = this.parseGovernance(gov?.content || '');
 
         this.updateState({ 
@@ -153,28 +156,76 @@ class ArborAdminPanel extends HTMLElement {
             parsedRules: parsedRules
         });
     }
+    
+    async loadReleases() {
+        this.updateState({ releasesLoading: true });
+        try {
+            const tree = await fileSystem.getTree('content/releases');
+            const releaseFolders = new Set();
+            tree.forEach(node => {
+                const path = node.path;
+                const parts = path.split('/');
+                if (parts.length >= 3 && parts[0] === 'content' && parts[1] === 'releases') {
+                    releaseFolders.add(parts[2]);
+                }
+            });
+            this.updateState({ releases: Array.from(releaseFolders).sort().reverse(), releasesLoading: false }); 
+        } catch (e) {
+            this.updateState({ releases: [], releasesLoading: false });
+        }
+    }
 
-    // --- GOVERNANCE PARSER ---
+    async createRelease() {
+        const name = this.state.newVersionName.trim().replace(/[^a-z0-9\.\-_]/gi, '');
+        if (!name) return;
+        this.updateState({ creatingRelease: true });
+        try {
+            await fileSystem.createNode('content/releases', name, 'folder');
+            this.updateState({ newVersionName: '' });
+            await this.loadReleases();
+            alert(`Version '${name}' created.`);
+        } catch (e) {
+            alert("Error: " + e.message);
+        } finally {
+            this.updateState({ creatingRelease: false });
+        }
+    }
+
+    switchToVersion(version) {
+        const activeSource = store.value.activeSource;
+        let dataRoot = activeSource.url;
+        if (dataRoot.includes('/data.json')) {
+            dataRoot = dataRoot.replace('/data.json', '');
+        } else {
+            dataRoot = dataRoot.substring(0, dataRoot.lastIndexOf('/'));
+        }
+        const newUrl = `${dataRoot}/releases/${version}.json`;
+
+        if (confirm(`Switch to '${version}'?`)) {
+            const newSource = {
+                ...activeSource,
+                id: `${activeSource.id}-${version}`,
+                name: `${activeSource.name} (${version})`,
+                url: newUrl,
+                type: 'archive'
+            };
+            store.loadData(newSource);
+            store.setModal(null);
+        }
+    }
+
     parseGovernance(rawText) {
         if (!rawText) return [];
         const lines = rawText.split('\n');
         const rules = [];
-        
         lines.forEach(line => {
             const clean = line.trim();
             if (!clean || clean.startsWith('#')) return;
-            
-            // Format: /path/to/folder @owner
             const parts = clean.split(/\s+/);
             if (parts.length >= 2) {
                 let path = parts[0];
-                // NORMALIZE: Ensure path starts with / for consistency
                 if (!path.startsWith('/')) path = '/' + path;
-                
-                rules.push({
-                    path: path,
-                    owner: parts[1] // Includes the @
-                });
+                rules.push({ path: path, owner: parts[1] });
             }
         });
         return rules;
@@ -198,112 +249,36 @@ class ArborAdminPanel extends HTMLElement {
             this.updateState({ expandedPaths: new Set(set) });
         };
         
-        window.selectGovNode = (path) => {
-            this.updateState({ selectedGovPath: path });
+        window.selectAdminNode = (path, type) => {
+            this.updateState({ selectedPath: path, selectedType: type });
         };
         
-        window.filterByOwner = (login) => {
-            if (this.state.activeUserFilter === login) {
-                this.updateState({ activeUserFilter: null }); // Toggle off
-            } else {
-                this.updateState({ activeUserFilter: login });
-            }
+        window.updateGovRuleAction = (path, owner) => {
+            const panel = document.querySelector('arbor-admin-panel');
+            if (panel) panel.updateGovRule(path, owner);
         };
 
         window.editFile = (path) => {
-             // For local mode, attempt to resolve ID
-             let nodeId = null;
-             if (fileSystem.isLocal) {
-                 const findId = (nodes) => {
-                     for(const n of nodes) {
-                         if(n.path === path) return n.id;
-                         if(n.children) {
-                             const found = findId(n.children);
-                             if(found) return found;
-                         }
-                     }
-                     return null;
-                 };
-                 nodeId = findId(this.state.treeNodes);
-             }
-
              store.setModal({ 
                  type: 'editor', 
                  returnTo: 'contributor',
-                 node: { 
-                     name: path.split('/').pop(), 
-                     sourcePath: path, 
-                     id: nodeId || 'edit-'+Date.now() 
-                 } 
+                 node: { name: path.split('/').pop(), sourcePath: path, id: 'edit-'+Date.now() } 
              });
         };
-        
-        window.deleteFileAction = async (path, type) => {
-            if(confirm(store.ui.adminConfirmDelete + path + '?')) {
-                try {
-                    await fileSystem.deleteNode(path, type);
-                    this.loadTreeData();
-                } catch(e) {
-                    alert("Error: " + e.message);
-                }
-            }
-        };
-
-        window.renameNode = async (path, type) => {
-            const parts = path.split('/');
-            const oldName = parts[parts.length - 1];
-            const newName = prompt(store.ui.adminRenamePrompt?.replace('{oldName}', oldName) || `Rename '${oldName}' to:`, oldName);
-            
-            if (newName && newName !== oldName) {
-                try {
-                    const treeContainer = this.querySelector('#tree-container');
-                    if(treeContainer) treeContainer.classList.add('opacity-50', 'pointer-events-none');
-                    
-                    await fileSystem.renameNode(path, newName, type);
-                    this.loadTreeData();
-                } catch(e) {
-                    alert("Error: " + e.message);
-                } finally {
-                    const treeContainer = this.querySelector('#tree-container');
-                    if(treeContainer) treeContainer.classList.remove('opacity-50', 'pointer-events-none');
-                }
-            }
-        };
-
-        window.createNodeAction = async (type) => {
-            const name = prompt(type === 'folder' ? "Folder Name:" : "Filename (e.g. Lesson.md):");
-            if (!name) return;
-            const parent = 'content/EN'; // Default Root for MVP
-            try {
-                await fileSystem.createNode(parent, name, type);
-                this.loadTreeData();
-            } catch(e) {
-                alert("Error: " + e.message);
-            }
-        };
-        
-        window.handleDragStart = (e) => {};
-        window.handleDragOver = (e) => {};
-        window.handleDrop = (e) => {};
     }
 
-    // --- AUTH ACTIONS ---
     async handleLogin() {
         const token = this.querySelector('#inp-token').value.trim();
         if (!token) return;
-
         this.updateState({ isLoggingIn: true, loginError: null });
-        
         try {
             const user = await github.initialize(token);
             if (user) {
                 localStorage.setItem('arbor-gh-token', token);
-                store.update({ githubUser: user }); // This triggers initData via listener
-            } else {
-                throw new Error("Invalid Token");
-            }
+                store.update({ githubUser: user });
+            } else { throw new Error("Invalid Token"); }
         } catch (e) {
-            this.updateState({ loginError: "Authentication failed. Check your token.", isLoggingIn: false });
+            this.updateState({ loginError: "Auth Failed", isLoggingIn: false });
         }
     }
 
@@ -312,50 +287,16 @@ class ArborAdminPanel extends HTMLElement {
         localStorage.removeItem('arbor-gh-token');
         store.update({ githubUser: null });
         this.updateState({ 
-            adminTab: 'explorer', 
-            isAdmin: false, 
-            canWrite: false, 
-            adminData: { prs: [], users: [], gov: null },
-            treeNodes: [],
-            parsedRules: []
+            adminTab: 'explorer', isAdmin: false, canWrite: false, 
+            adminData: { prs: [], users: [], gov: null }, treeNodes: [], parsedRules: [],
+            releases: []
         });
     }
 
-    // --- TEAM & GOV ACTIONS ---
-    async handleProtectBranch() {
-        if(confirm(store.ui.adminProtectConfirm)) {
-            try {
-                await github.protectBranch();
-                alert(store.ui.adminProtectSuccess);
-            } catch(e) {
-                alert(store.ui.adminProtectError);
-            }
-        }
-    }
-
-    async handleInvite() {
-        const username = prompt("GitHub Username:");
-        if(username) {
-            try {
-                await github.inviteUser(username);
-                alert(store.ui.adminInviteSent);
-                this.loadAdminData();
-            } catch(e) { alert("Error: " + e.message); }
-        }
-    }
-
     updateGovRule(path, owner) {
-        // Normalize for storage
         const formattedPath = path.startsWith('/') ? path : '/' + path;
-        
-        // 1. Remove existing rule for this path if any
         let newRules = this.state.parsedRules.filter(r => r.path !== formattedPath);
-        
-        // 2. Add new rule if owner is set (not empty)
-        if (owner) {
-            newRules.push({ path: formattedPath, owner: owner });
-        }
-        
+        if (owner) newRules.push({ path: formattedPath, owner: owner });
         this.updateState({ parsedRules: newRules });
     }
 
@@ -363,291 +304,307 @@ class ArborAdminPanel extends HTMLElement {
         const content = this.serializeGovernance(this.state.parsedRules);
         try {
             await github.saveCodeOwners('.github/CODEOWNERS', content, this.state.adminData.gov?.sha);
-            alert("✅ Governance updated successfully.");
+            alert("✅ Permissions updated.");
             this.loadAdminData();
         } catch(e) { alert("Error: " + e.message); }
+    }
+    
+    // --- RENDERERS ---
+
+    renderLogin() {
+        const ui = store.ui;
+        this.innerHTML = `
+        <div class="flex flex-col h-full bg-slate-50 dark:bg-slate-950 relative rounded-3xl overflow-hidden">
+            <button id="btn-close-panel" class="absolute top-6 right-6 w-10 h-10 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 transition-colors flex items-center justify-center text-xl">✕</button>
+            <div class="flex-1 flex flex-col items-center justify-center p-8 text-center max-w-md mx-auto animate-in fade-in zoom-in duration-300">
+                <div class="w-24 h-24 bg-black text-white rounded-3xl flex items-center justify-center text-5xl mb-8 shadow-2xl transform -rotate-6">🐙</div>
+                <h2 class="text-3xl font-black text-slate-800 dark:text-white mb-2">${ui.contribTitle}</h2>
+                <p class="text-lg text-slate-500 mb-10 font-medium leading-relaxed">${ui.contribDesc}</p>
+                <input id="inp-token" type="password" placeholder="${ui.contribTokenPlaceholder}" class="w-full px-6 py-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 mb-4 focus:border-black dark:focus:border-white outline-none transition-colors text-lg font-bold text-center">
+                ${this.state.loginError ? `<p class="text-sm text-red-500 font-bold mb-6 animate-pulse bg-red-50 px-4 py-2 rounded-lg">${this.state.loginError}</p>` : ''}
+                <button id="btn-login" class="w-full py-4 bg-black dark:bg-white text-white dark:text-black font-black text-xl rounded-2xl shadow-xl hover:scale-105 active:scale-95 transition-all mb-6">
+                    ${this.state.isLoggingIn ? 'Connecting...' : ui.contribConnect}
+                </button>
+            </div>
+        </div>`;
+        this.querySelector('#btn-close-panel').onclick = () => store.setModal(null);
+        const btnLogin = this.querySelector('#btn-login');
+        if(btnLogin) btnLogin.onclick = () => this.handleLogin();
+    }
+
+    renderInspector(path, type) {
+        if (!path) {
+            return `
+            <div class="flex-1 flex flex-col items-center justify-center text-center p-8 opacity-40">
+                <div class="text-9xl mb-4 grayscale opacity-20">👈</div>
+                <h3 class="font-black text-xl text-slate-800 dark:text-white">SELECT AN ITEM</h3>
+                <p class="text-sm text-slate-500 mt-2 font-medium">View properties and permissions.</p>
+            </div>`;
+        }
+
+        const name = path.split('/').pop();
+        const { adminData, parsedRules, canWrite } = this.state;
+        
+        // Governance Logic
+        const getOwner = (p) => {
+            const normalized = p.startsWith('/') ? p : '/' + p;
+            const rule = parsedRules.find(r => r.path === normalized);
+            return rule ? rule.owner : null;
+        };
+        const currentOwner = getOwner(path);
+        
+        // --- INSPECTOR UI ---
+        return `
+        <div class="flex flex-col h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 animate-in slide-in-from-right-4 duration-200">
+            <!-- HEADER -->
+            <div class="p-6 border-b border-slate-100 dark:border-slate-800">
+                <div class="flex items-center gap-3 mb-2">
+                    <div class="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center text-3xl">
+                        ${type === 'tree' || type === 'folder' ? '📁' : '📄'}
+                    </div>
+                    <div class="min-w-0">
+                        <h3 class="font-black text-lg text-slate-800 dark:text-white truncate" title="${name}">${name}</h3>
+                        <p class="text-[10px] text-slate-400 font-mono truncate">${path}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CONTENT -->
+            <div class="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8">
+                
+                <!-- ACTIONS -->
+                ${canWrite ? `
+                <div class="grid grid-cols-2 gap-3">
+                    <button class="py-3 px-4 bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-slate-700 dark:text-slate-300 font-bold rounded-xl text-xs flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-700 transition-colors" onclick="window.renameNode('${path}', '${type}')">
+                        <span>✏️</span> Rename
+                    </button>
+                    <button class="py-3 px-4 bg-slate-50 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 font-bold rounded-xl text-xs flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-700 transition-colors" onclick="window.deleteFileAction('${path}', '${type}')">
+                        <span>🗑️</span> Delete
+                    </button>
+                    <button class="col-span-2 py-4 bg-slate-900 dark:bg-white text-white dark:text-black font-black rounded-xl shadow-lg active:scale-95 transition-all text-sm flex items-center justify-center gap-2" onclick="window.editFile('${type === 'tree' || type === 'folder' ? path + '/meta.json' : path}')">
+                        <span>${type === 'tree' || type === 'folder' ? '⚙️ Properties' : '📝 Edit Content'}</span>
+                    </button>
+                </div>
+                ` : '<div class="text-center text-slate-400 text-xs italic">Read Only Mode</div>'}
+
+                <!-- GOVERNANCE (FOLDERS ONLY) -->
+                ${(type === 'tree' || type === 'folder') && !fileSystem.isLocal ? `
+                <div>
+                    <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 border-b border-slate-100 dark:border-slate-700 pb-2">Teacher Assignment</h4>
+                    
+                    <div class="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl mb-4 border border-slate-200 dark:border-slate-700 text-center">
+                        <p class="text-xs text-slate-500 mb-1">Current Owner</p>
+                        <div class="text-xl font-black text-purple-600 dark:text-purple-400">
+                            ${currentOwner || "Unassigned"}
+                        </div>
+                    </div>
+
+                    ${canWrite ? `
+                    <div class="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto custom-scrollbar p-1">
+                        <button onclick="window.updateGovRuleAction('${path}', '')" class="p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 text-xs font-bold text-slate-500 hover:text-red-500 transition-colors">
+                            ❌ Clear
+                        </button>
+                        ${adminData.users.map(u => `
+                            <button onclick="window.updateGovRuleAction('${path}', '@${u.login}')" class="p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/10 text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-2 transition-colors ${currentOwner === '@'+u.login ? 'bg-purple-100 dark:bg-purple-900/30 border-purple-500' : ''}">
+                                <img src="${u.avatar}" class="w-5 h-5 rounded-full"> @${u.login}
+                            </button>
+                        `).join('')}
+                    </div>
+                    <button id="btn-save-gov-inspector" class="w-full mt-4 py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl shadow transition-colors text-xs">
+                        Save Permissions
+                    </button>
+                    ` : ''}
+                </div>
+                ` : ''}
+
+            </div>
+        </div>
+        `;
     }
 
     render() {
         const ui = store.ui;
-        // CRITICAL CHECK: Are we Local or Remote?
-        // If Remote AND Not Logged In, show Login Screen.
+        
         if (!fileSystem.isLocal && !store.value.githubUser) {
             this.renderLogin();
             return;
         }
 
-        const { adminTab, isAdmin, canWrite, adminData, treeNodes, treeFilter, parsedRules, selectedGovPath, expandedPaths, activeUserFilter } = this.state;
-        const sourceName = store.value.activeSource?.name || 'Unknown Source';
-        
+        const { adminTab, treeNodes, treeFilter, expandedPaths, releases, releasesLoading, selectedPath, selectedType, adminData, creatingRelease, newVersionName } = this.state;
+        const sourceName = store.value.activeSource?.name || 'Garden';
+        const navButtonClass = (tab) => `flex-1 py-3 flex items-center justify-center gap-2 font-black uppercase text-xs tracking-widest transition-all ${adminTab === tab ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-md rounded-xl' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl'}`;
+
         const header = `
-        <div class="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950 shrink-0">
-            <div class="flex items-center gap-3">
-                <span class="text-2xl">${fileSystem.isLocal ? '🌱' : '🐙'}</span>
-                <div>
-                    <p class="font-black text-sm text-slate-800 dark:text-white leading-none">
-                        ${fileSystem.isLocal ? 'Garden Manager' : 'Repository Admin'}
-                    </p>
-                    <p class="text-[10px] text-slate-400 font-bold mt-0.5">${sourceName}</p>
+        <div class="flex flex-col bg-white dark:bg-slate-950 shrink-0 z-20 border-b border-slate-100 dark:border-slate-800">
+            <div class="p-4 flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center text-xl">🏛️</div>
+                    <div>
+                        <h2 class="text-lg font-black text-slate-800 dark:text-white uppercase leading-none tracking-tight">${sourceName}</h2>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Control Center</p>
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    ${!fileSystem.isLocal ? `<button id="btn-logout" class="px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-900/30 text-[10px] font-bold rounded-lg text-slate-500 hover:text-red-500 transition-colors">LOGOUT</button>` : ''}
+                    <button id="btn-close-panel" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 transition-colors">✕</button>
                 </div>
             </div>
-            <div class="flex gap-2">
-                ${!fileSystem.isLocal ? `<button id="btn-logout" class="px-3 py-1 bg-slate-200 dark:bg-slate-800 hover:bg-red-100 dark:hover:bg-red-900/30 text-xs font-bold rounded-lg text-slate-600 dark:text-slate-300 hover:text-red-600 transition-colors">${ui.signOut || 'Log Out'}</button>` : ''}
-                <button id="btn-close-panel" class="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 transition-colors">✕</button>
+            
+            <div class="flex px-4 pb-4 gap-2">
+                <button id="tab-explorer" class="${navButtonClass('explorer')}">
+                    <span>📚</span> ${ui.adminExplorer || "Curriculum"}
+                </button>
+                <button id="tab-faculty" class="${navButtonClass('faculty')}">
+                    <span>👩‍🏫</span> ${ui.adminTeam || "Faculty"}
+                </button>
+                <button id="tab-proposals" class="${navButtonClass('proposals')}">
+                    <span>📬</span> ${ui.adminPrs || "Proposals"}
+                </button>
+                <button id="tab-archives" class="${navButtonClass('archives')}">
+                    <span>⏳</span> ${ui.adminVersions || "Archives"}
+                </button>
             </div>
-        </div>`;
-
-        const tabs = `
-        <div class="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 shrink-0">
-            <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${adminTab === 'explorer' ? 'border-green-500 text-green-600' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-explorer">📂 ${ui.adminExplorer}</button>
-            ${fileSystem.features.hasGovernance ? `
-            <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${adminTab === 'prs' ? 'border-orange-500 text-orange-600' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-prs">${ui.adminPrs}</button>
-            ` : ''}
-            ${isAdmin ? `
-            <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${adminTab === 'team' ? 'border-purple-500 text-purple-600' : 'border-transparent text-slate-400 hover:text-slate-600'}" id="tab-team">${ui.adminTeam} & Access</button>
-            ` : ''}
         </div>`;
 
         let content = '';
 
-        // --- EXPLORER TAB ---
+        // --- TAB 1: CURRICULUM (MASTER-DETAIL) ---
         if (adminTab === 'explorer') {
              content = `
-             <div class="flex flex-col h-full bg-slate-50/30 overflow-hidden">
-                <div class="p-2 border-b border-slate-100 flex justify-between items-center bg-white dark:bg-slate-900 shrink-0 gap-2">
-                    <div class="flex gap-1">
-                        <button id="btn-refresh-tree" title="${ui.adminRefresh}" class="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded hover:bg-slate-100 dark:hover:bg-slate-800">🔄</button>
-                        ${canWrite ? `
-                        <button id="btn-create-folder" title="${ui.adminNewFolder}" class="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded hover:bg-slate-100 dark:hover:bg-slate-800">📁+</button>
-                        <button id="btn-create-file" title="${ui.adminNewFile}" class="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded hover:bg-slate-100 dark:hover:bg-slate-800">📄+</button>
+             <div class="flex-1 flex overflow-hidden bg-slate-50 dark:bg-slate-900">
+                <!-- LEFT: TREE -->
+                <div class="w-7/12 flex flex-col border-r border-slate-200 dark:border-slate-800">
+                    <div class="p-3 border-b border-slate-100 dark:border-slate-800 flex gap-2 bg-white dark:bg-slate-950">
+                        ${this.state.canWrite ? `
+                        <button id="btn-create-folder" class="px-3 py-2 bg-blue-50 text-blue-600 font-bold rounded-lg text-xs hover:bg-blue-100 transition-colors">📁+</button>
+                        <button id="btn-create-file" class="px-3 py-2 bg-green-50 text-green-600 font-bold rounded-lg text-xs hover:bg-green-100 transition-colors">📄+</button>
                         ` : ''}
+                        <button id="btn-refresh-tree" class="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 text-slate-400 hover:bg-slate-200">🔄</button>
+                        <input id="inp-tree-filter" type="text" placeholder="Search..." value="${treeFilter}" class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-lg px-3 text-xs font-bold text-slate-600 outline-none">
                     </div>
-                    <div class="flex-1 relative">
-                        <input id="inp-tree-filter" type="text" placeholder="${ui.searchPlaceholder}" value="${treeFilter}" class="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500">
+                    <div id="tree-container" class="flex-1 overflow-y-auto custom-scrollbar p-2">
+                        ${treeNodes.length === 0 ? `<div class="p-8 text-center text-slate-300 font-bold text-xs">Loading...</div>` : 
+                          AdminRenderer.renderRecursiveTree(treeNodes, 0, {
+                              filter: treeFilter.toLowerCase(),
+                              expandedPaths: expandedPaths,
+                              canEdit: () => true, // Always show standard items
+                              ui: ui
+                          })}
                     </div>
                 </div>
-                <div id="tree-container" class="flex-1 overflow-y-auto custom-scrollbar p-2 select-none bg-white dark:bg-slate-900">
-                    ${treeNodes.length === 0 ? `<div class="p-8 text-center text-slate-400 italic text-xs">Empty or Loading...</div>` : 
-                      AdminRenderer.renderRecursiveTree(treeNodes, 0, {
-                          filter: this.state.treeFilter.toLowerCase(),
-                          expandedPaths: this.state.expandedPaths,
-                          canEdit: () => canWrite,
-                          ui: ui
-                      })}
+
+                <!-- RIGHT: INSPECTOR -->
+                <div class="w-5/12 bg-white dark:bg-slate-900">
+                    ${this.renderInspector(selectedPath, selectedType)}
                 </div>
              </div>`;
         }
-        // --- PULL REQUESTS TAB ---
-        else if (adminTab === 'prs') {
-            content = `<div class="flex-1 overflow-y-auto p-4 space-y-2 bg-slate-50/50 dark:bg-slate-900/50">
-                ${adminData.prs.length === 0 ? `<div class="text-center p-8 text-slate-400">${ui.noResults}</div>` : 
+        
+        // --- TAB 2: FACULTY (ROSTER ONLY) ---
+        else if (adminTab === 'faculty') {
+            content = `
+            <div class="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-900">
+                <div class="max-w-2xl mx-auto">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="font-black text-xl text-slate-800 dark:text-white uppercase">Staff Directory</h3>
+                        <button id="btn-invite" class="px-4 py-2 bg-purple-600 text-white font-bold rounded-xl text-xs shadow hover:bg-purple-500">
+                            + Invite Teacher
+                        </button>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        ${adminData.users.map(u => `
+                            <div class="flex items-center gap-4 p-4 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+                                <img src="${u.avatar}" class="w-12 h-12 rounded-full border-2 border-slate-200 dark:border-slate-600">
+                                <div>
+                                    <h4 class="font-bold text-slate-800 dark:text-white">@${u.login}</h4>
+                                    <span class="text-[10px] font-black bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full uppercase">${u.role}</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        // --- TAB 3: PROPOSALS (PRs) ---
+        else if (adminTab === 'proposals') {
+            content = `<div class="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50 dark:bg-slate-900">
+                ${adminData.prs.length === 0 ? `
+                    <div class="flex flex-col items-center justify-center h-64 text-slate-400">
+                        <span class="text-6xl mb-4 opacity-20">📭</span>
+                        <p class="font-bold">Inbox Zero</p>
+                    </div>
+                ` : 
                 adminData.prs.map(pr => `
-                    <div class="p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl flex justify-between items-center hover:shadow-md transition-shadow">
-                        <div>
-                            <a href="${pr.html_url}" target="_blank" class="font-bold text-slate-800 dark:text-white hover:text-blue-600 hover:underline text-sm">#${pr.number} ${pr.title}</a>
-                            <p class="text-xs text-slate-400 mt-1">@${pr.user.login}</p>
+                    <div class="p-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl flex justify-between items-center shadow-sm">
+                        <div class="flex items-center gap-4">
+                            <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-sm">#${pr.number}</div>
+                            <div>
+                                <h4 class="font-bold text-sm text-slate-800 dark:text-white">${pr.title}</h4>
+                                <p class="text-xs text-slate-500 font-bold mt-0.5">by <span class="text-blue-500">@${pr.user.login}</span></p>
+                            </div>
                         </div>
-                        <a href="${pr.html_url}" target="_blank" class="px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs font-bold rounded-lg">View</a>
+                        <a href="${pr.html_url}" target="_blank" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-xs shadow transition-transform active:scale-95">Review</a>
                     </div>
                 `).join('')}
             </div>`;
         }
-        // --- TEAM & GOVERNANCE TAB (RADICAL REDESIGN) ---
-        else if (adminTab === 'team') {
-            
-            // Helper to get owner of a path from parsed rules
-            const getOwner = (path) => {
-                const normalized = path.startsWith('/') ? path : '/' + path;
-                const rule = parsedRules.find(r => r.path === normalized);
-                return rule ? rule.owner : null;
-            };
-            
-            const getUserInfo = (login) => {
-                if(!login) return null;
-                const clean = login.replace('@', '').toLowerCase();
-                return adminData.users.find(u => u.login.toLowerCase() === clean);
-            };
 
-            const selectedOwner = selectedGovPath ? getOwner(selectedGovPath) : null;
-            const selectedName = selectedGovPath ? selectedGovPath.split('/').pop().replace(/_/g, ' ') : null;
-
+        // --- TAB 4: ARCHIVES (VERSIONS) ---
+        else if (adminTab === 'archives') {
             content = `
-            <div class="flex flex-col h-full bg-white dark:bg-slate-900 overflow-hidden">
-                
-                <!-- TEAM ROSTER BAR (Horizontal) -->
-                <div class="p-3 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3 overflow-x-auto no-scrollbar bg-slate-50/50 dark:bg-slate-950/50 shrink-0">
-                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2 sticky left-0">Team</span>
-                    ${adminData.users.map(u => {
-                        const isActive = activeUserFilter === u.login;
-                        return `
-                        <button onclick="window.filterByOwner('${u.login}')" class="flex items-center gap-2 px-2 py-1.5 rounded-full border transition-all ${isActive ? 'bg-purple-100 dark:bg-purple-900/30 border-purple-300 dark:border-purple-600 shadow-sm' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-purple-300'}">
-                            <img src="${u.avatar}" class="w-5 h-5 rounded-full">
-                            <span class="text-xs font-bold ${isActive ? 'text-purple-700 dark:text-purple-300' : 'text-slate-600 dark:text-slate-400'}">${u.login}</span>
+            <div class="flex flex-col h-full bg-slate-50 dark:bg-slate-900">
+                <div class="p-6 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950/50">
+                    <label class="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Tag New Version</label>
+                    <div class="flex gap-2 max-w-lg">
+                        <input id="inp-version" type="text" placeholder="e.g. v2.0" class="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-white font-mono" value="${newVersionName}">
+                        <button id="btn-create-release" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-xl font-bold shadow-lg transition-all text-xs uppercase tracking-wider flex items-center gap-2" ${creatingRelease ? 'disabled' : ''}>
+                            ${creatingRelease ? '<span class="animate-spin">⏳</span>' : '<span>+ Tag</span>'}
                         </button>
-                    `}).join('')}
-                    <button id="btn-invite" class="w-8 h-8 rounded-full border border-dashed border-slate-300 text-slate-400 hover:text-blue-500 hover:border-blue-400 flex items-center justify-center text-lg transition-colors">+</button>
+                    </div>
                 </div>
-
-                <!-- SPLIT VIEW -->
-                <div class="flex-1 flex overflow-hidden">
-                    
-                    <!-- LEFT: VISUAL TERRITORY TREE -->
-                    <div class="w-1/3 border-r border-slate-200 dark:border-slate-800 flex flex-col bg-slate-50/30 dark:bg-slate-950/30">
-                        <div class="flex-1 overflow-y-auto custom-scrollbar p-2">
-                            ${treeNodes.length === 0 ? '<div class="p-4 text-xs text-slate-400 text-center">Loading Tree...</div>' : 
-                              AdminRenderer.renderGovernanceTree(treeNodes, 0, {
-                                  getOwner: getOwner,
-                                  getUserInfo: getUserInfo,
-                                  selectedPath: selectedGovPath,
-                                  expandedPaths: expandedPaths,
-                                  filterUser: activeUserFilter
-                              })
-                            }
-                        </div>
-                    </div>
-
-                    <!-- RIGHT: ACCESS CARD -->
-                    <div class="w-2/3 flex flex-col bg-white dark:bg-slate-900 relative">
-                        
-                        ${!selectedGovPath ? `
-                            <div class="flex-1 flex flex-col items-center justify-center text-center p-8 opacity-50">
-                                <div class="text-6xl mb-4 grayscale">🛡️</div>
-                                <h3 class="font-bold text-slate-400">Select a Zone</h3>
-                                <p class="text-xs text-slate-300 max-w-xs mt-2">Click a folder to assign responsibility or manage rules.</p>
-                            </div>
-                        ` : `
-                            <div class="p-8 flex-1 overflow-y-auto">
-                                
-                                <!-- Header Info -->
-                                <div class="mb-8 flex items-start justify-between">
-                                    <div class="flex items-center gap-3">
-                                        <div class="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center text-3xl">📂</div>
-                                        <div>
-                                            <h2 class="text-2xl font-black text-slate-800 dark:text-white">${selectedName}</h2>
-                                            <code class="text-xs text-slate-400 font-mono bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">/${selectedGovPath}</code>
-                                        </div>
+                <div class="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-3">
+                    ${releasesLoading 
+                        ? `<div class="p-12 text-center text-slate-400"><div class="animate-spin text-3xl mb-4 opacity-50">⏳</div></div>` 
+                        : (releases.length === 0 
+                            ? `<div class="p-8 text-center text-slate-400 italic text-sm">No archives found.</div>`
+                            : releases.map(ver => `
+                                <div class="flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm">
+                                    <div class="flex items-center gap-4">
+                                        <div class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-500 flex items-center justify-center text-lg">📦</div>
+                                        <span class="font-black text-lg text-slate-700 dark:text-slate-200 font-mono">${ver}</span>
                                     </div>
-                                    
-                                    ${activeUserFilter && getOwner(selectedGovPath)?.toLowerCase().includes(activeUserFilter.toLowerCase()) ? 
-                                        `<span class="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full border border-green-200">✅ Owned by Filter</span>` : ''
-                                    }
+                                    <button class="btn-switch-release px-5 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-blue-600 hover:text-white text-slate-600 dark:text-blue-200 text-xs font-bold rounded-xl transition-colors" data-ver="${ver}">Load</button>
                                 </div>
-
-                                <!-- Assignment Card -->
-                                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-sm mb-6 relative overflow-hidden">
-                                    <div class="absolute top-0 right-0 p-4 opacity-10 text-6xl">👑</div>
-                                    
-                                    <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Direct Ownership</h4>
-                                    
-                                    <div class="flex gap-4 items-center">
-                                        <!-- Current Avatar Preview -->
-                                        <div class="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center shrink-0 border-2 border-slate-200 dark:border-slate-600 overflow-hidden shadow-inner">
-                                            ${(() => {
-                                                if (!selectedOwner) return '<span class="text-2xl opacity-30">👤</span>';
-                                                const u = getUserInfo(selectedOwner);
-                                                return u ? `<img src="${u.avatar}" class="w-full h-full object-cover">` : '<span class="text-xl">?</span>';
-                                            })()}
-                                        </div>
-
-                                        <div class="flex-1">
-                                            <select id="sel-gov-owner" class="w-full p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 font-bold text-sm">
-                                                <option value="">-- Inherit from Parent --</option>
-                                                ${adminData.users.map(u => `
-                                                    <option value="@${u.login}" ${selectedOwner && selectedOwner.toLowerCase() === '@' + u.login.toLowerCase() ? 'selected' : ''}>
-                                                        @${u.login} (${u.role})
-                                                    </option>
-                                                `).join('')}
-                                            </select>
-                                        </div>
-                                    </div>
-                                    
-                                    <p class="text-[10px] text-slate-400 mt-4 bg-slate-50 dark:bg-slate-900/50 p-2 rounded">
-                                        ℹ️ Assigning an owner grants them write access to this folder and all subfolders (unless overridden).
-                                    </p>
-                                </div>
-
-                                <!-- Actions -->
-                                <div class="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-                                    <button id="btn-save-gov" class="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl shadow-lg shadow-purple-500/20 active:scale-95 transition-all flex items-center gap-2">
-                                        <span>💾</span> Update Rules
-                                    </button>
-                                </div>
-
-                            </div>
-                        `}
-                        
-                        <div class="p-4 bg-slate-50 dark:bg-slate-950/50 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-[10px] text-slate-400">
-                            <span>Rules defined in .github/CODEOWNERS</span>
-                            <button id="btn-protect-branch" class="hover:text-yellow-500 font-bold">Manage Branch Protection</button>
-                        </div>
-                    </div>
+                            `).join(''))
+                    }
                 </div>
             </div>`;
         }
 
-        this.innerHTML = `<div class="flex flex-col h-full overflow-hidden">${header}${tabs}${content}</div>`;
+        this.innerHTML = `<div class="flex flex-col h-full overflow-hidden rounded-3xl">${header}${content}</div>`;
         this.bindEvents();
     }
 
-    renderLogin() {
-        const ui = store.ui;
-        this.innerHTML = `
-        <div class="flex flex-col h-full bg-slate-50 dark:bg-slate-950 relative">
-            <button id="btn-close-panel" class="absolute top-4 right-4 w-8 h-8 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 transition-colors flex items-center justify-center">✕</button>
-            
-            <div class="flex-1 flex flex-col items-center justify-center p-8 text-center max-w-sm mx-auto">
-                <div class="w-20 h-20 bg-black text-white rounded-full flex items-center justify-center text-4xl mb-6 shadow-xl">
-                    🐙
-                </div>
-                <h2 class="text-2xl font-black text-slate-800 dark:text-white mb-2">${ui.contribTitle}</h2>
-                <p class="text-sm text-slate-500 mb-8 leading-relaxed">${ui.contribDesc}</p>
-                
-                <input id="inp-token" type="password" placeholder="${ui.contribTokenPlaceholder}" class="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 mb-2 focus:ring-2 focus:ring-black dark:focus:ring-white outline-none transition-shadow">
-                
-                ${this.state.loginError ? `<p class="text-xs text-red-500 font-bold mb-4 animate-pulse">${this.state.loginError}</p>` : ''}
-                
-                <button id="btn-login" class="w-full py-3 bg-black dark:bg-white text-white dark:text-black font-bold rounded-xl shadow-lg hover:scale-105 active:scale-95 transition-all mb-4">
-                    ${this.state.isLoggingIn ? 'Connecting...' : ui.contribConnect}
-                </button>
-                
-                <a href="https://github.com/settings/tokens/new?scopes=repo&description=Arbor%20Editor" target="_blank" class="text-xs text-blue-600 hover:underline">
-                    Generate Token (Classic)
-                </a>
-            </div>
-        </div>`;
-        
-        this.querySelector('#btn-close-panel').onclick = () => store.setModal(null);
-        
-        const btnLogin = this.querySelector('#btn-login');
-        if(btnLogin) btnLogin.onclick = () => this.handleLogin();
-    }
-
     bindEvents() {
-        // Ensure buttons exist before binding to avoid null reference errors
         const closeBtn = this.querySelector('#btn-close-panel');
         if (closeBtn) closeBtn.onclick = () => store.setModal(null);
         
         const logoutBtn = this.querySelector('#btn-logout');
         if (logoutBtn) logoutBtn.onclick = () => this.handleLogout();
         
-        const tabExplorer = this.querySelector('#tab-explorer');
-        if (tabExplorer) tabExplorer.onclick = () => { this.updateState({ adminTab: 'explorer' }); };
-        
-        const tabPrs = this.querySelector('#tab-prs');
-        if (tabPrs) tabPrs.onclick = () => { 
-            this.updateState({ adminTab: 'prs' });
-            if (!fileSystem.isLocal) this.loadAdminData();
-        };
-        
-        const tabTeam = this.querySelector('#tab-team');
-        if (tabTeam) tabTeam.onclick = () => {
-            this.updateState({ adminTab: 'team' });
-            this.loadAdminData();
-            // Critical: Ensure file structure is fresh when managing governance
-            this.loadTreeData();
-        };
+        const tabs = ['explorer', 'faculty', 'proposals', 'archives'];
+        tabs.forEach(t => {
+            const btn = this.querySelector(`#tab-${t}`);
+            if(btn) btn.onclick = () => { 
+                this.updateState({ adminTab: t }); 
+                if(t === 'explorer') this.loadTreeData();
+                if(t === 'faculty' || t === 'proposals') this.loadAdminData();
+                if(t === 'archives') this.loadReleases();
+            };
+        });
 
-        // Explorer Events
         if (this.state.adminTab === 'explorer') {
             const btnRefresh = this.querySelector('#btn-refresh-tree');
             if (btnRefresh) btnRefresh.onclick = () => this.loadTreeData(true);
@@ -662,30 +619,26 @@ class ArborAdminPanel extends HTMLElement {
 
             const btnCreateF = this.querySelector('#btn-create-folder');
             if (btnCreateF) btnCreateF.onclick = () => window.createNodeAction('folder');
-            
             const btnCreateFile = this.querySelector('#btn-create-file');
             if (btnCreateFile) btnCreateFile.onclick = () => window.createNodeAction('file');
+            
+            const btnSaveGov = this.querySelector('#btn-save-gov-inspector');
+            if (btnSaveGov) btnSaveGov.onclick = () => this.handleSaveGov();
         }
         
-        // Team Events
-        if (this.state.adminTab === 'team') {
-            const btnProtect = this.querySelector('#btn-protect-branch');
-            if(btnProtect) btnProtect.onclick = () => this.handleProtectBranch();
-            
+        if (this.state.adminTab === 'faculty') {
             const btnInvite = this.querySelector('#btn-invite');
             if(btnInvite) btnInvite.onclick = () => this.handleInvite();
-            
-            const selOwner = this.querySelector('#sel-gov-owner');
-            if (selOwner) {
-                selOwner.onchange = (e) => {
-                    if (this.state.selectedGovPath) {
-                        this.updateGovRule(this.state.selectedGovPath, e.target.value);
-                    }
-                };
-            }
-            
-            const btnSaveGov = this.querySelector('#btn-save-gov');
-            if(btnSaveGov) btnSaveGov.onclick = () => this.handleSaveGov();
+        }
+        
+        if (this.state.adminTab === 'archives') {
+            const btnCreate = this.querySelector('#btn-create-release');
+            if(btnCreate) btnCreate.onclick = () => this.createRelease();
+            const inp = this.querySelector('#inp-version');
+            if(inp) inp.oninput = (e) => this.state.newVersionName = e.target.value;
+            this.querySelectorAll('.btn-switch-release').forEach(b => {
+                b.onclick = (e) => this.switchToVersion(e.currentTarget.dataset.ver);
+            });
         }
     }
 }

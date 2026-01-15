@@ -1,5 +1,4 @@
 
-
 import { BLOCKS } from './editor-engine.js';
 
 export const ContentRenderer = {
@@ -126,7 +125,7 @@ export const ContentRenderer = {
 
 export const AdminRenderer = {
     renderRecursiveTree(nodes, depth, context) {
-        const { filter, expandedPaths, canEdit, ui, getCustomIcon } = context;
+        const { filter, expandedPaths, getCustomIcon } = context;
         
         const folders = nodes.filter(n => n.type === 'tree').sort((a,b) => a.path.localeCompare(b.path));
         const files = nodes.filter(n => n.type === 'blob').sort((a,b) => a.path.localeCompare(b.path));
@@ -135,7 +134,6 @@ export const AdminRenderer = {
         
         folders.forEach(node => {
              const name = node.path.split('/').pop().replace(/_/g, ' ');
-             
              let hasMatchingChildren = false;
              let childrenHtml = '';
              
@@ -145,36 +143,22 @@ export const AdminRenderer = {
              }
              
              const selfMatch = filter ? name.toLowerCase().includes(filter) : true;
-             
              if (!selfMatch && !hasMatchingChildren && filter) return; 
 
              const isExpanded = expandedPaths.has(node.path) || (filter && hasMatchingChildren);
-             const canWrite = canEdit(node.path);
              const padding = depth * 12 + 10;
              const customIcon = getCustomIcon ? getCustomIcon(node.path) : null;
 
              html += `
              <div>
-                <div class="flex items-center justify-between py-1.5 px-2 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer rounded text-sm group transition-colors ${!canWrite ? 'opacity-75' : ''}"
+                <div class="flex items-center justify-between py-2 px-2 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer rounded text-base group transition-colors"
                      style="padding-left: ${padding}px"
-                     onclick="window.toggleFolder('${node.path}')"
-                     ondragover="window.handleDragOver(event)"
-                     ondragleave="window.handleDragLeave(event)"
-                     ondrop="window.handleDrop(event, '${node.path}', 'folder')"
-                     data-path="${node.path}">
-                    <div class="flex items-center gap-2 overflow-hidden">
-                        <span class="text-slate-400 text-xs">${isExpanded ? '📂' : '📁'}</span>
-                        ${customIcon ? `<span class="text-xs">${customIcon}</span>` : ''}
-                        <span class="font-bold text-slate-700 dark:text-slate-300 truncate select-none">${name}</span>
-                        ${!canWrite ? '<span class="text-[10px] ml-auto text-slate-400">🔒</span>' : ''}
+                     onclick="window.selectAdminNode('${node.path}', 'tree'); window.toggleFolder('${node.path}')">
+                    <div class="flex items-center gap-3 overflow-hidden">
+                        <span class="text-slate-400 text-lg">${isExpanded ? '📂' : '📁'}</span>
+                        ${customIcon ? `<span class="text-lg">${customIcon}</span>` : ''}
+                        <span class="font-bold text-slate-700 dark:text-slate-300 truncate select-none text-sm">${name}</span>
                     </div>
-                    
-                    ${canWrite ? `
-                    <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button class="p-1 text-slate-400 hover:text-blue-500 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30" title="${ui.editorEdit}" onclick="event.stopPropagation(); window.editFile('${node.path}/meta.json')">⚙️</button>
-                        <button class="p-1 text-slate-400 hover:text-orange-500 rounded hover:bg-orange-50 dark:hover:bg-orange-900/30" title="${ui.adminRename}" onclick="event.stopPropagation(); window.renameNode('${node.path}', 'folder')">✏️</button>
-                        <button class="p-1 text-slate-400 hover:text-red-500 rounded hover:bg-red-50 dark:hover:bg-red-900/30" title="${ui.adminDelete}" onclick="event.stopPropagation(); window.deleteFileAction('${node.path}', 'folder')">🗑️</button>
-                    </div>` : ''}
                 </div>
                 ${isExpanded ? `<div class="border-l border-slate-200 dark:border-slate-800 ml-4">${childrenHtml}</div>` : ''}
              </div>`;
@@ -183,118 +167,19 @@ export const AdminRenderer = {
         files.forEach(node => {
             if (node.path.endsWith('meta.json')) return; 
             const name = node.path.split('/').pop().replace('.md', '').replace(/_/g, ' ');
-            
             if (filter && !name.toLowerCase().includes(filter)) return;
 
             const padding = depth * 12 + 10;
-            const canWrite = canEdit(node.path);
             
             html += `
-            <div class="flex items-center justify-between py-1.5 px-2 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer rounded text-sm group file-item transition-colors"
+            <div class="flex items-center justify-between py-2 px-2 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer rounded text-base group transition-colors"
                  style="padding-left: ${padding}px"
-                 draggable="${canWrite}"
-                 ondragstart="window.handleDragStart(event, '${node.path}', 'file')"
-                 ondragover="window.handleDragOver(event)"
-                 ondragleave="window.handleDragLeave(event)"
-                 ondrop="window.handleDrop(event, '${node.path}', 'file')"
-                 onclick="window.editFile('${node.path}')"
-                 data-path="${node.path}">
-                 
-                <div class="flex items-center gap-2 overflow-hidden">
-                    <span class="text-slate-400 text-xs">📄</span>
-                    <span class="text-slate-600 dark:text-slate-400 truncate select-none">${name}</span>
-                    ${!canWrite ? '<span class="text-[10px] ml-auto text-slate-400">🔒</span>' : ''}
+                 onclick="window.selectAdminNode('${node.path}', 'blob')">
+                <div class="flex items-center gap-3 overflow-hidden">
+                    <span class="text-slate-400 text-lg">📄</span>
+                    <span class="text-slate-600 dark:text-slate-400 truncate select-none text-sm">${name}</span>
                 </div>
-
-                ${canWrite ? `
-                <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button class="p-1 text-slate-400 hover:text-orange-500 rounded hover:bg-orange-50 dark:hover:bg-orange-900/30" title="${ui.adminRename}" onclick="event.stopPropagation(); window.renameNode('${node.path}', 'file')">✏️</button>
-                    <button class="p-1 text-slate-400 hover:text-red-500 rounded hover:bg-red-50 dark:hover:bg-red-900/30" title="${ui.adminDelete}" onclick="event.stopPropagation(); window.deleteFileAction('${node.path}', 'file')">🗑️</button>
-                </div>` : ''}
             </div>`;
-        });
-
-        return html;
-    },
-
-    // New specialized renderer for Governance Mode
-    renderGovernanceTree(nodes, depth, context) {
-        const { getOwner, getUserInfo, selectedPath, expandedPaths, filterUser } = context;
-        
-        // Filter only Folders for Governance View
-        const folders = nodes.filter(n => n.type === 'tree').sort((a,b) => a.path.localeCompare(b.path));
-        
-        let html = '';
-        
-        folders.forEach(node => {
-             const name = node.path.split('/').pop().replace(/_/g, ' ');
-             const isSelected = selectedPath === node.path;
-             const isExpanded = expandedPaths.has(node.path);
-             const owner = getOwner(node.path);
-             
-             // VISUAL FILTERING LOGIC
-             let isDimmed = false;
-             let isHighlighted = false;
-             
-             if (filterUser) {
-                 if (owner && owner.toLowerCase().includes(filterUser.toLowerCase())) {
-                     isHighlighted = true;
-                 } else {
-                     isDimmed = true;
-                 }
-             }
-             
-             // Use consistent indentation relative to nesting
-             const padding = depth * 12 + 10;
-             
-             let childrenHtml = '';
-             let hasChildren = node.children && node.children.some(c => c.type === 'tree');
-
-             // If highlighted, we might want to auto-expand, but for now stick to manual + existing state
-             if (hasChildren && (isExpanded || isHighlighted)) {
-                 childrenHtml = AdminRenderer.renderGovernanceTree(node.children, depth + 1, context);
-             }
-             
-             // Owner Badge Logic (Visual Upgrade: Avatar instead of Text)
-             let ownerBadge = '';
-             if (owner) {
-                 const u = getUserInfo(owner);
-                 if (u) {
-                     ownerBadge = `<img src="${u.avatar}" class="w-5 h-5 rounded-full border border-purple-300 shadow-sm" title="${owner}">`;
-                 } else {
-                     ownerBadge = `<span class="text-xs">👤</span>`;
-                 }
-             }
-             
-             const icon = hasChildren ? (isExpanded ? '📂' : '📁') : '📁';
-             
-             // Style Classes
-             const baseClasses = "flex items-center justify-between py-2 px-2 cursor-pointer rounded-lg text-sm transition-all duration-200 border border-transparent";
-             let activeClasses = "hover:bg-slate-50 dark:hover:bg-slate-800/50";
-             
-             if (isSelected) activeClasses = "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800";
-             if (isHighlighted) activeClasses += " bg-purple-50 dark:bg-purple-900/10 border-purple-200 dark:border-purple-800 shadow-sm";
-             if (isDimmed) activeClasses += " opacity-40 hover:opacity-100 grayscale";
-
-             html += `
-             <div>
-                <div class="${baseClasses} ${activeClasses}"
-                     style="padding-left: ${padding}px"
-                     onclick="window.selectGovNode('${node.path}')">
-                    
-                    <div class="flex items-center gap-2 overflow-hidden min-w-0">
-                        <button class="text-slate-400 text-lg hover:text-slate-600 p-1 -ml-1 transition-transform" onclick="event.stopPropagation(); window.toggleFolder('${node.path}')">
-                            ${icon}
-                        </button>
-                        <span class="font-bold ${isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-300'} truncate select-none">${name}</span>
-                    </div>
-                    
-                    <div class="flex-shrink-0 ml-2">
-                        ${ownerBadge}
-                    </div>
-                </div>
-                ${childrenHtml ? `<div class="border-l border-slate-100 dark:border-slate-800 ml-4">${childrenHtml}</div>` : ''}
-             </div>`;
         });
 
         return html;

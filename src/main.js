@@ -5,7 +5,8 @@ import './components/graph.js';
 import './components/content.js';
 import './components/modals.js';
 import './components/progress-widget.js';
-import './components/construction-panel.js'; // NEW
+import './components/version-widget.js'; // NEW
+import './components/construction-panel.js'; 
 import './components/modals/editor.js';
 import './components/modals/sage.js';
 
