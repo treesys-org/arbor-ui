@@ -1,3 +1,4 @@
+
 {
   "appTitle": "ARBOR",
   "appSubtitle": "Open University",
@@ -204,13 +205,13 @@
   "editorCancelLoading": "Cancel",
   "adminExplorer": "Explorer",
   "adminPrs": "Pull Requests",
-  "adminTeam": "Team & Access",
+  "adminTeam": "Faculty & Staff",
   "adminVersions": "Timeline",
-  "adminGovTitle": "Access Rules",
-  "adminGovPath": "Folder Path",
-  "adminGovOwner": "Owner",
-  "adminGovAdd": "Add Rule",
-  "adminSaveGov": "Save Rules",
+  "adminGovTitle": "Permissions",
+  "adminGovPath": "Territory Path",
+  "adminGovOwner": "Guardian",
+  "adminGovAdd": "Add Guardian",
+  "adminSaveGov": "Commit Rules",
   "adminInvite": "Invite",
   "adminProtectBranch": "Protect Branch",
   "adminInviteSent": "Invitation sent",
@@ -366,5 +367,6 @@
   "editorLocalSaveSuccess": "Tree updated locally.",
   "editorMagicDraft": "Magic Draft (AI)",
   "editorMagicDraftPrompt": "What should this lesson be about?",
-  "sourceExport": "Export"
+  "sourceExport": "Export",
+  "adminSelectPath": "Select Path"
 }

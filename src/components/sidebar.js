@@ -24,6 +24,7 @@ class ArborSidebar extends HTMLElement {
         const { theme, lang, viewMode, gamification, githubUser, constructionMode } = store.value;
         const g = gamification;
         const canEdit = fileSystem.features.canWrite;
+        const isContributor = githubUser || fileSystem.isLocal;
         
         const seedsCount = g.seeds ? g.seeds.length : (g.fruits ? g.fruits.length : 0);
         
@@ -125,7 +126,7 @@ class ArborSidebar extends HTMLElement {
              </button>
              
              <div class="flex items-center gap-2">
-                <!-- Basket Mobile (Triggers Progress Widget now, not Profile) -->
+                <!-- Basket Mobile -->
                 <button class="js-btn-progress-mobile flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 dark:bg-orange-900/20 border border-orange-100 dark:border-orange-800/30 rounded-full active:scale-95 transition-transform" aria-label="${ui.gardenTitle}">
                     <span class="text-sm">🎒</span>
                     <span class="text-xs font-bold text-orange-700 dark:text-orange-400">${seedsCount}</span>
@@ -164,20 +165,19 @@ class ArborSidebar extends HTMLElement {
 
                 <div class="relative group"><button class="js-btn-sources w-10 h-10 rounded-xl flex items-center justify-center bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-600 hover:text-white transition-colors" aria-label="${ui.navSources}"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" /></svg></button><span class="tooltip">${ui.navSources}</span></div>
                 
-                <!-- ARCADE BUTTON -->
                 <div class="relative group">
                     <button class="js-btn-arcade w-10 h-10 rounded-xl flex items-center justify-center bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 hover:bg-orange-600 hover:text-white transition-colors" aria-label="${ui.navArcade || 'Arcade'}">🎮</button>
                     <span class="tooltip">${ui.navArcade || 'Arcade'}</span>
                 </div>
 
-                <!-- THE SAGE CONFIG BUTTON -->
                 <div class="relative group">
                      <button class="js-btn-sage w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-purple-500 hover:text-white transition-all" aria-label="${ui.navSage}">🦉</button>
                      <span class="tooltip">${ui.navSage}</span>
                 </div>
                 
                 <div class="w-8 h-px bg-slate-200 dark:bg-slate-700 my-1"></div>
-                <!-- CONSTRUCTION MODE (Always Visible) -->
+                
+                <!-- CONSTRUCTION MODE -->
                 <div class="relative group">
                      <button class="js-btn-construct w-10 h-10 rounded-xl flex items-center justify-center transition-all ${constructionMode ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30 animate-pulse' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-orange-500 hover:text-white'}" aria-label="Construction Mode">🏗️</button>
                      <span class="tooltip">Construction Mode</span>
@@ -187,10 +187,8 @@ class ArborSidebar extends HTMLElement {
             <!-- BOTTOM SECTION -->
             <div class="flex flex-col gap-3 items-center w-full">
                 
-                <!-- Removed Contributor Octopus Button per user request -->
                 <div class="relative group"><button class="js-btn-about w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="${ui.navAbout}"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 15" /></svg></button><span class="tooltip">${ui.navAbout}</span></div>
                 
-                <!-- Privacy Button (Extreme Legal) -->
                 <div class="relative group">
                     <button class="js-btn-privacy w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors" title="${ui.privacyTitle || 'Privacy'}" aria-label="${ui.privacyTitle}">
                         🛡️
@@ -203,7 +201,6 @@ class ArborSidebar extends HTMLElement {
                 <div class="relative group"><button class="js-btn-lang w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 text-xl flex items-center justify-center" aria-label="${ui.languageTitle}">${store.currentLangInfo.flag}</button><span class="tooltip">${ui.languageTitle}</span></div>
                 <div class="relative group"><button class="js-btn-theme w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 text-xl flex items-center justify-center" aria-label="Toggle Theme">${store.value.theme === 'light' ? '🌙' : '☀️'}</button><span class="tooltip">Toggle Theme</span></div>
                 
-                <!-- User Profile / Login / Sync -->
                 <div class="relative group">
                     <button class="js-btn-profile w-10 h-10 rounded-full border-2 border-slate-200 dark:border-slate-700 p-0.5 overflow-hidden relative transition-transform hover:scale-105 active:scale-95" aria-label="${ui.navProfile}">
                          <div class="w-full h-full rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 text-2xl">${g.avatar || '👤'}</div>
@@ -238,15 +235,13 @@ class ArborSidebar extends HTMLElement {
         this.querySelectorAll('.js-btn-lang').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('language')));
         this.querySelectorAll('.js-btn-help').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('tutorial')));
         this.querySelectorAll('.js-btn-impressum').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('impressum')));
-        this.querySelectorAll('.js-btn-privacy').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('privacy'))); // Bind Privacy
+        this.querySelectorAll('.js-btn-privacy').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('privacy'))); 
         this.querySelectorAll('.js-btn-profile').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('profile')));
         
-        // Mobile Basket Button -> Trigger Global Progress Widget Event instead of Profile
         this.querySelectorAll('.js-btn-progress-mobile').forEach(b => b.onclick = mobileMenuAction(() => {
             document.dispatchEvent(new CustomEvent('toggle-progress-widget'));
         }));
 
-        // SAGE AI Button -> Open Sage (Let Sage Modal decide view)
         this.querySelectorAll('.js-btn-sage').forEach(b => b.onclick = mobileMenuAction(() => {
             store.setModal({ type: 'sage' }); 
         }));

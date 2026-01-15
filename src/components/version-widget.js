@@ -76,8 +76,9 @@ class ArborVersionWidget extends HTMLElement {
     }
 
     render() {
-        // POSITIONING UPDATE: Changed top-4 to top-14 to avoid Architect Banner overlap
-        this.className = "hidden md:flex fixed top-14 right-28 z-40 flex-col items-end pointer-events-none";
+        // POSITIONING UPDATE: Moved to Bottom Left (HUD Style)
+        // left-24 accounts for the 80px sidebar + padding
+        this.className = "hidden md:flex fixed bottom-6 left-24 z-40 flex-col items-start pointer-events-none";
 
         const { activeSource, availableReleases, theme } = store.value;
         const releases = availableReleases || [];
@@ -116,8 +117,9 @@ class ArborVersionWidget extends HTMLElement {
         if (this.isOpen) {
             const archives = releases.filter(r => r.type === 'archive').sort((a,b) => b.url.localeCompare(a.url));
             
+            // CHANGED: absolute bottom-full (Opens UP) + slide-in-from-bottom
             dropdownHtml = `
-            <div class="absolute top-full right-0 mt-2 w-64 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 pointer-events-auto flex flex-col">
+            <div class="absolute bottom-full left-0 mb-2 w-64 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 pointer-events-auto flex flex-col">
                 <div class="p-2 border-b border-slate-100 dark:border-slate-800 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                     Select Version
                 </div>
@@ -175,7 +177,7 @@ class ArborVersionWidget extends HTMLElement {
                     </div>
                     <div class="w-px h-6 bg-current opacity-20 mx-1"></div>
                     <span class="text-[10px] font-bold opacity-60 group-hover:opacity-100 transition-opacity">
-                        ${this.isOpen ? '▲' : '▼'}
+                        ${this.isOpen ? '▼' : '▲'}
                     </span>
                 </button>
                 ${dropdownHtml}

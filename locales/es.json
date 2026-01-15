@@ -1,3 +1,4 @@
+
 {
   "appTitle": "ARBOR",
   "appSubtitle": "Open University",
@@ -204,12 +205,12 @@
   "editorCancelLoading": "Cancelar",
   "adminExplorer": "Archivos",
   "adminPrs": "Solicitudes",
-  "adminTeam": "Equipo y Acceso",
+  "adminTeam": "Cuerpo Docente",
   "adminVersions": "Línea Temporal",
-  "adminGovTitle": "Reglas de Acceso",
-  "adminGovPath": "Ruta Carpeta",
-  "adminGovOwner": "Dueño",
-  "adminGovAdd": "Añadir Regla",
+  "adminGovTitle": "Permisos",
+  "adminGovPath": "Ruta Territorio",
+  "adminGovOwner": "Guardián",
+  "adminGovAdd": "Añadir Guardián",
   "adminSaveGov": "Guardar Reglas",
   "adminInvite": "Invitar",
   "adminProtectBranch": "Proteger Rama",
@@ -372,5 +373,6 @@
   "editorLocalSaveSuccess": "Árbol actualizado localmente.",
   "editorMagicDraft": "Borrador Mágico (IA)",
   "editorMagicDraftPrompt": "¿De qué quieres que trate esta lección?",
-  "sourceExport": "Exportar"
+  "sourceExport": "Exportar",
+  "adminSelectPath": "Seleccionar Ruta"
 }

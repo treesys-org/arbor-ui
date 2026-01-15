@@ -2,36 +2,40 @@
 import { store } from '../../store.js';
 import { fileSystem } from '../../services/filesystem.js';
 import { github } from '../../services/github.js'; 
-import { AdminRenderer } from '../../utils/renderer.js';
 
 class ArborAdminPanel extends HTMLElement {
     constructor() {
         super();
         this.state = {
-            adminTab: 'explorer', // 'explorer' | 'faculty' | 'proposals' | 'archives'
+            adminTab: 'proposals', 
             isAdmin: false,
             canWrite: false,
             isRepoHealthy: true, 
             adminData: { prs: [], users: [], gov: null },
-            parsedRules: [], 
-            treeNodes: [], 
-            treeFilter: '',
-            expandedPaths: new Set(['content', 'content/EN', 'content/ES']),
             
-            // MASTER-DETAIL STATE
-            selectedPath: null,
-            selectedType: null, // 'folder' | 'file'
+            // Access / Permissions State
+            accessRules: [], 
+            accessTree: null, 
+            selectedFolderPath: null, 
+            expandedPaths: new Set(['/']), // Default expand root
+            isDirty: false, 
             
-            activeUserFilter: null,
+            // Login State
             isLoggingIn: false,
             loginError: null,
             
-            // VERSIONS STATE
+            // Versions State
             releases: [],
             releasesLoading: false,
             newVersionName: '',
-            creatingRelease: false
+            creatingRelease: false,
+            
+            loadingTree: false
         };
+        
+        // Bind methods to be used in HTML strings
+        window.arborAdminToggleFolder = (path) => this.toggleFolder(path);
+        window.arborAdminSelectFolder = (path) => this.selectAccessFolder(path);
     }
 
     connectedCallback() {
@@ -42,12 +46,11 @@ class ArborAdminPanel extends HTMLElement {
 
         this.subscription = (e) => {
             this.render();
-            if(store.value.activeSource) this.initData();
+            if(store.value.activeSource && !this.state.accessTree) this.initData();
         };
         store.addEventListener('state-change', this.subscription);
         
         this.render();
-        this.setupGlobalHandlers();
         
         if (store.value.activeSource) {
             this.initData();
@@ -56,6 +59,9 @@ class ArborAdminPanel extends HTMLElement {
     
     disconnectedCallback() {
         store.removeEventListener('state-change', this.subscription);
+        // Clean up global handlers
+        delete window.arborAdminToggleFolder;
+        delete window.arborAdminSelectFolder;
     }
 
     async initData() {
@@ -68,67 +74,16 @@ class ArborAdminPanel extends HTMLElement {
             canWrite: features.canWrite,
             isAdmin: isAdmin
         });
-
-        if (this.state.adminTab === 'explorer') {
-            this.loadTreeData();
-        }
         
-        if (this.state.adminTab === 'archives') {
-            this.loadReleases();
-        }
+        // Initial data load based on tab
+        if (this.state.adminTab === 'archives') this.loadReleases();
+        if (this.state.adminTab === 'access') this.loadFolderTree();
 
         if (!fileSystem.isLocal && features.canWrite) {
             const isHealthy = await github.checkHealth();
             this.updateState({ isRepoHealthy: isHealthy });
-            
-            // Always load admin data if we can, needed for autocomplete/governance in Explorer too
             this.loadAdminData();
         }
-    }
-
-    async loadTreeData(force = false) {
-        try {
-            const flatNodes = await fileSystem.getTree();
-            const tree = this.buildTree(flatNodes);
-            this.updateState({ treeNodes: tree });
-        } catch (e) {
-            console.error("Failed to load tree", e);
-        }
-    }
-
-    buildTree(flatNodes) {
-        const root = [];
-        const map = {};
-        flatNodes.forEach(n => { map[n.path] = { ...n, children: [] }; });
-
-        flatNodes.forEach(n => {
-            const node = map[n.path];
-            const parts = n.path.split('/'); 
-            if (parts.length >= 1) {
-                const parentPath = parts.slice(0, -1).join('/');
-                if (map[parentPath]) {
-                    map[parentPath].children.push(node);
-                } else {
-                    if (n.path.startsWith('content')) root.push(node); // Root at content
-                }
-            }
-        });
-
-        const sortFn = (a, b) => {
-            if (a.type === b.type) return a.path.localeCompare(b.path);
-            return a.type === 'tree' ? -1 : 1;
-        };
-
-        const sortRecursive = (n) => {
-            if (n.children && n.children.length > 0) {
-                n.children.sort(sortFn);
-                n.children.forEach(sortRecursive);
-            }
-        };
-
-        root.sort(sortFn);
-        root.forEach(sortRecursive);
-        return root;
     }
 
     async loadAdminData() {
@@ -153,9 +108,121 @@ class ArborAdminPanel extends HTMLElement {
 
         this.updateState({ 
             adminData: { prs, users, gov },
-            parsedRules: parsedRules
+            accessRules: parsedRules,
+            isDirty: false
         });
     }
+    
+    // --- PERMISSIONS / FOLDER LOGIC ---
+
+    async loadFolderTree() {
+        this.updateState({ loadingTree: true });
+        try {
+            const flatTree = await fileSystem.getTree('content');
+            
+            const folders = flatTree
+                .filter(node => node.type === 'tree')
+                .map(node => {
+                    let p = node.path;
+                    if (!p.startsWith('/')) p = '/' + p;
+                    if (!p.endsWith('/')) p = p + '/';
+                    return p;
+                });
+
+            const root = { name: 'Root', path: '/', children: [] };
+            
+            folders.forEach(path => {
+                const parts = path.split('/').filter(p => p);
+                let current = root;
+                
+                parts.forEach((part, index) => {
+                    let existing = current.children.find(c => c.name === part);
+                    if (!existing) {
+                        const currentPath = '/' + parts.slice(0, index + 1).join('/') + '/';
+                        existing = { name: part, path: currentPath, children: [] };
+                        current.children.push(existing);
+                    }
+                    current = existing;
+                });
+            });
+            
+            const sortNode = (node) => {
+                if (node.children) {
+                    node.children.sort((a, b) => a.name.localeCompare(b.name));
+                    node.children.forEach(sortNode);
+                }
+            };
+            sortNode(root);
+
+            this.updateState({ accessTree: root, loadingTree: false });
+        } catch(e) {
+            console.error("Error loading folder tree", e);
+            this.updateState({ loadingTree: false });
+        }
+    }
+
+    parseGovernance(rawText) {
+        if (!rawText) return [];
+        const lines = rawText.split('\n');
+        const rules = [];
+        lines.forEach(line => {
+            const clean = line.trim();
+            if (!clean || clean.startsWith('#')) return;
+            const parts = clean.split(/\s+/);
+            if (parts.length >= 2) {
+                let path = parts[0];
+                if (!path.startsWith('/')) path = '/' + path;
+                if (!path.endsWith('/')) path = path + '/';
+                rules.push({ path: path, owner: parts[1] });
+            }
+        });
+        return rules;
+    }
+    
+    toggleFolder(path) {
+        const expanded = new Set(this.state.expandedPaths);
+        if (expanded.has(path)) expanded.delete(path);
+        else expanded.add(path);
+        this.updateState({ expandedPaths: expanded });
+    }
+
+    selectAccessFolder(path) {
+        this.updateState({ selectedFolderPath: path });
+    }
+    
+    addGuardianToSelected(username) {
+        const { selectedFolderPath, accessRules } = this.state;
+        if (!selectedFolderPath || !username) return;
+        const exists = accessRules.some(r => r.path === selectedFolderPath && r.owner === username);
+        if (exists) return;
+        const newRules = [...accessRules, { path: selectedFolderPath, owner: username }];
+        this.updateState({ accessRules: newRules, isDirty: true });
+    }
+    
+    removeGuardianFromSelected(username) {
+        const { selectedFolderPath, accessRules } = this.state;
+        if (!selectedFolderPath) return;
+        const newRules = accessRules.filter(r => !(r.path === selectedFolderPath && r.owner === username));
+        this.updateState({ accessRules: newRules, isDirty: true });
+    }
+    
+    async saveGovernance() {
+        const { accessRules, adminData } = this.state;
+        let content = "# ARBOR GOVERNANCE\n# Define ownership rules here\n\n";
+        accessRules.forEach(r => {
+            content += `${r.path} ${r.owner}\n`;
+        });
+        
+        try {
+            await github.saveCodeOwners(adminData.gov?.path || '.github/CODEOWNERS', content, adminData.gov?.sha);
+            alert("Permissions updated successfully.");
+            this.loadAdminData(); 
+        } catch(e) {
+            alert("Error saving rules: " + e.message);
+        }
+    }
+
+    // --- RELEASES LOGIC ---
     
     async loadReleases() {
         this.updateState({ releasesLoading: true });
@@ -169,8 +236,10 @@ class ArborAdminPanel extends HTMLElement {
                     releaseFolders.add(parts[2]);
                 }
             });
-            this.updateState({ releases: Array.from(releaseFolders).sort().reverse(), releasesLoading: false }); 
+            const list = Array.from(releaseFolders).sort().reverse();
+            this.updateState({ releases: list, releasesLoading: false }); 
         } catch (e) {
+            console.warn("Release load error", e);
             this.updateState({ releases: [], releasesLoading: false });
         }
     }
@@ -214,57 +283,9 @@ class ArborAdminPanel extends HTMLElement {
         }
     }
 
-    parseGovernance(rawText) {
-        if (!rawText) return [];
-        const lines = rawText.split('\n');
-        const rules = [];
-        lines.forEach(line => {
-            const clean = line.trim();
-            if (!clean || clean.startsWith('#')) return;
-            const parts = clean.split(/\s+/);
-            if (parts.length >= 2) {
-                let path = parts[0];
-                if (!path.startsWith('/')) path = '/' + path;
-                rules.push({ path: path, owner: parts[1] });
-            }
-        });
-        return rules;
-    }
-
-    serializeGovernance(rules) {
-        const header = `# ARBOR GOVERNANCE FILE\n# This file is managed visually by Arbor UI.\n# Define folder ownership below.\n`;
-        const body = rules.map(r => `${r.path} ${r.owner}`).join('\n');
-        return header + '\n' + body;
-    }
-
     updateState(partial) {
         this.state = { ...this.state, ...partial };
         this.render();
-    }
-
-    setupGlobalHandlers() {
-        window.toggleFolder = (path) => {
-            const set = this.state.expandedPaths;
-            if (set.has(path)) set.delete(path); else set.add(path);
-            this.updateState({ expandedPaths: new Set(set) });
-        };
-        
-        window.selectAdminNode = (path, type) => {
-            this.updateState({ selectedPath: path, selectedType: type });
-        };
-        
-        window.updateGovRuleAction = (path, owner) => {
-            const panel = document.querySelector('arbor-admin-panel');
-            if (panel) panel.updateGovRule(path, owner);
-        };
-
-        window.editFile = (path) => {
-             store.setModal({ 
-                 type: 'editor', 
-                 returnTo: 'contributor',
-                 node: { name: path.split('/').pop(), sourcePath: path, id: 'edit-'+Date.now() } 
-             });
-        };
     }
 
     async handleLogin() {
@@ -282,34 +303,47 @@ class ArborAdminPanel extends HTMLElement {
         }
     }
 
-    handleLogout() {
-        github.disconnect();
-        localStorage.removeItem('arbor-gh-token');
-        store.update({ githubUser: null });
-        this.updateState({ 
-            adminTab: 'explorer', isAdmin: false, canWrite: false, 
-            adminData: { prs: [], users: [], gov: null }, treeNodes: [], parsedRules: [],
-            releases: []
-        });
+    // --- RECURSIVE TREE RENDERER ---
+    renderFolderTree(node, depth = 0) {
+        const { selectedFolderPath, accessRules, expandedPaths } = this.state;
+        
+        const hasRules = accessRules.some(r => r.path === node.path);
+        const isSelected = selectedFolderPath === node.path;
+        const isExpanded = expandedPaths.has(node.path);
+        const hasChildren = node.children && node.children.length > 0;
+        
+        const padding = depth * 14 + 8;
+        
+        let html = `
+        <div class="tree-item group select-none">
+            <div class="flex items-center w-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors rounded-lg mb-0.5 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/30 ring-1 ring-blue-500/20' : ''}">
+                
+                <div style="width: ${padding}px" class="shrink-0 h-8"></div>
+                
+                ${hasChildren ? `
+                <button class="w-6 h-8 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors focus:outline-none"
+                        onclick="window.arborAdminToggleFolder('${node.path}')">
+                    <span class="text-[10px] font-bold transform transition-transform ${isExpanded ? 'rotate-90' : ''}">▶</span>
+                </button>
+                ` : `<div class="w-6 h-8"></div>`}
+                
+                <button class="flex-1 text-left flex items-center gap-2 h-8 pr-2 min-w-0"
+                        onclick="window.arborAdminSelectFolder('${node.path}')">
+                    <span class="text-lg leading-none ${isSelected ? 'text-blue-500' : 'text-slate-400'}">${depth === 0 ? '🌳' : (isExpanded ? '📂' : '📁')}</span>
+                    <span class="text-xs font-bold truncate ${isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-300'}">${node.name}</span>
+                    ${hasRules ? `<span class="shrink-0 text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded border border-green-200">🛡️</span>` : ''}
+                </button>
+            </div>
+            
+            ${isExpanded && hasChildren ? `
+            <div class="tree-children">
+                ${node.children.map(c => this.renderFolderTree(c, depth + 1)).join('')}
+            </div>
+            ` : ''}
+        </div>
+        `;
+        return html;
     }
-
-    updateGovRule(path, owner) {
-        const formattedPath = path.startsWith('/') ? path : '/' + path;
-        let newRules = this.state.parsedRules.filter(r => r.path !== formattedPath);
-        if (owner) newRules.push({ path: formattedPath, owner: owner });
-        this.updateState({ parsedRules: newRules });
-    }
-
-    async handleSaveGov() {
-        const content = this.serializeGovernance(this.state.parsedRules);
-        try {
-            await github.saveCodeOwners('.github/CODEOWNERS', content, this.state.adminData.gov?.sha);
-            alert("✅ Permissions updated.");
-            this.loadAdminData();
-        } catch(e) { alert("Error: " + e.message); }
-    }
-    
-    // --- RENDERERS ---
 
     renderLogin() {
         const ui = store.ui;
@@ -332,96 +366,6 @@ class ArborAdminPanel extends HTMLElement {
         if(btnLogin) btnLogin.onclick = () => this.handleLogin();
     }
 
-    renderInspector(path, type) {
-        if (!path) {
-            return `
-            <div class="flex-1 flex flex-col items-center justify-center text-center p-8 opacity-40">
-                <div class="text-9xl mb-4 grayscale opacity-20">👈</div>
-                <h3 class="font-black text-xl text-slate-800 dark:text-white">SELECT AN ITEM</h3>
-                <p class="text-sm text-slate-500 mt-2 font-medium">View properties and permissions.</p>
-            </div>`;
-        }
-
-        const name = path.split('/').pop();
-        const { adminData, parsedRules, canWrite } = this.state;
-        
-        // Governance Logic
-        const getOwner = (p) => {
-            const normalized = p.startsWith('/') ? p : '/' + p;
-            const rule = parsedRules.find(r => r.path === normalized);
-            return rule ? rule.owner : null;
-        };
-        const currentOwner = getOwner(path);
-        
-        // --- INSPECTOR UI ---
-        return `
-        <div class="flex flex-col h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 animate-in slide-in-from-right-4 duration-200">
-            <!-- HEADER -->
-            <div class="p-6 border-b border-slate-100 dark:border-slate-800">
-                <div class="flex items-center gap-3 mb-2">
-                    <div class="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center text-3xl">
-                        ${type === 'tree' || type === 'folder' ? '📁' : '📄'}
-                    </div>
-                    <div class="min-w-0">
-                        <h3 class="font-black text-lg text-slate-800 dark:text-white truncate" title="${name}">${name}</h3>
-                        <p class="text-[10px] text-slate-400 font-mono truncate">${path}</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- CONTENT -->
-            <div class="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8">
-                
-                <!-- ACTIONS -->
-                ${canWrite ? `
-                <div class="grid grid-cols-2 gap-3">
-                    <button class="py-3 px-4 bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-slate-700 dark:text-slate-300 font-bold rounded-xl text-xs flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-700 transition-colors" onclick="window.renameNode('${path}', '${type}')">
-                        <span>✏️</span> Rename
-                    </button>
-                    <button class="py-3 px-4 bg-slate-50 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 font-bold rounded-xl text-xs flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-700 transition-colors" onclick="window.deleteFileAction('${path}', '${type}')">
-                        <span>🗑️</span> Delete
-                    </button>
-                    <button class="col-span-2 py-4 bg-slate-900 dark:bg-white text-white dark:text-black font-black rounded-xl shadow-lg active:scale-95 transition-all text-sm flex items-center justify-center gap-2" onclick="window.editFile('${type === 'tree' || type === 'folder' ? path + '/meta.json' : path}')">
-                        <span>${type === 'tree' || type === 'folder' ? '⚙️ Properties' : '📝 Edit Content'}</span>
-                    </button>
-                </div>
-                ` : '<div class="text-center text-slate-400 text-xs italic">Read Only Mode</div>'}
-
-                <!-- GOVERNANCE (FOLDERS ONLY) -->
-                ${(type === 'tree' || type === 'folder') && !fileSystem.isLocal ? `
-                <div>
-                    <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 border-b border-slate-100 dark:border-slate-700 pb-2">Teacher Assignment</h4>
-                    
-                    <div class="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl mb-4 border border-slate-200 dark:border-slate-700 text-center">
-                        <p class="text-xs text-slate-500 mb-1">Current Owner</p>
-                        <div class="text-xl font-black text-purple-600 dark:text-purple-400">
-                            ${currentOwner || "Unassigned"}
-                        </div>
-                    </div>
-
-                    ${canWrite ? `
-                    <div class="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto custom-scrollbar p-1">
-                        <button onclick="window.updateGovRuleAction('${path}', '')" class="p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 text-xs font-bold text-slate-500 hover:text-red-500 transition-colors">
-                            ❌ Clear
-                        </button>
-                        ${adminData.users.map(u => `
-                            <button onclick="window.updateGovRuleAction('${path}', '@${u.login}')" class="p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/10 text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-2 transition-colors ${currentOwner === '@'+u.login ? 'bg-purple-100 dark:bg-purple-900/30 border-purple-500' : ''}">
-                                <img src="${u.avatar}" class="w-5 h-5 rounded-full"> @${u.login}
-                            </button>
-                        `).join('')}
-                    </div>
-                    <button id="btn-save-gov-inspector" class="w-full mt-4 py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl shadow transition-colors text-xs">
-                        Save Permissions
-                    </button>
-                    ` : ''}
-                </div>
-                ` : ''}
-
-            </div>
-        </div>
-        `;
-    }
-
     render() {
         const ui = store.ui;
         
@@ -430,7 +374,7 @@ class ArborAdminPanel extends HTMLElement {
             return;
         }
 
-        const { adminTab, treeNodes, treeFilter, expandedPaths, releases, releasesLoading, selectedPath, selectedType, adminData, creatingRelease, newVersionName } = this.state;
+        const { adminTab, releases, releasesLoading, adminData, accessRules, isDirty, accessTree, selectedFolderPath, loadingTree, newVersionName, creatingRelease } = this.state;
         const sourceName = store.value.activeSource?.name || 'Garden';
         const navButtonClass = (tab) => `flex-1 py-3 flex items-center justify-center gap-2 font-black uppercase text-xs tracking-widest transition-all ${adminTab === tab ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-md rounded-xl' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl'}`;
 
@@ -441,24 +385,23 @@ class ArborAdminPanel extends HTMLElement {
                     <div class="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center text-xl">🏛️</div>
                     <div>
                         <h2 class="text-lg font-black text-slate-800 dark:text-white uppercase leading-none tracking-tight">${sourceName}</h2>
-                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Control Center</p>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Admin Console</p>
                     </div>
                 </div>
                 <div class="flex gap-2">
-                    ${!fileSystem.isLocal ? `<button id="btn-logout" class="px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-900/30 text-[10px] font-bold rounded-lg text-slate-500 hover:text-red-500 transition-colors">LOGOUT</button>` : ''}
                     <button id="btn-close-panel" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 transition-colors">✕</button>
                 </div>
             </div>
             
-            <div class="flex px-4 pb-4 gap-2">
-                <button id="tab-explorer" class="${navButtonClass('explorer')}">
-                    <span>📚</span> ${ui.adminExplorer || "Curriculum"}
+            <div class="flex px-4 pb-4 gap-2 overflow-x-auto no-scrollbar">
+                <button id="tab-proposals" class="${navButtonClass('proposals')}">
+                    <span>📬</span> ${ui.adminPrs || "Proposals"}
+                </button>
+                <button id="tab-access" class="${navButtonClass('access')}">
+                    <span>🔐</span> ${ui.adminGovTitle || "Permissions"}
                 </button>
                 <button id="tab-faculty" class="${navButtonClass('faculty')}">
                     <span>👩‍🏫</span> ${ui.adminTeam || "Faculty"}
-                </button>
-                <button id="tab-proposals" class="${navButtonClass('proposals')}">
-                    <span>📬</span> ${ui.adminPrs || "Proposals"}
                 </button>
                 <button id="tab-archives" class="${navButtonClass('archives')}">
                     <span>⏳</span> ${ui.adminVersions || "Archives"}
@@ -468,57 +411,133 @@ class ArborAdminPanel extends HTMLElement {
 
         let content = '';
 
-        // --- TAB 1: CURRICULUM (MASTER-DETAIL) ---
-        if (adminTab === 'explorer') {
-             content = `
-             <div class="flex-1 flex overflow-hidden bg-slate-50 dark:bg-slate-900">
-                <!-- LEFT: TREE -->
-                <div class="w-7/12 flex flex-col border-r border-slate-200 dark:border-slate-800">
-                    <div class="p-3 border-b border-slate-100 dark:border-slate-800 flex gap-2 bg-white dark:bg-slate-950">
-                        ${this.state.canWrite ? `
-                        <button id="btn-create-folder" class="px-3 py-2 bg-blue-50 text-blue-600 font-bold rounded-lg text-xs hover:bg-blue-100 transition-colors">📁+</button>
-                        <button id="btn-create-file" class="px-3 py-2 bg-green-50 text-green-600 font-bold rounded-lg text-xs hover:bg-green-100 transition-colors">📄+</button>
-                        ` : ''}
-                        <button id="btn-refresh-tree" class="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 text-slate-400 hover:bg-slate-200">🔄</button>
-                        <input id="inp-tree-filter" type="text" placeholder="Search..." value="${treeFilter}" class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-lg px-3 text-xs font-bold text-slate-600 outline-none">
+        // --- TAB: PERMISSIONS (ACCESS) ---
+        if (adminTab === 'access') {
+            
+            let treeHtml = '';
+            if (loadingTree || !accessTree) {
+                treeHtml = `<div class="p-8 text-center text-slate-400 text-xs animate-pulse flex flex-col gap-2"><span class="text-2xl">📡</span><span>Scanning territory...</span></div>`;
+            } else {
+                treeHtml = `<div class="w-full whitespace-nowrap">${this.renderFolderTree(accessTree)}</div>`;
+            }
+
+            let detailsHtml = '';
+            if (!selectedFolderPath) {
+                detailsHtml = `
+                <div class="flex-1 flex flex-col items-center justify-center text-slate-400 text-center p-8">
+                    <span class="text-6xl mb-4 opacity-10">🗺️</span>
+                    <p class="text-sm font-bold text-slate-500">Select a folder from the list.</p>
+                    <p class="text-xs mt-2 opacity-60">You can assign permissions per folder.</p>
+                </div>`;
+            } else {
+                const folderName = selectedFolderPath === '/' ? 'Root Territory' : selectedFolderPath.split('/').filter(p => p).pop();
+                const folderGuardians = accessRules.filter(r => r.path === selectedFolderPath);
+                const userOptions = adminData.users.map(u => `<option value="@${u.login}">@${u.login}</option>`).join('');
+
+                detailsHtml = `
+                <div class="flex-1 flex flex-col h-full overflow-hidden">
+                    <div class="p-6 border-b border-slate-100 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-900">
+                        <div class="flex items-center gap-3">
+                            <span class="text-2xl">📂</span>
+                            <div class="min-w-0">
+                                <h3 class="text-lg font-black text-slate-800 dark:text-white truncate">${folderName}</h3>
+                                <p class="text-xs font-mono text-slate-400 mt-0.5 truncate max-w-full" title="${selectedFolderPath}">${selectedFolderPath}</p>
+                            </div>
+                        </div>
                     </div>
-                    <div id="tree-container" class="flex-1 overflow-y-auto custom-scrollbar p-2">
-                        ${treeNodes.length === 0 ? `<div class="p-8 text-center text-slate-300 font-bold text-xs">Loading...</div>` : 
-                          AdminRenderer.renderRecursiveTree(treeNodes, 0, {
-                              filter: treeFilter.toLowerCase(),
-                              expandedPaths: expandedPaths,
-                              canEdit: () => true, // Always show standard items
-                              ui: ui
-                          })}
+                    
+                    <div class="p-6 flex-1 overflow-y-auto custom-scrollbar">
+                        <div class="mb-8">
+                            <div class="flex justify-between items-center mb-3">
+                                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Guardians</h4>
+                                <span class="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-slate-500 font-bold">${folderGuardians.length}</span>
+                            </div>
+                            
+                            ${folderGuardians.length === 0 
+                                ? `<div class="p-4 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl text-center">
+                                     <p class="text-sm text-slate-400 font-medium">No guardians assigned.</p>
+                                   </div>`
+                                : `<div class="space-y-2">
+                                    ${folderGuardians.map(r => `
+                                        <div class="flex items-center justify-between p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">
+                                            <div class="flex items-center gap-3">
+                                                <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">
+                                                    ${r.owner.substring(1,3).toUpperCase()}
+                                                </div>
+                                                <span class="font-bold text-slate-700 dark:text-slate-200 text-sm">${r.owner}</span>
+                                            </div>
+                                            <button class="btn-revoke w-8 h-8 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" data-owner="${r.owner}">✕</button>
+                                        </div>
+                                    `).join('')}
+                                   </div>`
+                            }
+                        </div>
+                        
+                        <div class="bg-blue-50 dark:bg-blue-900/10 p-5 rounded-2xl border border-blue-100 dark:border-blue-800/30">
+                            <label class="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase mb-2 block tracking-wider">Add Guardian</label>
+                            <div class="flex gap-2">
+                                <div class="relative flex-1">
+                                    <select id="inp-new-guardian" class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm outline-none font-bold text-slate-700 dark:text-white appearance-none focus:ring-2 focus:ring-blue-500">
+                                        <option value="" disabled selected>Select User...</option>
+                                        ${userOptions}
+                                    </select>
+                                    <div class="absolute right-4 top-3.5 pointer-events-none text-slate-400 text-xs">▼</div>
+                                </div>
+                                <button id="btn-add-guardian" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-xl font-bold text-xs shadow-lg shadow-blue-500/20 transition-transform active:scale-95">
+                                    Add
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            }
+
+            content = `
+            <div class="flex flex-col h-full bg-slate-50 dark:bg-slate-900 relative">
+                <div class="flex-1 flex overflow-hidden">
+                    <!-- LEFT: TREE (Fixed Width with Scroll) -->
+                    <div class="w-1/3 md:w-72 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-y-auto overflow-x-auto custom-scrollbar p-3 pb-24 shrink-0">
+                        <div class="mb-4 px-2">
+                            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Map</h4>
+                        </div>
+                        ${treeHtml}
+                    </div>
+                    
+                    <!-- RIGHT: DETAILS -->
+                    <div class="flex-1 bg-slate-50 dark:bg-slate-900 overflow-hidden relative flex flex-col min-w-0">
+                        ${detailsHtml}
                     </div>
                 </div>
 
-                <!-- RIGHT: INSPECTOR -->
-                <div class="w-5/12 bg-white dark:bg-slate-900">
-                    ${this.renderInspector(selectedPath, selectedType)}
+                ${isDirty ? `
+                <div class="absolute bottom-6 right-6 z-40 animate-in slide-in-from-bottom-4 bounce-in">
+                    <button id="btn-save-gov" class="bg-green-600 hover:bg-green-500 text-white px-8 py-4 rounded-full font-black shadow-2xl transition-all flex items-center gap-3 transform hover:scale-105 active:scale-95 ring-4 ring-white dark:ring-slate-800">
+                        <span>💾</span> ${ui.adminSaveGov || "Save Rules"}
+                    </button>
                 </div>
-             </div>`;
+                ` : ''}
+            </div>`;
         }
-        
-        // --- TAB 2: FACULTY (ROSTER ONLY) ---
+
+        // --- TAB: FACULTY ---
         else if (adminTab === 'faculty') {
             content = `
             <div class="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-900">
-                <div class="max-w-2xl mx-auto">
-                    <div class="flex justify-between items-center mb-6">
-                        <h3 class="font-black text-xl text-slate-800 dark:text-white uppercase">Staff Directory</h3>
-                        <button id="btn-invite" class="px-4 py-2 bg-purple-600 text-white font-bold rounded-xl text-xs shadow hover:bg-purple-500">
-                            + Invite Teacher
-                        </button>
+                <div class="max-w-3xl mx-auto">
+                    <div class="flex justify-between items-center mb-8">
+                        <div>
+                            <h3 class="font-black text-xl text-slate-800 dark:text-white uppercase">Faculty</h3>
+                            <p class="text-xs text-slate-500 mt-1">Contributors</p>
+                        </div>
                     </div>
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         ${adminData.users.map(u => `
-                            <div class="flex items-center gap-4 p-4 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
-                                <img src="${u.avatar}" class="w-12 h-12 rounded-full border-2 border-slate-200 dark:border-slate-600">
+                            <div class="flex items-center gap-4 p-5 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+                                <img src="${u.avatar}" class="w-14 h-14 rounded-xl border-2 border-slate-100 dark:border-slate-600 shadow-sm">
                                 <div>
-                                    <h4 class="font-bold text-slate-800 dark:text-white">@${u.login}</h4>
-                                    <span class="text-[10px] font-black bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full uppercase">${u.role}</span>
+                                    <h4 class="font-bold text-slate-800 dark:text-white text-base">@${u.login}</h4>
+                                    <span class="text-[10px] font-black bg-blue-100 text-blue-600 px-2 py-0.5 rounded-md uppercase tracking-wide mt-1 inline-block">${u.role}</span>
                                 </div>
                             </div>
                         `).join('')}
@@ -527,7 +546,7 @@ class ArborAdminPanel extends HTMLElement {
             </div>`;
         }
 
-        // --- TAB 3: PROPOSALS (PRs) ---
+        // --- TAB: PROPOSALS ---
         else if (adminTab === 'proposals') {
             content = `<div class="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50 dark:bg-slate-900">
                 ${adminData.prs.length === 0 ? `
@@ -537,21 +556,27 @@ class ArborAdminPanel extends HTMLElement {
                     </div>
                 ` : 
                 adminData.prs.map(pr => `
-                    <div class="p-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl flex justify-between items-center shadow-sm">
+                    <div class="p-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl flex justify-between items-center shadow-sm hover:shadow-md transition-shadow group">
                         <div class="flex items-center gap-4">
-                            <div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-sm">#${pr.number}</div>
+                            <div class="w-12 h-12 bg-blue-50 dark:bg-blue-900/30 text-blue-600 rounded-xl flex flex-col items-center justify-center font-bold text-xs border border-blue-100 dark:border-blue-800">
+                                <span>PR</span>
+                                <span class="text-sm">#${pr.number}</span>
+                            </div>
                             <div>
-                                <h4 class="font-bold text-sm text-slate-800 dark:text-white">${pr.title}</h4>
-                                <p class="text-xs text-slate-500 font-bold mt-0.5">by <span class="text-blue-500">@${pr.user.login}</span></p>
+                                <h4 class="font-bold text-sm text-slate-800 dark:text-white group-hover:text-blue-600 transition-colors">${pr.title}</h4>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <img src="${pr.user.avatar_url}" class="w-4 h-4 rounded-full">
+                                    <p class="text-xs text-slate-500 font-medium">@${pr.user.login}</p>
+                                </div>
                             </div>
                         </div>
-                        <a href="${pr.html_url}" target="_blank" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-xs shadow transition-transform active:scale-95">Review</a>
+                        <a href="${pr.html_url}" target="_blank" class="px-5 py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold rounded-xl text-xs shadow-lg hover:opacity-90 transition-all active:scale-95">Review</a>
                     </div>
                 `).join('')}
             </div>`;
         }
 
-        // --- TAB 4: ARCHIVES (VERSIONS) ---
+        // --- TAB: ARCHIVES ---
         else if (adminTab === 'archives') {
             content = `
             <div class="flex flex-col h-full bg-slate-50 dark:bg-slate-900">
@@ -583,7 +608,7 @@ class ArborAdminPanel extends HTMLElement {
             </div>`;
         }
 
-        this.innerHTML = `<div class="flex flex-col h-full overflow-hidden rounded-3xl">${header}${content}</div>`;
+        this.innerHTML = `<div class="flex flex-col h-full overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl">${header}${content}</div>`;
         this.bindEvents();
     }
 
@@ -591,44 +616,30 @@ class ArborAdminPanel extends HTMLElement {
         const closeBtn = this.querySelector('#btn-close-panel');
         if (closeBtn) closeBtn.onclick = () => store.setModal(null);
         
-        const logoutBtn = this.querySelector('#btn-logout');
-        if (logoutBtn) logoutBtn.onclick = () => this.handleLogout();
-        
-        const tabs = ['explorer', 'faculty', 'proposals', 'archives'];
+        const tabs = ['faculty', 'proposals', 'archives', 'access'];
         tabs.forEach(t => {
             const btn = this.querySelector(`#tab-${t}`);
             if(btn) btn.onclick = () => { 
                 this.updateState({ adminTab: t }); 
-                if(t === 'explorer') this.loadTreeData();
                 if(t === 'faculty' || t === 'proposals') this.loadAdminData();
+                if(t === 'access') { this.loadAdminData(); this.loadFolderTree(); }
                 if(t === 'archives') this.loadReleases();
             };
         });
-
-        if (this.state.adminTab === 'explorer') {
-            const btnRefresh = this.querySelector('#btn-refresh-tree');
-            if (btnRefresh) btnRefresh.onclick = () => this.loadTreeData(true);
-
-            const filterInput = this.querySelector('#inp-tree-filter');
-            if (filterInput) {
-                filterInput.oninput = (e) => {
-                    this.updateState({ treeFilter: e.target.value });
-                    setTimeout(() => this.querySelector('#inp-tree-filter')?.focus(), 10);
-                };
-            }
-
-            const btnCreateF = this.querySelector('#btn-create-folder');
-            if (btnCreateF) btnCreateF.onclick = () => window.createNodeAction('folder');
-            const btnCreateFile = this.querySelector('#btn-create-file');
-            if (btnCreateFile) btnCreateFile.onclick = () => window.createNodeAction('file');
-            
-            const btnSaveGov = this.querySelector('#btn-save-gov-inspector');
-            if (btnSaveGov) btnSaveGov.onclick = () => this.handleSaveGov();
-        }
         
-        if (this.state.adminTab === 'faculty') {
-            const btnInvite = this.querySelector('#btn-invite');
-            if(btnInvite) btnInvite.onclick = () => this.handleInvite();
+        if (this.state.adminTab === 'access') {
+            const btnSave = this.querySelector('#btn-save-gov');
+            if(btnSave) btnSave.onclick = () => this.saveGovernance();
+            
+            const btnAdd = this.querySelector('#btn-add-guardian');
+            if(btnAdd) btnAdd.onclick = () => {
+                const user = this.querySelector('#inp-new-guardian').value;
+                this.addGuardianToSelected(user);
+            };
+            
+            this.querySelectorAll('.btn-revoke').forEach(b => {
+                b.onclick = (e) => this.removeGuardianFromSelected(e.currentTarget.dataset.owner);
+            });
         }
         
         if (this.state.adminTab === 'archives') {
