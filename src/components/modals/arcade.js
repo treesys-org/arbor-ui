@@ -88,7 +88,7 @@ class ArborModalArcade extends HTMLElement {
         
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
-            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-2xl w-full relative overflow-hidden flex flex-col h-[600px] max-h-[90vh] border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-5xl w-full relative overflow-hidden flex flex-col h-[85vh] max-h-[90vh] border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
                 <button class="btn-close absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 z-20 transition-colors">✕</button>
 
                 <div class="p-6 h-full flex flex-col relative">
@@ -417,7 +417,7 @@ class ArborModalArcade extends HTMLElement {
         </div>
 
         <div class="pt-4 mt-4 border-t border-slate-100 dark:border-slate-800 shrink-0">
-            <button data-action="start-game" class="w-full py-4 bg-orange-600 text-white font-black text-lg rounded-2xl shadow-xl hover:bg-orange-500 active:scale-95 transition-all flex items-center justify-center gap-2" ${!this.selectedNodeId ? 'disabled style="opacity:0.5"' : ''}>
+            <button data-action="start-game" class="w-full py-4 bg-orange-600 text-white font-black text-lg rounded-2xl shadow-xl hover:bg-orange-50 active:scale-95 transition-all flex items-center justify-center gap-2" ${!this.selectedNodeId ? 'disabled style="opacity:0.5"' : ''}>
                 <span>🚀</span> ${ui.arcadeStart || "START GAME"}
             </button>
             <p class="text-[10px] text-center text-slate-400 mt-2">${ui.arcadeDisclaimer || "⚠️ Uses AI"}</p>

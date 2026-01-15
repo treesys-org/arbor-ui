@@ -319,7 +319,7 @@ class ArborModalGamePlayer extends HTMLElement {
             
             this.innerHTML = `
             <div id="modal-backdrop" class="fixed inset-0 z-[80] bg-black/95 backdrop-blur-sm flex flex-col animate-in fade-in h-full w-full items-center justify-center">
-                <div class="bg-slate-900 border border-slate-700 p-8 rounded-3xl max-w-md text-center shadow-2xl relative overflow-hidden">
+                <div class="bg-slate-900 border border-slate-700 p-8 rounded-3xl max-w-xl text-center shadow-2xl relative overflow-hidden">
                     
                     <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 to-purple-600"></div>
                     
