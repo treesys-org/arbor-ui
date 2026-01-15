@@ -1,3 +1,4 @@
+
 {
   "appTitle": "ARBOR",
   "appSubtitle": "Open University",
@@ -203,9 +204,9 @@
   "editorLoading": "Cargando Contenido...",
   "editorCancelLoading": "Cancelar",
   "adminExplorer": "Archivos",
-  "adminPrs": "Solicitudes de Cambio",
+  "adminPrs": "Solicitudes",
   "adminTeam": "Equipo y Acceso",
-  "adminGovTitle": "Acceso",
+  "adminGovTitle": "Reglas de Acceso",
   "adminGovPath": "Ruta Carpeta",
   "adminGovOwner": "Dueño",
   "adminGovAdd": "Añadir Regla",

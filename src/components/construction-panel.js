@@ -7,11 +7,8 @@ class ArborConstructionPanel extends HTMLElement {
     constructor() {
         super();
         this.state = {
-            activePopover: null, // 'requests' | 'team' | 'governance' | 'login' | null
+            activePopover: null, // 'requests' | 'login' | null
             prs: [],
-            team: [],
-            governance: '',
-            govSha: null,
             loading: false,
             isLoggingIn: false,
             loginError: null,
@@ -50,20 +47,10 @@ class ArborConstructionPanel extends HTMLElement {
         this.render();
 
         try {
-            const [prs, users, gov] = await Promise.all([
-                github.getPullRequests(),
-                github.getCollaborators(),
-                github.getCodeOwners()
-            ]);
-            
+            // Only fetch PRs for the quick badge notification
+            // Detailed Team/Gov data is now handled by the big modal
+            const prs = await github.getPullRequests();
             this.state.prs = prs || [];
-            this.state.team = users || [];
-            
-            if (gov) {
-                this.state.governance = gov.content || '';
-                this.state.govSha = gov.sha;
-            }
-
             this.state.repoInfo = github.getRepositoryInfo();
         } catch (e) {
             console.error("Construction Panel Fetch Error", e);
@@ -112,19 +99,6 @@ class ArborConstructionPanel extends HTMLElement {
         }
     }
 
-    async handleSaveGov() {
-        const txt = this.querySelector('#inp-gov');
-        if (!txt) return;
-        try {
-            const content = txt.value;
-            await github.saveCodeOwners('.github/CODEOWNERS', content, this.state.govSha);
-            alert("✅ Governance Updated.");
-            this.togglePopover(null);
-        } catch(e) {
-            alert("Error: " + e.message);
-        }
-    }
-
     render() {
         const { constructionMode, activeSource, githubUser } = store.value;
         
@@ -135,7 +109,7 @@ class ArborConstructionPanel extends HTMLElement {
         }
         this.style.display = 'block';
 
-        const { activePopover, prs, team, loading, isLoggingIn, loginError, governance } = this.state;
+        const { activePopover, prs, loading, isLoggingIn, loginError } = this.state;
         const repoName = activeSource?.name || "Local Garden";
         const isLocal = fileSystem.isLocal;
 
@@ -143,7 +117,6 @@ class ArborConstructionPanel extends HTMLElement {
         const renderKey = JSON.stringify({
             activePopover, 
             prCount: prs.length, 
-            teamCount: team.length, 
             loading, isLoggingIn, loginError,
             source: activeSource?.id,
             user: githubUser?.login
@@ -223,7 +196,7 @@ class ArborConstructionPanel extends HTMLElement {
             }
 
         } else {
-            // --- FULL ENGINEER DOCK ---
+            // --- FULL ENGINEER DOCK (CONNECTED) ---
             
             // 0. ARCHITECT AI
             dockItemsHtml += `
@@ -242,7 +215,7 @@ class ArborConstructionPanel extends HTMLElement {
                 </button>
             `;
 
-            // 2. REQUESTS (PRs)
+            // 2. REQUESTS (PRs - Popover)
             const reqActive = activePopover === 'requests';
             dockItemsHtml += `
                 <button id="btn-requests" class="${itemBaseClass} ${reqActive ? itemActiveClass : itemInactiveClass}" title="Change Requests">
@@ -268,54 +241,14 @@ class ArborConstructionPanel extends HTMLElement {
                 </div>`;
             }
 
-            // 3. TEAM
-            const teamActive = activePopover === 'team';
+            // 3. TEAM & GOVERNANCE (Unified Button -> Opens Modal)
             dockItemsHtml += `
-                <button id="btn-team" class="${itemBaseClass} ${teamActive ? itemActiveClass : itemInactiveClass}" title="Team">
-                    <span>👥</span>
+                <button id="btn-unified-admin" class="${itemBaseClass} ${itemInactiveClass}" title="Team & Access">
+                    <span class="text-xl">🛡️</span>
                 </button>
             `;
 
-            if (teamActive) {
-                activePopoverHtml = `
-                <div class="${popoverClass}">
-                    <div class="flex justify-between items-center mb-3 px-1">
-                        <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest">Team</h4>
-                        <button id="btn-invite" class="text-[10px] font-bold text-blue-400 hover:text-white">+ Invite</button>
-                    </div>
-                    <div class="space-y-2">
-                        ${team.map(u => `
-                            <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5">
-                                <img src="${u.avatar}" class="w-6 h-6 rounded-full border border-slate-600">
-                                <span class="text-xs font-bold text-slate-200 flex-1">${u.login}</span>
-                                <span class="text-[9px] uppercase font-bold text-slate-500 border border-slate-700 px-1.5 py-0.5 rounded">${u.role}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>`;
-            }
-
-            // 4. GOVERNANCE
-            const govActive = activePopover === 'governance';
-            dockItemsHtml += `
-                <button id="btn-gov" class="${itemBaseClass} ${govActive ? itemActiveClass : itemInactiveClass}" title="Governance">
-                    <span>⚖️</span>
-                </button>
-            `;
-
-            if (govActive) {
-                activePopoverHtml = `
-                <div class="${popoverClass}">
-                    <div class="flex justify-between items-center mb-3 px-1">
-                        <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest">CodeOwners</h4>
-                        <button id="btn-save-gov" class="text-[10px] font-bold text-green-400 hover:text-white">Save</button>
-                    </div>
-                    <textarea id="inp-gov" class="w-full h-48 bg-black/30 border border-slate-700 rounded-lg p-3 text-[10px] font-mono text-slate-300 outline-none focus:border-slate-500 resize-none" spellcheck="false">${governance}</textarea>
-                    <p class="text-[9px] text-slate-500 mt-2 px-1">Format: <code>/path @user</code></p>
-                </div>`;
-            }
-
-            // 5. USER / LOGOUT (Rightmost)
+            // 4. USER / LOGOUT (Rightmost)
             dockItemsHtml += `
                 <div class="w-px h-8 bg-white/10 mx-1"></div>
                 <button id="btn-logout" class="${itemBaseClass} ${itemInactiveClass} !rounded-full" title="Log Out @${githubUser.login}">
@@ -348,20 +281,15 @@ class ArborConstructionPanel extends HTMLElement {
                 bind('#btn-login-action', () => this.handleLogin());
             } else {
                 bind('#btn-requests', () => this.togglePopover('requests'));
-                bind('#btn-team', () => this.togglePopover('team'));
-                bind('#btn-gov', () => this.togglePopover('governance'));
+                
+                // UNIFIED ACTION: Opens the main Admin Panel on the "Team" tab
+                bind('#btn-unified-admin', () => store.setModal({ type: 'contributor', tab: 'team' }));
+                
                 bind('#btn-logout', () => {
                     github.disconnect();
                     localStorage.removeItem('arbor-gh-token');
                     store.update({ githubUser: null });
                 });
-                
-                // Popover internal buttons
-                bind('#btn-invite', () => {
-                    const u = prompt("GitHub Username:");
-                    if(u) github.inviteUser(u);
-                });
-                bind('#btn-save-gov', () => this.handleSaveGov());
             }
         }
     }

@@ -23,6 +23,12 @@ class ArborAdminPanel extends HTMLElement {
     }
 
     connectedCallback() {
+        // Check for deep-link tab in modal state
+        const modalState = store.value.modal;
+        if (modalState && modalState.tab) {
+            this.state.adminTab = modalState.tab;
+        }
+
         // Subscribe to state changes to react to login/logout events
         this.subscription = (e) => {
             this.render();
@@ -62,7 +68,8 @@ class ArborAdminPanel extends HTMLElement {
             const isHealthy = await github.checkHealth();
             this.updateState({ isRepoHealthy: isHealthy });
             
-            if (this.state.isAdmin || features.hasGovernance) {
+            // Auto-load data if we started on a data-heavy tab
+            if (this.state.adminTab !== 'explorer') {
                 this.loadAdminData();
             }
         }
