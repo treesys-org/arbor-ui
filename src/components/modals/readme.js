@@ -41,8 +41,8 @@ class ArborModalReadme extends HTMLElement {
                 // currentFolder is usually ".../data/"
                 const currentFolder = activeSource.url.substring(0, activeSource.url.lastIndexOf('/') + 1);
                 
+                // Base candidates (same folder as data.json)
                 const candidates = [
-                    // 1. Same folder as data.json (e.g. /data/INTRO.md)
                     new URL('INTRO.md', currentFolder).href,
                     new URL('intro.md', currentFolder).href
                 ];
@@ -51,16 +51,22 @@ class ArborModalReadme extends HTMLElement {
                 if (currentFolder.includes('/data/')) {
                     const rootFolder = new URL('../', currentFolder).href;
                     
-                    // 2. Root of the repo (e.g. /INTRO.md) - Most common
-                    candidates.push(new URL('INTRO.md', rootFolder).href);
-                    candidates.push(new URL('intro.md', rootFolder).href);
+                    // PRIORITY 1: New Standard (content/rolling/INTRO.md)
+                    // Used by the v3.6 Builder Script
+                    const rollingFolder = new URL('content/rolling/', rootFolder).href;
+                    candidates.push(new URL('INTRO.md', rollingFolder).href);
+                    candidates.push(new URL('intro.md', rollingFolder).href);
 
-                    // 3. Content folder (e.g. /content/INTRO.md) - Organized
+                    // PRIORITY 2: Classic Standard (content/INTRO.md)
                     const contentFolder = new URL('content/', rootFolder).href;
                     candidates.push(new URL('INTRO.md', contentFolder).href);
                     candidates.push(new URL('intro.md', contentFolder).href);
 
-                    // 4. Fallback to README at root
+                    // PRIORITY 3: Root (INTRO.md)
+                    candidates.push(new URL('INTRO.md', rootFolder).href);
+                    candidates.push(new URL('intro.md', rootFolder).href);
+
+                    // Fallback to README
                     candidates.push(new URL('README.md', rootFolder).href);
                     candidates.push(new URL('readme.md', rootFolder).href);
                 } else {
@@ -68,8 +74,10 @@ class ArborModalReadme extends HTMLElement {
                     candidates.push(new URL('README.md', currentFolder).href);
                 }
                 
+                // Fetch loop with Cache Busting
                 for (const url of candidates) {
-                    const res = await fetch(url);
+                    // We append ?t=timestamp to bypass GitHub Raw caching (often 5 mins)
+                    const res = await fetch(`${url}?t=${Date.now()}`);
                     if (res.ok) {
                         const text = await res.text();
                         // Clean up potential Frontmatter if present
