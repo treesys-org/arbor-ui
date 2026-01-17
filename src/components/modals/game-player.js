@@ -11,6 +11,8 @@ class ArborModalGamePlayer extends HTMLElement {
         this.playlist = []; 
         this.isPreparing = true;
         this.needsConsent = false;
+        this.checkingAI = false;
+        this.aiError = null;
         this.error = null;
         this.scriptCache = new Map();
         
@@ -21,6 +23,8 @@ class ArborModalGamePlayer extends HTMLElement {
     async connectedCallback() {
         // Reset session stats
         this.sessionXP = 0;
+        this.aiError = null;
+        this.error = null;
         
         // Check for unified AI consent key
         const hasConsent = localStorage.getItem('arbor-ai-consent') === 'true';
@@ -31,6 +35,23 @@ class ArborModalGamePlayer extends HTMLElement {
             return;
         }
 
+        // 1. HEALTH CHECK: Verify AI Availability
+        this.checkingAI = true;
+        this.render();
+        
+        const isHealthy = await aiService.checkHealth();
+        this.checkingAI = false;
+        
+        if (!isHealthy) {
+            const provider = aiService.config.provider;
+            this.aiError = provider === 'ollama' 
+                ? "Could not connect to Local AI (Ollama). Please ensure it is running on localhost:11434." 
+                : "Could not connect to Cloud AI (Puter). Please check your internet connection.";
+            this.render();
+            return;
+        }
+
+        // 2. LOAD GAME
         this.render();
         try {
             await this.prepareCurriculum();
@@ -66,6 +87,10 @@ class ArborModalGamePlayer extends HTMLElement {
         localStorage.setItem('arbor-ai-consent', 'true');
         this.needsConsent = false;
         // Reboot the component logic basically
+        this.connectedCallback();
+    }
+    
+    retryConnection() {
         this.connectedCallback();
     }
 
@@ -380,9 +405,41 @@ class ArborModalGamePlayer extends HTMLElement {
             this.querySelector('#btn-cancel-consent').onclick = () => this.close();
             return;
         }
+        
+        // --- AI ERROR SCREEN ---
+        if (this.aiError) {
+            this.innerHTML = `
+            <div id="modal-backdrop" class="fixed inset-0 z-[80] bg-black/95 backdrop-blur-sm flex flex-col animate-in fade-in h-full w-full items-center justify-center">
+                <div class="bg-slate-900 border border-red-500/50 p-8 rounded-3xl max-w-xl text-center shadow-2xl relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-full h-1 bg-red-500"></div>
+                    
+                    <div class="w-20 h-20 bg-red-900/20 rounded-full mx-auto flex items-center justify-center text-5xl mb-6 text-red-500 shadow-xl border border-red-900/50 animate-pulse">
+                        🔌
+                    </div>
+                    
+                    <h2 class="text-xl font-black text-white mb-2 uppercase tracking-wide">Connection Lost</h2>
+                    <p class="text-sm text-red-300 font-medium mb-6 max-w-sm mx-auto leading-relaxed">${this.aiError}</p>
+                    
+                    <div class="flex flex-col gap-3">
+                        <button id="btn-retry" class="w-full py-3.5 bg-red-600 text-white font-black rounded-xl shadow-lg hover:bg-red-500 active:scale-95 transition-all text-sm uppercase tracking-wider">
+                            ${store.ui.sageRetryConnection || "Retry Connection"}
+                        </button>
+                        <button id="btn-cancel-error" class="text-xs text-slate-500 hover:text-slate-300 font-bold uppercase tracking-wider">
+                            ${ui.cancel || "Cancel"}
+                        </button>
+                    </div>
+                </div>
+            </div>`;
+            
+            this.querySelector('#btn-retry').onclick = () => this.retryConnection();
+            this.querySelector('#btn-cancel-error').onclick = () => this.close();
+            return;
+        }
 
         let loadingText = "Loading Cartridge...";
-        if (this.isPreparing) {
+        if (this.checkingAI) {
+            loadingText = "Establishing Neural Uplink...";
+        } else if (this.isPreparing) {
             loadingText = `Reading Knowledge Tree... (${this.playlist.length} lessons found)`;
         }
 
@@ -426,7 +483,7 @@ class ArborModalGamePlayer extends HTMLElement {
                     <p class="text-xs font-mono uppercase tracking-widest animate-pulse">${loadingText}</p>
                 </div>
                 
-                ${!this.isPreparing ? `
+                ${!this.isPreparing && !this.checkingAI ? `
                 <iframe class="relative z-10 w-full h-full border-none bg-white opacity-0 transition-opacity duration-500" 
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; gamepad" 
                     allowfullscreen sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-pointer-lock allow-modals allow-popups-to-escape-sandbox"></iframe>

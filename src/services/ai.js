@@ -35,6 +35,32 @@ class HybridAIService {
         // Ollama doesn't need init, just connection check on demand.
         return true;
     }
+    
+    // --- HEALTH CHECK ---
+    async checkHealth() {
+        if (this.config.provider === 'ollama') {
+            try {
+                // Short timeout to avoid hanging if Ollama is down
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 2000);
+                
+                const response = await fetch(`${this.config.ollamaHost}/api/tags`, { 
+                    method: 'GET',
+                    signal: controller.signal 
+                });
+                
+                clearTimeout(timeoutId);
+                return response.ok;
+            } catch (e) {
+                return false;
+            }
+        } else {
+            // Puter Check
+            // We assume if window.puter exists, the script loaded successfully.
+            // Actual service availability is checked during chat, but this confirms the library is present.
+            return !!window.puter; 
+        }
+    }
 
     // Abort current generation
     abort() {
