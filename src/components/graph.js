@@ -99,11 +99,29 @@ class ArborGraph extends HTMLElement {
                 z-index: 60;
             }
             .architect-dock button:hover::after { opacity: 1; }
+
+            /* CLAUSTROPHOBIC VIGNETTE */
+            .vignette-overlay {
+                position: absolute;
+                inset: 0;
+                pointer-events: none;
+                z-index: 5;
+                background: radial-gradient(circle, transparent 50%, rgba(255,255,255,0.6) 120%);
+                mix-blend-mode: multiply;
+            }
+            .dark .vignette-overlay {
+                background: radial-gradient(circle, transparent 40%, rgba(0,0,0,0.85) 100%);
+                mix-blend-mode: normal;
+            }
         `;
         this.appendChild(style);
 
         this.innerHTML += `
         <div id="chart" class="w-full h-full cursor-grab active:cursor-grabbing relative overflow-hidden bg-gradient-to-b from-sky-200 to-sky-50 dark:from-slate-900 dark:to-slate-800 transition-colors duration-500" style="touch-action: none;">
+             
+             <!-- Vignette for focus -->
+             <div class="vignette-overlay"></div>
+
              <!-- Clouds -->
              <div class="clouds-layer">
                  <div class="absolute top-10 left-10 opacity-40 dark:opacity-10 pointer-events-none text-6xl select-none animate-pulse" style="animation-duration: 10s">☁️</div>
@@ -435,8 +453,10 @@ class ArborGraph extends HTMLElement {
 
         this.drawGround(); // Initial default draw
 
+        // CLAUSTROPHOBIC ZOOM INIT
+        // Restrict scale extent heavily so users can't zoom out too far
         this.zoom = d3.zoom()
-            .scaleExtent([0.1, 4])
+            .scaleExtent([0.5, 3]) // Increased min scale from 0.1 to 0.5
             .on("zoom", (e) => {
                 this.g.attr("transform", e.transform);
                 // Sync Dock Position during zoom/pan
@@ -444,8 +464,9 @@ class ArborGraph extends HTMLElement {
             });
         
         this.svg.call(this.zoom).on("dblclick.zoom", null);
-        // CLAUSTROPHOBIC INIT: Restrict to just a bit larger than screen initially
-        this.zoom.translateExtent([[-this.width/2, -this.height/2], [this.width*1.5, this.height*1.5]]);
+        
+        // Initial loose bound, will be tightened in updateGraph
+        this.zoom.translateExtent([[-this.width, -this.height], [this.width*2, this.height*2]]);
         this.resetZoom(0);
         
         if(store.value.data) this.updateGraph();
@@ -477,24 +498,18 @@ class ArborGraph extends HTMLElement {
         if (store.value.constructionMode) return;
 
         const theme = store.value.theme;
-        // COLORS: Solid pastel tones (No transparency)
-        // Dark: Slate-700
-        // Light: Vibrant Green (Updated from pale green)
         const color = theme === 'dark' ? '#334155' : '#22c55e'; // green-500
         
         const cx = this.width / 2;
         const groundY = this.height;
         
-        // DYNAMIC STRETCH: 
-        // Use a multiplier on the viewport or content width to ensure it goes way off screen
-        // This solves the "cliff" effect by making the horizon effectively infinite for the view.
-        const totalWidth = Math.max(this.width * 5, (contentWidth || 0) * 3);
+        // The ground now stretches just enough to cover the strict bounds + screen width
+        // We use a safe multiplier but since pan is restricted, we don't need infinite ground
+        const totalWidth = Math.max(this.width * 3, (contentWidth || 0) * 1.5);
         const halfWidth = totalWidth / 2;
 
-        // SOLID: Opacity 1
         this.groundGroup.style("opacity", 1);
 
-        // GEOMETRY: Simple, gentle curve
         this.groundGroup.append("path")
             .attr("d", `
                 M${cx - halfWidth},${groundY} 
@@ -502,7 +517,7 @@ class ArborGraph extends HTMLElement {
                 Z
             `)
             .attr("fill", color)
-            .style("pointer-events", "none"); // Allow clicks to pass through to the SVG background handler
+            .style("pointer-events", "none"); 
     }
 
     updateGraph() {
@@ -518,10 +533,13 @@ class ArborGraph extends HTMLElement {
             chartDiv.classList.add('blueprint-grid');
             chartDiv.classList.remove('bg-gradient-to-b');
             this.querySelector('.clouds-layer').style.display = 'none';
+            // Hide vignette in construct mode for clarity
+            this.querySelector('.vignette-overlay').style.display = 'none'; 
         } else {
             chartDiv.classList.remove('blueprint-grid');
             chartDiv.classList.add('bg-gradient-to-b');
             this.querySelector('.clouds-layer').style.display = 'block';
+            this.querySelector('.vignette-overlay').style.display = 'block'; 
         }
         
         const root = d3.hierarchy(store.value.data, d => d.expanded ? d.children : null);
@@ -546,24 +564,32 @@ class ArborGraph extends HTMLElement {
             if (d.y < minY) minY = d.y; if (d.y > maxY) maxY = d.y;
         });
         
+        // --- CLAUSTROPHOBIC BOUNDS ---
+        if (this.zoom) {
+            // Padding around the exact node bounds
+            const padding = isMobile ? 50 : 100;
+            
+            // Allow panning so that the farthest node can reach the center of the screen, but not much more.
+            // minX is the leftmost node position. To center it, we need to pan right by width/2.
+            const x0 = minX - (this.width / 2) - padding;
+            const x1 = maxX + (this.width / 2) + padding;
+            const y0 = minY - (this.height / 2) - padding;
+            const y1 = maxY + (this.height / 2) + padding;
+
+            this.zoom.translateExtent([[x0, y0], [x1, y1]]);
+            
+            // Adjust minimum zoom based on tree size.
+            // If tree is small, minScale stays high (can't zoom out).
+            // If tree is massive, we allow *some* zoom out, but cap it.
+            const realTreeWidth = maxX - minX;
+            // Ensure minScale is never too small (e.g. 0.1), keep it around 0.4 minimum
+            const minScale = Math.max(0.4, Math.min(1, this.width / (realTreeWidth + 200)));
+            this.zoom.scaleExtent([minScale, 3]);
+        }
+
         // --- DYNAMIC GROUND DRAWING ---
-        // Pass the actual tree width to ensure ground stretches enough
         const realTreeWidth = maxX - minX;
         this.drawGround(realTreeWidth);
-
-        // Update Zoom Extent
-        if (this.zoom) {
-            const margin = 0; 
-            const screenW = this.width;
-            const screenH = this.height;
-            
-            const x0 = minX - (screenW / 2);
-            const x1 = maxX + (screenW / 2);
-            const y0 = minY - (screenH / 2);
-            const y1 = maxY + (screenH / 2); 
-            
-            this.zoom.translateExtent([[x0, y0], [x1, y1]]);
-        }
 
         // --- NODES ---
         const nodes = root.descendants();

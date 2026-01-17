@@ -202,17 +202,11 @@ class ArborConstructionPanel extends HTMLElement {
                 <button id="btn-save-all" class="${itemBaseClass} ${itemActionClass}" title="Save Changes"><span>💾</span></button>
                 <button id="btn-revert" class="${itemBaseClass} ${itemActionClass}" title="Undo / Revert"><span>↩️</span></button>
                 <div class="w-px h-6 bg-white/10 mx-1"></div>
-            `;
-        }
-
-        html += `
-            <button id="btn-architect" class="${itemBaseClass} ${itemSpecialClass}" title="AI Architect">
-                <span class="relative">🦉<span class="absolute -top-2 -right-2 text-[10px] transform rotate-12 drop-shadow-md">⛑️</span></span>
-            </button>
-        `;
-
-        if (isContributor) {
-            html += `
+                
+                <button id="btn-architect" class="${itemBaseClass} ${itemSpecialClass}" title="AI Architect">
+                    <span class="relative">🦉<span class="absolute -top-2 -right-2 text-[10px] transform rotate-12 drop-shadow-md">⛑️</span></span>
+                </button>
+                
                 <button id="btn-governance" class="${itemBaseClass} ${itemBlueClass}" title="Governance"><span>🏛️</span></button>
             `;
         }
@@ -233,12 +227,13 @@ class ArborConstructionPanel extends HTMLElement {
             if (el) el.onclick = (e) => { e.stopPropagation(); fn(e); };
         };
 
-        bind('#btn-architect', () => store.setModal({ type: 'sage', mode: 'architect' }));
         if (isContributor) {
+            bind('#btn-architect', () => store.setModal({ type: 'sage', mode: 'architect' }));
             bind('#btn-governance', () => store.setModal({ type: 'contributor', tab: 'access' }));
             bind('#btn-save-all', () => this.handleSave());
             bind('#btn-revert', () => this.handleRevert());
         }
+        
         if (!isLocal) {
             if (!githubUser) bind('#btn-login-toggle', () => this.togglePopover('login'));
             else bind('#btn-logout', () => this.handleLogout());
