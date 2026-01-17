@@ -296,6 +296,23 @@ class Store extends EventTarget {
             
             this.dispatchEvent(new CustomEvent('graph-update'));
             setTimeout(() => this.update({ lastActionMessage: null }), 3000);
+            
+            // --- README MODAL TRIGGER ---
+            // If the user hasn't explicitly skipped the readme for this source, show it.
+            if (this.state.activeSource && !this.state.modal) {
+                const sourceId = this.state.activeSource.id.split('-')[0]; // Use base ID, ignoring version suffix for preferences
+                const skipKey = `arbor-skip-readme-${sourceId}`;
+                
+                // We show it if it's NOT skipped.
+                if (localStorage.getItem(skipKey) !== 'true') {
+                    // Small delay to allow UI to settle
+                    setTimeout(() => {
+                        // Only show if no other modal (like security warning) hijacked focus
+                        if (!this.state.modal) this.setModal('readme');
+                    }, 500);
+                }
+            }
+
         } catch (e) {
             console.error("Data Processing Error", e);
             this.update({ loading: false, error: "Failed to process data structure." });

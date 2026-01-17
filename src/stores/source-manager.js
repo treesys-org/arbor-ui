@@ -161,7 +161,7 @@ export class SourceManager {
     }
 
     async discoverManifest(sourceUrl) {
-        if (!sourceUrl || sourceUrl.startsWith('local://')) return;
+        if (!sourceUrl || sourceUrl.startsWith('local://')) return null;
 
         try {
             const absoluteSource = new URL(sourceUrl, window.location.href).href;
@@ -201,14 +201,18 @@ export class SourceManager {
                          }
                          
                          this.update({ availableReleases: versions, manifestUrlAttempted: url });
-                         return; 
+                         
+                         // Return sorted versions to allow smarter loading
+                         return versions; 
                      }
                  } catch(e) { }
             }
             this.update({ availableReleases: [], manifestUrlAttempted: uniqueCandidates.join(' | ') });
+            return [];
 
         } catch (e) {
             this.update({ availableReleases: [] });
+            return [];
         }
     }
 
@@ -248,7 +252,40 @@ export class SourceManager {
         }
         // -------------------------
 
-        this.discoverManifest(source.url);
+        // --- MANIFEST DISCOVERY & RELEASE PRIORITY ---
+        const discoveredVersions = await this.discoverManifest(source.url);
+        let urlToFetch = source.url;
+        let finalSourceObj = { ...source };
+
+        // Logic: If we found releases, and the current source is generic (not a specific archive ID),
+        // we should try to upgrade to the latest stable release.
+        if (discoveredVersions && discoveredVersions.length > 0) {
+            const archives = discoveredVersions.filter(v => v.type === 'archive');
+            
+            // Check if user is NOT explicitly on "rolling" or a specific archive
+            // We assume if type is missing or generic, we can upgrade
+            const isSpecificVersion = source.type === 'archive';
+            
+            if (!isSpecificVersion && archives.length > 0) {
+                // Sort by ID descending (assuming date-based or semver-ish ID)
+                archives.sort((a, b) => b.id.localeCompare(a.id));
+                const latest = archives[0];
+                
+                console.log(`[Arbor] Upgrading to latest stable release: ${latest.id}`);
+                urlToFetch = latest.url;
+                
+                // Update the active source in state to reflect the redirect
+                finalSourceObj = {
+                    ...source,
+                    id: `${source.id}-${latest.id}`,
+                    name: latest.name || `${source.name} (${latest.id})`,
+                    url: latest.url,
+                    type: 'archive'
+                };
+                
+                this.update({ activeSource: finalSourceObj });
+            }
+        }
 
         try {
             let json;
@@ -256,23 +293,25 @@ export class SourceManager {
             if (!forceRefresh && existingRawData && this.state.activeSource?.id === source.id) {
                 json = existingRawData;
             } else {
-                const url = source.url; 
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 20000); 
 
-                const res = await fetch(url, { signal: controller.signal, cache: 'no-cache' });
+                const res = await fetch(urlToFetch, { signal: controller.signal, cache: 'no-cache' });
                 clearTimeout(timeoutId);
 
-                if (!res.ok) throw new Error(`Failed to fetch data from ${source.name} (Status ${res.status}).`);
+                if (!res.ok) throw new Error(`Failed to fetch data from ${finalSourceObj.name} (Status ${res.status}).`);
                 json = await res.json();
             }
             
             // Name Refresh Logic
             if (json.universeName && json.universeName !== source.name) {
-                const updatedCommunity = this.state.communitySources.map(s => s.id === source.id ? {...s, name: json.universeName} : s);
-                this.update({ communitySources: updatedCommunity });
-                localStorage.setItem('arbor-sources', JSON.stringify(updatedCommunity));
-                this.update({ activeSource: { ...source, name: json.universeName } });
+                // Only update base name if it wasn't a release redirect
+                if (finalSourceObj.type !== 'archive') {
+                    const updatedCommunity = this.state.communitySources.map(s => s.id === source.id ? {...s, name: json.universeName} : s);
+                    this.update({ communitySources: updatedCommunity });
+                    localStorage.setItem('arbor-sources', JSON.stringify(updatedCommunity));
+                    this.update({ activeSource: { ...finalSourceObj, name: json.universeName } });
+                }
             }
 
             return json;

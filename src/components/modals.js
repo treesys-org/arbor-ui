@@ -23,6 +23,7 @@ import './modals/releases.js';
 import './modals/node-properties.js'; 
 import './modals/dialog.js';
 import './modals/manual.js';
+import './modals/readme.js'; // NEW
 
 // Admin Panel is essentially a modal
 import './modals/admin.js';
@@ -117,6 +118,9 @@ class ArborModals extends HTMLElement {
                 break;
             case 'releases': 
                 this.innerHTML = `<arbor-modal-releases></arbor-modal-releases>`; 
+                break;
+            case 'readme': 
+                this.innerHTML = `<arbor-modal-readme></arbor-modal-readme>`; 
                 break;
             case 'security-warning':
                 this.innerHTML = `<arbor-modal-security-warning></arbor-modal-security-warning>`;
