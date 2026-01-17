@@ -25,72 +25,51 @@ class ArborModalReadme extends HTMLElement {
     async loadContent() {
         const rootNode = store.value.data;
         const activeSource = store.value.activeSource;
+        const rawData = store.value.rawGraphData;
         
         if (!activeSource || !rootNode) return;
 
         // Base ID for preferences (strip version)
         this.sourceId = activeSource.id.split('-')[0];
 
-        // 1. Default Content (Fallback)
-        this.readmeContent = rootNode.description || "Welcome to this knowledge tree.";
+        // 1. PRIORITY: Embedded Intro (Standard V3.7+)
+        // The builder injects the Markdown content directly into data.json.
+        // This is instant, offline-friendly, and version-perfect.
+        if (rawData && rawData.readme) {
+            this.readmeContent = rawData.readme;
+            this.loading = false;
+            this.renderContent();
+            return;
+        }
 
-        // 2. Fetch Logic
-        // Strategy: Look for INTRO.md or README.md in multiple locations relative to data.json
+        // 2. FALLBACK: Sibling File Fetch (Dev / Legacy)
+        // Only look for INTRO.md in the SAME folder as data.json.
+        // No complex directory scanning.
         if (activeSource.url && activeSource.url.startsWith('http')) {
             try {
-                // currentFolder is usually ".../data/"
                 const currentFolder = activeSource.url.substring(0, activeSource.url.lastIndexOf('/') + 1);
-                
-                // Base candidates (same folder as data.json)
-                const candidates = [
-                    new URL('INTRO.md', currentFolder).href,
-                    new URL('intro.md', currentFolder).href
-                ];
+                const candidates = ['INTRO.md', 'README.md', 'intro.md', 'readme.md'];
 
-                // If we are in a standard structure (inside /data/), look in parent and siblings
-                if (currentFolder.includes('/data/')) {
-                    const rootFolder = new URL('../', currentFolder).href;
-                    
-                    // PRIORITY 1: New Standard (content/rolling/INTRO.md)
-                    // Used by the v3.6 Builder Script
-                    const rollingFolder = new URL('content/rolling/', rootFolder).href;
-                    candidates.push(new URL('INTRO.md', rollingFolder).href);
-                    candidates.push(new URL('intro.md', rollingFolder).href);
-
-                    // PRIORITY 2: Classic Standard (content/INTRO.md)
-                    const contentFolder = new URL('content/', rootFolder).href;
-                    candidates.push(new URL('INTRO.md', contentFolder).href);
-                    candidates.push(new URL('intro.md', contentFolder).href);
-
-                    // PRIORITY 3: Root (INTRO.md)
-                    candidates.push(new URL('INTRO.md', rootFolder).href);
-                    candidates.push(new URL('intro.md', rootFolder).href);
-
-                    // Fallback to README
-                    candidates.push(new URL('README.md', rootFolder).href);
-                    candidates.push(new URL('readme.md', rootFolder).href);
-                } else {
-                    // If not in /data/, just check current folder for README
-                    candidates.push(new URL('README.md', currentFolder).href);
-                }
-                
-                // Fetch loop with Cache Busting
-                for (const url of candidates) {
-                    // We append ?t=timestamp to bypass GitHub Raw caching (often 5 mins)
+                for (const filename of candidates) {
+                    const url = new URL(filename, currentFolder).href;
+                    // Cache busting only for these manual fetches
                     const res = await fetch(`${url}?t=${Date.now()}`);
                     if (res.ok) {
                         const text = await res.text();
-                        // Clean up potential Frontmatter if present
-                        const cleanText = text.replace(/^---\n[\s\S]*?\n---\n/, '');
-                        this.readmeContent = cleanText;
-                        break; // Stop after finding the highest priority file
+                        // Clean Frontmatter
+                        this.readmeContent = text.replace(/^---\n[\s\S]*?\n---\n/, '');
+                        this.loading = false;
+                        this.renderContent();
+                        return;
                     }
                 }
             } catch (e) {
-                console.warn("Could not load intro/readme for tree, using description.");
+                // Ignore network errors, fall to description
             }
         }
 
+        // 3. FINAL FALLBACK: Node Description
+        this.readmeContent = rootNode.description || "Welcome to Arbor.";
         this.loading = false;
         this.renderContent();
     }

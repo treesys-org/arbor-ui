@@ -9,7 +9,7 @@ import time
 import sys
 
 # ==============================================================================
-#  🌳 ARBOR BUILDER V3.6 (PORTABLE DATA PACKAGE)
+#  🌳 ARBOR BUILDER V3.7 (EMBEDDED INTRO)
 # ==============================================================================
 # 1. LIVE MODE (The "Rolling" Branch):
 #    - Priority Source: ./content/rolling
@@ -326,8 +326,6 @@ def clean_orphans():
     if not os.path.exists(CONTENT_API_DIR): return
     
     # SAFETY: Only run if we actually generated something.
-    # If GENERATED_CONTENT_PATHS is empty, it might mean the build failed or was empty.
-    # To prevent wiping the folder on a configuration error, we abort cleaning if 0 files were tracked.
     if len(GENERATED_CONTENT_PATHS) == 0:
         return
 
@@ -344,6 +342,42 @@ def clean_orphans():
         if not os.listdir(root) and root != os.path.abspath(CONTENT_API_DIR):
             try: os.rmdir(root)
             except: pass
+
+def get_readme_content(source_path):
+    """
+    Looks for INTRO.md or README.md in the source folder or its parent.
+    Returns the content string or None.
+    """
+    if not source_path or not os.path.exists(source_path):
+        return None
+        
+    candidates = ["INTRO.md", "intro.md", "README.md", "readme.md"]
+    
+    # 1. Look in source folder (e.g. content/releases/v1/)
+    for c in candidates:
+        p = os.path.join(source_path, c)
+        if os.path.exists(p):
+            try:
+                with open(p, 'r', encoding='utf-8-sig') as f:
+                    content = f.read()
+                    # Clean frontmatter if present
+                    return re.sub(r'^---\n[\s\S]*?\n---\n', '', content).strip()
+            except: pass
+            
+    # 2. Look in parent folder (e.g. content/ if scanning content/rolling)
+    # Only do this if we are likely in a structured subfolder
+    parent = os.path.dirname(source_path)
+    if os.path.exists(parent):
+        for c in candidates:
+            p = os.path.join(parent, c)
+            if os.path.exists(p):
+                try:
+                    with open(p, 'r', encoding='utf-8-sig') as f:
+                        content = f.read()
+                        return re.sub(r'^---\n[\s\S]*?\n---\n', '', content).strip()
+                except: pass
+                
+    return None
 
 def process_universe(source_root_path, is_archive=False):
     
@@ -363,11 +397,11 @@ def process_universe(source_root_path, is_archive=False):
         "generatedAt": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "universeId": universe_id,
         "universeName": universe_name,
+        "readme": get_readme_content(source_root_path), # <--- EMBEDDED INTRO
         "languages": {}
     }
 
     # Find languages (folders)
-    # Filter out 'releases' and 'rolling' if we are scanning the root (fallback mode)
     excluded = ['.', 'releases', 'rolling']
     
     if not os.path.exists(source_root_path):
@@ -392,7 +426,7 @@ def process_universe(source_root_path, is_archive=False):
             "icon": "🌳", "expanded": True, "status": "available", 
             "type": "root", "description": f"{lang_folder.upper()} Curriculum", 
             "path": root_name,
-            "sourcePath": os.path.relpath(lang_path, ".").replace("\\", "/") # FIX: Explicitly add sourcePath to Root
+            "sourcePath": os.path.relpath(lang_path, ".").replace("\\", "/")
         }
         
         lang_search_nodes = []
@@ -433,11 +467,41 @@ def process_universe(source_root_path, is_archive=False):
 
     return data_structure
 
+def copy_intro_files():
+    """
+    Scans for INTRO.md or README.md in content folders and copies it to data/INTRO.md.
+    This ensures the intro file is always available relative to data.json for legacy clients.
+    """
+    # Candidate filenames
+    candidates = ["INTRO.md", "intro.md", "README.md", "readme.md"]
+    
+    # Priority folders:
+    # 1. content/rolling/ (New standard)
+    # 2. content/ (Legacy standard)
+    # 3. . (Root - fallback)
+    search_paths = [
+        os.path.join(BASE_CONTENT_DIR, "rolling"),
+        BASE_CONTENT_DIR,
+        "."
+    ]
+    
+    source_file = None
+    for path in search_paths:
+        if os.path.exists(path):
+            for filename in candidates:
+                fullpath = os.path.join(path, filename)
+                if os.path.exists(fullpath):
+                    source_file = fullpath
+                    break
+        if source_file: break
+        
+    if source_file:
+        dest = os.path.join(DATA_ROOT_DIR, "INTRO.md")
+        try:
+            shutil.copy2(source_file, dest)
+        except: pass
+
 def generate_master_index(current_name):
-    """
-    Updates arbor-index.json inside the data/ folder.
-    URLs are now relative to the data folder itself (cleaner/portable).
-    """
     print(f"📜 Generating Master Index in {INDEX_FILE}...")
     
     index = {
@@ -445,7 +509,7 @@ def generate_master_index(current_name):
             "id": f"latest-{int(time.time())}",
             "name": f"{current_name} (Rolling)",
             "description": "Latest unstable version. Updates continuously.",
-            "url": "./data.json", # Relative to data/
+            "url": "./data.json",
             "year": "Rolling"
         },
         "releases": []
@@ -453,7 +517,6 @@ def generate_master_index(current_name):
 
     if os.path.exists(RELEASES_OUT_DIR):
         files = sorted(os.listdir(RELEASES_OUT_DIR), reverse=True)
-        print(f"   Found releases in {RELEASES_OUT_DIR}: {files}")
         for f in files:
             if f.endswith(".json"):
                 name_no_ext = os.path.splitext(f)[0]
@@ -469,7 +532,7 @@ def generate_master_index(current_name):
                     "id": f"release-{name_no_ext}",
                     "name": release_name,
                     "description": f"Archived snapshot from {name_no_ext}.",
-                    "url": f"./releases/{f}", # Relative to data/
+                    "url": f"./releases/{f}",
                     "year": name_no_ext
                 })
 
@@ -480,14 +543,14 @@ def generate_master_index(current_name):
 
 def main():
     start_time = time.time()
-    print(f"\n🌳 Arbor Builder v3.6 (Portable Mode)")
+    print(f"\n🌳 Arbor Builder v3.7 (Embedded Intro)")
     print(f"==================================================")
     
     load_cache()
 
     if not os.path.exists(BASE_CONTENT_DIR):
         print(f"❌ Error: Base content directory '{BASE_CONTENT_DIR}' not found.")
-        sys.exit(1) # Exit with error code for CI
+        sys.exit(1)
 
     if os.path.exists(SEARCH_DIR): shutil.rmtree(SEARCH_DIR)
     if os.path.exists(API_DIR): shutil.rmtree(API_DIR)
@@ -498,8 +561,7 @@ def main():
     os.makedirs(CONTENT_API_DIR, exist_ok=True)
     os.makedirs(RELEASES_OUT_DIR, exist_ok=True)
 
-    # 1. LIVE BUILD (AUTOMATIC SOURCE DETECTION)
-    # Priority: content/rolling -> content/ (root fallback)
+    # 1. LIVE BUILD
     live_source = os.path.join(BASE_CONTENT_DIR, "rolling")
     live_source_valid = False
 
@@ -507,8 +569,6 @@ def main():
         print(f"🔨 Building LIVE Universe from: {live_source}")
         live_source_valid = True
     else:
-        # Fallback check: Does 'content/EN' or similar exist in root?
-        # This handles cases where user hasn't moved folders yet.
         potential_langs = [d for d in os.listdir(BASE_CONTENT_DIR) if os.path.isdir(os.path.join(BASE_CONTENT_DIR, d)) and len(d) == 2]
         if potential_langs:
             print(f"⚠️  'content/rolling' not found. Falling back to root '{BASE_CONTENT_DIR}'.")
@@ -516,53 +576,46 @@ def main():
             live_source_valid = True
         else:
             print(f"⚠️  Notice: No live content found (checked 'rolling' and root). Building empty tree.")
-            # We continue to build an empty tree to ensure data.json exists and frontend doesn't crash.
 
-    # Execute Build
     live_data = process_universe(live_source if live_source_valid else None, is_archive=False)
     
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f: 
         json.dump(live_data, f, ensure_ascii=False, separators=(',', ':'))
     
-    # SAFETY: Only clean orphans if we actually had a valid source to build from.
     if live_source_valid:
         clean_orphans()
     else:
         print("   - Skipped orphan cleaning (safety mode).")
     
-    # 2. ARCHIVE BUILD (FROM content/releases)
+    # 2. ARCHIVE BUILD
     releases_src = os.path.join(BASE_CONTENT_DIR, "releases")
     if os.path.exists(releases_src):
         archives = sorted([d for d in os.listdir(releases_src) if os.path.isdir(os.path.join(releases_src, d))])
         
         if archives:
             print(f"\n🏛️  Compiling {len(archives)} Archives from: {releases_src}")
-            
             for archive_name in archives:
                 archive_src = os.path.join(releases_src, archive_name)
                 print(f"   - Compiling Snapshot: {archive_name}")
-                
                 archive_data = process_universe(archive_src, is_archive=True)
-                
-                # LOG: Confirm languages found
-                found_langs = list(archive_data.get('languages', {}).keys())
-                print(f"     ✅ Languages packed: {', '.join(found_langs)}")
-                
                 out_path = os.path.join(RELEASES_OUT_DIR, f"{archive_name}.json")
                 with open(out_path, 'w', encoding='utf-8') as f:
                     json.dump(archive_data, f, ensure_ascii=False)
 
-    # 3. INDEX
+    # 3. UTILITIES
     live_name = live_data.get('universeName', DEFAULT_UNIVERSE_NAME)
-    generate_master_index(live_name)
     
+    # Keep legacy file copy just in case
+    copy_intro_files()
+    
+    generate_master_index(live_name)
     save_cache()
 
     elapsed = time.time() - start_time
     print(f"==================================================")
     print(f"✅ Build Complete in {elapsed:.2f}s")
     print(f"==================================================\n")
-    sys.exit(0) # Explicit success
+    sys.exit(0)
 
 if __name__ == "__main__":
     main()
