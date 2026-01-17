@@ -34,23 +34,42 @@ class ArborModalReadme extends HTMLElement {
         // 1. Default Content (Fallback)
         this.readmeContent = rootNode.description || "Welcome to this knowledge tree.";
 
-        // 2. Fetch Logic (INTRO.md -> README.md)
-        // Only if it's a remote URL (http/https)
+        // 2. Fetch Logic
+        // Strategy: Look for INTRO.md or README.md in multiple locations relative to data.json
         if (activeSource.url && activeSource.url.startsWith('http')) {
             try {
-                let baseUrl = activeSource.url.substring(0, activeSource.url.lastIndexOf('/') + 1);
+                // currentFolder is usually ".../data/"
+                const currentFolder = activeSource.url.substring(0, activeSource.url.lastIndexOf('/') + 1);
                 
-                // If we are in /data/, the root of the repo is one level up
-                if (baseUrl.includes('/data/')) {
-                    baseUrl = new URL('../', baseUrl).href;
-                }
+                const candidates = [
+                    // 1. Same folder as data.json (e.g. /data/INTRO.md)
+                    new URL('INTRO.md', currentFolder).href,
+                    new URL('intro.md', currentFolder).href
+                ];
 
-                // Priority: INTRO.md (Student facing) -> README.md (Technical fallback)
-                const candidates = ['INTRO.md', 'intro.md', 'README.md', 'readme.md'];
+                // If we are in a standard structure (inside /data/), look in parent and siblings
+                if (currentFolder.includes('/data/')) {
+                    const rootFolder = new URL('../', currentFolder).href;
+                    
+                    // 2. Root of the repo (e.g. /INTRO.md) - Most common
+                    candidates.push(new URL('INTRO.md', rootFolder).href);
+                    candidates.push(new URL('intro.md', rootFolder).href);
+
+                    // 3. Content folder (e.g. /content/INTRO.md) - Organized
+                    const contentFolder = new URL('content/', rootFolder).href;
+                    candidates.push(new URL('INTRO.md', contentFolder).href);
+                    candidates.push(new URL('intro.md', contentFolder).href);
+
+                    // 4. Fallback to README at root
+                    candidates.push(new URL('README.md', rootFolder).href);
+                    candidates.push(new URL('readme.md', rootFolder).href);
+                } else {
+                    // If not in /data/, just check current folder for README
+                    candidates.push(new URL('README.md', currentFolder).href);
+                }
                 
-                for (const filename of candidates) {
-                    const targetUrl = new URL(filename, baseUrl).href;
-                    const res = await fetch(targetUrl);
+                for (const url of candidates) {
+                    const res = await fetch(url);
                     if (res.ok) {
                         const text = await res.text();
                         // Clean up potential Frontmatter if present
