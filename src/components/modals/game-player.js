@@ -194,6 +194,13 @@ class ArborModalGamePlayer extends HTMLElement {
             getDue: () => store.userStore.getDueNodes(),
             reportMemory: (nodeId, quality) => store.userStore.reportMemory(nodeId, quality),
             
+            // ERROR TRAPPING FOR CHILD IFRAME
+            reportError: (msg) => {
+                console.error("Game Crash Reported:", msg);
+                this.error = "Game Crash: " + msg;
+                this.render();
+            },
+            
             close: () => this.close()
         };
     }
@@ -251,6 +258,22 @@ class ArborModalGamePlayer extends HTMLElement {
 
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
+            
+            // INJECT ERROR TRAP (CRITICAL for debugging broken games)
+            const errorTrapScript = doc.createElement('script');
+            errorTrapScript.textContent = `
+                window.onerror = function(msg, url, line, col, error) {
+                    if (window.parent && window.parent.__ARBOR_GAME_BRIDGE__) {
+                        window.parent.__ARBOR_GAME_BRIDGE__.reportError(msg + " (Line " + line + ")");
+                    }
+                };
+                window.onunhandledrejection = function(e) {
+                    if (window.parent && window.parent.__ARBOR_GAME_BRIDGE__) {
+                        window.parent.__ARBOR_GAME_BRIDGE__.reportError(e.reason ? e.reason.message : "Unknown Promise Error");
+                    }
+                };
+            `;
+            doc.head.prepend(errorTrapScript);
 
             const scripts = doc.querySelectorAll('script[type="module"][src]');
             for (const script of scripts) {
@@ -446,11 +469,15 @@ class ArborModalGamePlayer extends HTMLElement {
         if (this.error) {
             this.innerHTML = `
             <div id="modal-backdrop" class="fixed inset-0 z-[80] bg-black/95 backdrop-blur-sm flex flex-col animate-in fade-in h-full w-full items-center justify-center">
-                <div class="bg-slate-900 border border-red-500/50 p-8 rounded-2xl max-w-md text-center shadow-2xl">
-                    <div class="text-4xl mb-4">🍂</div>
-                    <h2 class="text-xl font-bold text-white mb-2">Could not start game</h2>
-                    <p class="text-sm text-red-300 font-mono mb-6">${this.error}</p>
-                    <button class="btn-close px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition-colors">
+                <div class="bg-slate-900 border border-red-500/50 p-8 rounded-2xl max-w-md text-center shadow-2xl relative">
+                    <div class="text-6xl mb-4 animate-bounce">🐛</div>
+                    <h2 class="text-xl font-bold text-white mb-2">Game Crashed</h2>
+                    <p class="text-xs text-red-300 font-mono mb-6 bg-black/50 p-3 rounded break-all">${this.error}</p>
+                    <div class="text-xs text-slate-400 mb-6">
+                        This is an error inside the game's code, not Arbor.<br>
+                        Developer hint: Check the browser console.
+                    </div>
+                    <button class="btn-close px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition-colors w-full">
                         Close
                     </button>
                 </div>
