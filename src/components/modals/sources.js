@@ -133,11 +133,11 @@ class ArborModalSources extends HTMLElement {
         if (this.overlay === 'plant') {
             container.innerHTML = `
                 <div class="w-full max-w-xs text-center">
-                    <h3 class="text-xl font-black mb-4 dark:text-white">Plant New Tree</h3>
+                    <h3 class="text-xl font-black mb-4 dark:text-white">${ui.plantTree}</h3>
                     <input id="inp-new-tree-name" type="text" placeholder="${ui.treeNamePlaceholder || "Name your tree..."}" class="w-full bg-slate-100 dark:bg-slate-800 rounded-xl px-4 py-4 text-base font-bold mb-4 focus:ring-2 focus:ring-green-500 outline-none dark:text-white" autofocus>
                     <div class="flex gap-3">
-                        <button data-action="cancel-overlay" class="flex-1 py-3 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs uppercase">Cancel</button>
-                        <button data-action="confirm-plant" class="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold text-xs uppercase shadow-lg hover:scale-105 transition-transform">Plant</button>
+                        <button data-action="cancel-overlay" class="flex-1 py-3 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs uppercase">${ui.cancel}</button>
+                        <button data-action="confirm-plant" class="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold text-xs uppercase shadow-lg hover:scale-105 transition-transform">${ui.sourceAdd}</button>
                     </div>
                 </div>`;
             // Autofocus
@@ -149,11 +149,10 @@ class ArborModalSources extends HTMLElement {
             container.innerHTML = `
                 <div class="w-full max-w-xs text-center">
                     <div class="text-4xl mb-4">⚠️</div>
-                    <h3 class="text-xl font-black mb-2 dark:text-white">Delete Tree?</h3>
-                    <p class="text-sm text-slate-500 mb-6">This action cannot be undone.</p>
+                    <h3 class="text-xl font-black mb-2 dark:text-white">${ui.deleteTreeConfirm}</h3>
                     <div class="flex gap-3">
-                        <button data-action="cancel-overlay" class="flex-1 py-3 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs uppercase">Keep</button>
-                        <button data-action="confirm-delete" class="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold text-xs uppercase shadow-lg hover:scale-105 transition-transform">Delete</button>
+                        <button data-action="cancel-overlay" class="flex-1 py-3 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl font-bold text-xs uppercase">${ui.cancel}</button>
+                        <button data-action="confirm-delete" class="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold text-xs uppercase shadow-lg hover:scale-105 transition-transform">${ui.sourceRemove}</button>
                     </div>
                 </div>`;
         }
@@ -205,7 +204,7 @@ class ArborModalSources extends HTMLElement {
                         </div>
                         ${isDifferent ? `
                         <button data-action="switch-version" class="bg-purple-600 hover:bg-purple-500 text-white px-5 py-3.5 rounded-xl font-bold text-sm shadow-lg active:scale-95 transition-all animate-in fade-in slide-in-from-right-2">
-                            Switch
+                            ${ui.releasesSwitch || 'Switch'}
                         </button>
                         ` : `
                         <button data-action="share-tree" class="bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 px-4 py-3.5 rounded-xl font-bold text-lg border border-slate-200 dark:border-slate-700 transition-colors shadow-sm" title="Copy Share Link">
@@ -237,7 +236,7 @@ class ArborModalSources extends HTMLElement {
                                 <p class="text-[10px] text-slate-400 truncate">Default Repository</p>
                             </div>
                         </div>
-                        <button class="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-lg transition-colors pointer-events-none">Load</button>
+                        <button class="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-lg transition-colors pointer-events-none">${ui.sourceLoad}</button>
                     </div>
                     ` : ''}
 
@@ -254,7 +253,7 @@ class ArborModalSources extends HTMLElement {
                                         </div>
                                     </div>
                                     <div class="flex gap-2">
-                                        <button data-action="load-source" data-id="${s.id}" class="px-4 py-2 bg-slate-50 dark:bg-slate-800 hover:bg-green-50 dark:hover:bg-green-900/30 text-slate-600 dark:text-green-400 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition-colors hover:border-green-300">Load</button>
+                                        <button data-action="load-source" data-id="${s.id}" class="px-4 py-2 bg-slate-50 dark:bg-slate-800 hover:bg-green-50 dark:hover:bg-green-900/30 text-slate-600 dark:text-green-400 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition-colors hover:border-green-300">${ui.sourceLoad}</button>
                                         <button data-action="remove-source" data-id="${s.id}" class="w-9 h-9 flex items-center justify-center hover:bg-red-50 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 rounded-xl transition-colors">✕</button>
                                     </div>
                                 </div>
@@ -283,7 +282,7 @@ class ArborModalSources extends HTMLElement {
                     <button data-action="show-plant" class="py-6 px-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 font-bold rounded-2xl active:scale-95 transition-all flex flex-col items-center gap-2 group shadow-sm hover:shadow-md">
                         <span class="text-4xl group-hover:-translate-y-1 transition-transform pointer-events-none">🌱</span> 
                         <span class="text-sm uppercase tracking-wide pointer-events-none font-black">${ui.plantTree || 'Plant New Tree'}</span>
-                        <span class="text-[10px] opacity-70 pointer-events-none font-normal">Start fresh from scratch</span>
+                        <span class="text-[10px] opacity-70 pointer-events-none font-normal">${ui.plantTreeDesc || "Start fresh"}</span>
                     </button>
                 </div>
                 
@@ -308,13 +307,13 @@ class ArborModalSources extends HTMLElement {
                                     </div>
                                 </div>
                                 <div class="flex gap-2 shrink-0 items-center">
-                                    <button data-action="export-local" data-id="${t.id}" data-name="${t.name}" class="px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-slate-600 dark:text-blue-300 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center gap-2 hover:border-blue-300" title="Export JSON">
+                                    <button data-action="export-local" data-id="${t.id}" data-name="${t.name}" class="px-3 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-slate-600 dark:text-blue-300 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center gap-2 hover:border-blue-300" title="${ui.sourceExport}">
                                         <span>📤</span>
                                     </button>
                                     
                                     ${isActive 
-                                        ? `<span class="px-4 py-2 bg-green-100 text-green-700 text-xs font-black rounded-xl border border-green-200 cursor-default uppercase tracking-wider">Active</span>`
-                                        : `<button data-action="load-local" data-id="${t.id}" data-name="${t.name}" class="px-6 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold rounded-xl shadow hover:opacity-90 transition-opacity uppercase tracking-wider">Open</button>`
+                                        ? `<span class="px-4 py-2 bg-green-100 text-green-700 text-xs font-black rounded-xl border border-green-200 cursor-default uppercase tracking-wider">${ui.sourceActive}</span>`
+                                        : `<button data-action="load-local" data-id="${t.id}" data-name="${t.name}" class="px-6 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold rounded-xl shadow hover:opacity-90 transition-opacity uppercase tracking-wider">${ui.sourceLoad}</button>`
                                     }
                                     
                                     <button data-action="show-delete" data-id="${t.id}" class="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors ml-1" title="${ui.sourceRemove}">✕</button>

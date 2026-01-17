@@ -248,7 +248,7 @@ class ArborGraph extends HTMLElement {
         if (state.constructionMode) {
             html += `
             <div class="absolute top-0 left-0 w-full h-8 bg-yellow-500 text-black font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 z-[60] shadow-md striped-bg animate-in slide-in-from-top-full pointer-events-none">
-                <span>🚧 CONSTRUCTION MODE 🚧</span>
+                <span>🚧 ${ui.navConstruct || 'CONSTRUCTION MODE'} 🚧</span>
             </div>
             <style>.striped-bg { background-image: repeating-linear-gradient(45deg, #f59e0b, #f59e0b 10px, #fbbf24 10px, #fbbf24 20px); }</style>
             `;
@@ -291,6 +291,8 @@ class ArborGraph extends HTMLElement {
             return;
         }
         
+        const ui = store.ui;
+
         // POSITION CALCULATION
         // Find the D3 node visual element to get coordinates
         const d3Node = this.nodeGroup.selectAll(".node").data().find(d => d.data.id === this.selectedNodeId);
@@ -316,27 +318,27 @@ class ArborGraph extends HTMLElement {
             // READ ONLY STATE
             controls = `
                 <div class="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1">
-                    <span>🔒</span> Read Only
+                    <span>🔒</span> ${ui.graphReadOnly || 'Read Only'}
                 </div>
             `;
         } else {
             // EDITABLE STATE
             controls = `
-                <button class="${this.isMoveMode ? 'active-move' : ''}" id="dock-move" data-tooltip="${this.isMoveMode ? 'Stop Moving' : 'Move Node (M)'}">
+                <button class="${this.isMoveMode ? 'active-move' : ''}" id="dock-move" data-tooltip="${this.isMoveMode ? 'Stop Moving' : (ui.graphMove || 'Move Node') + ' (M)'}">
                     ${this.isMoveMode ? '✋' : '✥'}
                 </button>
                 <div style="width:1px; height:20px; background:#475569; margin:0 4px"></div>
                 
-                <button id="dock-edit" data-tooltip="Edit">✏️</button>
+                <button id="dock-edit" data-tooltip="${ui.graphEdit || 'Edit'}">✏️</button>
                 
                 ${!isLeaf ? `
-                    <button id="dock-add-folder" data-tooltip="Add Folder">📁+</button>
-                    <button id="dock-add-file" data-tooltip="Add Lesson">📄+</button>
+                    <button id="dock-add-folder" data-tooltip="${ui.graphAddFolder || 'Add Folder'}">📁+</button>
+                    <button id="dock-add-file" data-tooltip="${ui.graphAddLesson || 'Add Lesson'}">📄+</button>
                 ` : ''}
                 
                 ${!isRoot ? `
                     <div style="width:1px; height:20px; background:#475569; margin:0 4px"></div>
-                    <button class="danger" id="dock-delete" data-tooltip="Delete">🗑️</button>
+                    <button class="danger" id="dock-delete" data-tooltip="${ui.graphDelete || 'Delete'}">🗑️</button>
                 ` : ''}
             `;
         }
@@ -564,27 +566,38 @@ class ArborGraph extends HTMLElement {
             if (d.y < minY) minY = d.y; if (d.y > maxY) maxY = d.y;
         });
         
-        // --- CLAUSTROPHOBIC BOUNDS ---
+        // --- CLAUSTROPHOBIC BOUNDS (TIGHTENED) ---
         if (this.zoom) {
-            // Padding around the exact node bounds
-            const padding = isMobile ? 50 : 100;
-            
-            // Allow panning so that the farthest node can reach the center of the screen, but not much more.
-            // minX is the leftmost node position. To center it, we need to pan right by width/2.
-            const x0 = minX - (this.width / 2) - padding;
-            const x1 = maxX + (this.width / 2) + padding;
-            const y0 = minY - (this.height / 2) - padding;
-            const y1 = maxY + (this.height / 2) + padding;
-
-            this.zoom.translateExtent([[x0, y0], [x1, y1]]);
-            
-            // Adjust minimum zoom based on tree size.
-            // If tree is small, minScale stays high (can't zoom out).
-            // If tree is massive, we allow *some* zoom out, but cap it.
+            const padding = isMobile ? 20 : 60; // Reduced padding for tighter fit
             const realTreeWidth = maxX - minX;
-            // Ensure minScale is never too small (e.g. 0.1), keep it around 0.4 minimum
-            const minScale = Math.max(0.4, Math.min(1, this.width / (realTreeWidth + 200)));
+            const realTreeHeight = maxY - minY;
+            
+            // Calculate Min Scale to fit width OR be reasonably zoomed out
+            const fitScale = this.width / (realTreeWidth + padding * 2);
+            const minScale = Math.max(0.4, Math.min(1, fitScale));
+            
             this.zoom.scaleExtent([minScale, 3]);
+            
+            // Calculate Extent
+            // The extent must be at least large enough to contain the viewport at minScale
+            const maxViewportWidth = this.width / minScale;
+            const maxViewportHeight = this.height / minScale;
+            
+            // Width Logic: Content Width vs Viewport Width
+            const targetWidth = Math.max(realTreeWidth + padding * 2, maxViewportWidth);
+            const centerX = (minX + maxX) / 2;
+            const x0 = centerX - targetWidth / 2;
+            const x1 = centerX + targetWidth / 2;
+            
+            // Height Logic: Content Height vs Viewport Height
+            // We want to be able to scroll to the top and bottom freely
+            const targetHeight = Math.max(realTreeHeight + padding * 2, maxViewportHeight);
+            const centerY = (minY + maxY) / 2;
+            const y0 = centerY - targetHeight / 2;
+            const y1 = centerY + targetHeight / 2;
+
+            // Apply strict extent
+            this.zoom.translateExtent([[x0, y0], [x1, y1]]);
         }
 
         // --- DYNAMIC GROUND DRAWING ---

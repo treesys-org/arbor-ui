@@ -73,7 +73,7 @@ class ArborSidebar extends HTMLElement {
                     
                     <button class="js-btn-construct menu-item ${constructionMode ? 'bg-orange-50 text-orange-600' : ''}">
                         <span>${constructionMode ? '🏗️' : '👷'}</span> 
-                        <span>Construction Mode</span>
+                        <span>${ui.navConstruct || 'Construction Mode'}</span>
                     </button>
                     
                     <button class="js-btn-lang menu-item"><span>${store.currentLangInfo.flag}</span> <span>${ui.languageTitle}</span></button>
@@ -194,7 +194,7 @@ class ArborSidebar extends HTMLElement {
                 <!-- CONSTRUCTION MODE -->
                 <div class="relative group">
                      <button class="js-btn-construct w-10 h-10 rounded-xl flex items-center justify-center transition-all ${constructionMode ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30 animate-pulse' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-orange-500 hover:text-white'}" aria-label="Construction Mode">🏗️</button>
-                     <span class="tooltip">Construction Mode</span>
+                     <span class="tooltip">${ui.navConstruct || 'Construction Mode'}</span>
                 </div>
             </div>
 
@@ -237,7 +237,7 @@ class ArborSidebar extends HTMLElement {
         this.querySelectorAll('.js-btn-construct').forEach(b => b.onclick = mobileMenuAction(() => store.toggleConstructionMode()));
         this.querySelectorAll('.js-btn-about').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('about')));
         
-        // MANUAL BINDING (CRITICAL FIX)
+        // MANUAL BINDING
         this.querySelectorAll('.js-btn-manual').forEach(b => b.onclick = mobileMenuAction(() => {
             store.setModal('manual');
         }));

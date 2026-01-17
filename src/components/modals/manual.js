@@ -29,14 +29,14 @@ class ArborModalManual extends HTMLElement {
         const titleText = ui.navManual || "Field Guide";
 
         const sections = [
-            { id: 'intro', title: 'Philosophy', icon: '🌱' },
-            { id: 'nav', title: 'Navigation', icon: '🗺️' },
-            { id: 'learn', title: 'Learning', icon: '📝' },
-            { id: 'garden', title: 'The Garden', icon: '🎒' },
-            { id: 'arcade', title: 'Arcade', icon: '🎮' },
-            { id: 'sage', title: 'Sage (AI)', icon: '🦉' },
-            { id: 'construct', title: 'Construction', icon: '🏗️' },
-            { id: 'data', title: 'Data & Sync', icon: '💾' }
+            { id: 'intro', title: ui.manualPhilosophyTitle || 'Philosophy', icon: '🌱' },
+            { id: 'nav', title: ui.manualNavigationTitle || 'Navigation', icon: '🗺️' },
+            { id: 'learn', title: ui.manualLearningTitle || 'Learning', icon: '📝' },
+            { id: 'garden', title: ui.manualGardenTitle || 'The Garden', icon: '🎒' },
+            { id: 'arcade', title: ui.manualArcadeTitle || 'Arcade', icon: '🎮' },
+            { id: 'sage', title: ui.manualSageTitle || 'Sage (AI)', icon: '🦉' },
+            { id: 'construct', title: ui.manualConstructTitle || 'Construction', icon: '🏗️' },
+            { id: 'data', title: ui.manualDataTitle || 'Data & Sync', icon: '💾' }
         ];
 
         const sidebarHtml = sections.map(s => {
@@ -54,83 +54,81 @@ class ArborModalManual extends HTMLElement {
             </button>`;
         }).join('');
 
-        // Use standard HTML tags instead of backticks inside the template to prevent parsing errors
         const contentHtml = `
         <div class="prose prose-slate dark:prose-invert max-w-3xl mx-auto pb-20">
             <section id="sec-intro" class="mb-20">
-                <h1>The Arbor Grimoire</h1>
-                <p class="lead text-xl">Arbor is not just a website; it is a <strong>Visual Knowledge Browser</strong>. It treats information like a living forest that you can explore, prune, and grow.</p>
+                <h1>${ui.manualHeader || 'The Arbor Grimoire'}</h1>
+                <p class="lead text-xl">${ui.manualIntroText}</p>
                 <div class="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-2xl border border-blue-100 dark:border-blue-800 my-6">
-                    <strong class="text-blue-700 dark:text-blue-300 block mb-2">Core Philosophy</strong>
-                    Knowledge is decentralized. There is no central server holding the "truth". You can load any tree (JSON file) from the internet, or plant your own local garden right in your browser.
+                    <strong class="text-blue-700 dark:text-blue-300 block mb-2">${ui.manualPhilosophyCore}</strong>
+                    ${ui.manualPhilosophyDesc}
                 </div>
             </section>
 
             <hr class="border-slate-200 dark:border-slate-800 my-12">
 
             <section id="sec-nav" class="mb-20">
-                <h2>🗺️ Navigation</h2>
-                <p>The interface is designed to be spatial. You don't scroll through lists; you travel through branches.</p>
+                <h2>${ui.manualNavigationTitle}</h2>
+                <p>${ui.manualNavDesc}</p>
                 <ul class="grid grid-cols-1 md:grid-cols-2 gap-4 list-none pl-0">
                     <li class="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
-                        <strong>Pan</strong><br>Click and drag the background to move the camera.
+                        <strong>${ui.manualNavPan}</strong><br>${ui.manualNavPanDesc}
                     </li>
                     <li class="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
-                        <strong>Zoom</strong><br>Use the mouse wheel or the +/- buttons in the corner.
+                        <strong>${ui.manualNavZoom}</strong><br>${ui.manualNavZoomDesc}
                     </li>
                     <li class="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
-                        <strong>Expand</strong><br>Click on a circle node to reveal its children.
+                        <strong>${ui.manualNavExpand}</strong><br>${ui.manualNavExpandDesc}
                     </li>
                     <li class="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
-                        <strong>Focus</strong><br>Double-click a node to center the camera on it.
+                        <strong>${ui.manualNavFocus}</strong><br>${ui.manualNavFocusDesc}
                     </li>
                 </ul>
             </section>
 
             <section id="sec-learn" class="mb-20">
-                <h2>📝 Learning</h2>
-                <p>Content is organized into a hierarchy:</p>
+                <h2>${ui.manualLearningTitle}</h2>
+                <p>${ui.manualLearnDesc}</p>
                 <ul class="space-y-2">
-                    <li><strong>Roots (🌳):</strong> The main topics or subjects.</li>
-                    <li><strong>Modules (📁):</strong> Containers for related lessons.</li>
-                    <li><strong>Lessons (📄):</strong> The actual educational content. Click "Enter Lesson" to read.</li>
-                    <li><strong>Exams (⚔️):</strong> Special nodes that test your knowledge of an entire branch. Passing an exam marks the branch as "Mastered".</li>
+                    <li><strong>${ui.manualLearnRoots} (🌳):</strong> The main topics or subjects.</li>
+                    <li><strong>${ui.manualLearnModules} (📁):</strong> Containers for related lessons.</li>
+                    <li><strong>${ui.manualLearnLessons} (📄):</strong> The actual educational content. Click "Enter Lesson" to read.</li>
+                    <li><strong>${ui.manualLearnExams} (⚔️):</strong> Special nodes that test your knowledge of an entire branch. Passing an exam marks the branch as "Mastered".</li>
                 </ul>
-                <p><strong>Bookmarks:</strong> Arbor automatically remembers where you scrolled in every lesson.</p>
             </section>
 
             <section id="sec-garden" class="mb-20">
-                <h2>🎒 The Garden (Gamification)</h2>
-                <p>Your progress is visualized as a collection of seeds.</p>
+                <h2>${ui.manualGardenTitle}</h2>
+                <p>${ui.manualGardenDesc}</p>
                 <ul>
-                    <li><strong>Seeds:</strong> When you complete a module, you collect a unique seed based on the module's name hash.</li>
-                    <li><strong>Streak:</strong> Days in a row you have visited Arbor.</li>
-                    <li><strong>Photosynthesis (XP):</strong> Points earned by reading lessons and passing quizzes.</li>
-                    <li><strong>Memory:</strong> Completed lessons may turn yellow (wither) over time. This indicates you should review them (Spaced Repetition).</li>
+                    <li><strong>${ui.manualGardenSeeds}</strong></li>
+                    <li><strong>${ui.manualGardenStreak}</strong></li>
+                    <li><strong>${ui.manualGardenXP}</strong></li>
+                    <li><strong>${ui.manualGardenMemory}</strong></li>
                 </ul>
             </section>
 
             <section id="sec-arcade" class="mb-20">
-                <h2>🎮 Arcade</h2>
-                <p>The Arcade allows you to play educational games that <strong>adapt</strong> to what you are currently studying.</p>
+                <h2>${ui.manualArcadeTitle}</h2>
+                <p>${ui.manualArcadeDesc}</p>
                 <div class="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-xl border border-purple-100 dark:border-purple-800 text-sm">
                     <strong>Context Injection:</strong> When you launch a game, Arbor sends the content of the current lesson to the game engine. The game uses AI (Sage) to generate levels, questions, or enemies based on that text.
                 </div>
             </section>
 
             <section id="sec-sage" class="mb-20">
-                <h2>🦉 The Sage (AI)</h2>
+                <h2>${ui.manualSageTitle}</h2>
                 <p>The Sage is your AI companion. It can explain complex topics, summarize lessons, or create quizzes.</p>
                 <h3>Providers</h3>
                 <ul>
-                    <li><strong>Cloud (Default):</strong> Uses Puter.com to provide free access to LLMs. Requires internet.</li>
-                    <li><strong>Local (Advanced):</strong> Connects to a local <strong>Ollama</strong> instance running on your machine. Private and offline capable.</li>
+                    <li><strong>${ui.sageModeCloud}:</strong> Uses Puter.com to provide free access to LLMs. Requires internet.</li>
+                    <li><strong>${ui.sageModeLocal}:</strong> Connects to a local <strong>Ollama</strong> instance running on your machine. Private and offline capable.</li>
                 </ul>
             </section>
 
             <section id="sec-construct" class="mb-20">
-                <h2>🏗️ Construction Mode</h2>
-                <p>Arbor includes a full visual editor to create your own courses.</p>
+                <h2>${ui.manualConstructTitle}</h2>
+                <p>${ui.manualConstructDesc}</p>
                 <ol>
                     <li>Click the <strong>Construction Hat</strong> (🏗️) in the sidebar.</li>
                     <li><strong>Create:</strong> Click the floating buttons on the selected node to add Folders or Lessons.</li>
@@ -140,8 +138,8 @@ class ArborModalManual extends HTMLElement {
             </section>
 
             <section id="sec-data" class="mb-20">
-                <h2>💾 Data & Sync</h2>
-                <p>Arbor is a "Local-First" application.</p>
+                <h2>${ui.manualDataTitle}</h2>
+                <p>${ui.manualDataDesc}</p>
                 <ul>
                     <li><strong>Export:</strong> Go to Profile -> Export to download a <code>.json</code> backup of your progress.</li>
                     <li><strong>Import:</strong> Load a backup file to restore your progress on another device.</li>
