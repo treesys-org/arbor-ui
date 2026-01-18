@@ -1,4 +1,5 @@
 
+
 import { store } from '../../store.js';
 import { fileSystem } from '../../services/filesystem.js';
 import { github } from '../../services/github.js'; 
@@ -124,8 +125,8 @@ class ArborAdminPanel extends HTMLElement {
                     <button data-tab="access" class="tab-btn flex-1 py-3 flex items-center justify-center gap-2 font-black uppercase text-xs tracking-widest transition-all rounded-xl">
                         <span>🔐</span> ${ui.adminGovTitle || "Permissions"}
                     </button>
-                    <button data-tab="faculty" class="tab-btn flex-1 py-3 flex items-center justify-center gap-2 font-black uppercase text-xs tracking-widest transition-all rounded-xl">
-                        <span>👩‍🏫</span> ${ui.adminTeam || "Faculty"}
+                    <button data-tab="team" class="tab-btn flex-1 py-3 flex items-center justify-center gap-2 font-black uppercase text-xs tracking-widest transition-all rounded-xl">
+                        <span>👩‍🏫</span> ${ui.adminTeam || "Maintainers"}
                     </button>
                     <button data-tab="archives" class="tab-btn flex-1 py-3 flex items-center justify-center gap-2 font-black uppercase text-xs tracking-widest transition-all rounded-xl">
                         <span>⏳</span> ${ui.adminVersions || "Versions"}
@@ -145,7 +146,7 @@ class ArborAdminPanel extends HTMLElement {
             btn.onclick = () => {
                 const tab = btn.dataset.tab;
                 this.updateState({ adminTab: tab });
-                if(tab === 'faculty' || tab === 'proposals') this.loadAdminData();
+                if(tab === 'team' || tab === 'proposals') this.loadAdminData();
                 if(tab === 'access') { this.loadAdminData(); this.loadFolderTree(); }
                 if(tab === 'archives') this.loadReleases();
             };
@@ -202,7 +203,7 @@ class ArborAdminPanel extends HTMLElement {
 
         const { adminTab } = this.state;
         if (adminTab === 'access') container.innerHTML = this.getAccessContent();
-        else if (adminTab === 'faculty') container.innerHTML = this.getFacultyContent();
+        else if (adminTab === 'team') container.innerHTML = this.getTeamContent();
         else if (adminTab === 'proposals') container.innerHTML = this.getProposalsContent();
         else if (adminTab === 'archives') container.innerHTML = this.getArchivesContent();
     }
@@ -247,7 +248,7 @@ class ArborAdminPanel extends HTMLElement {
                 <div class="p-6 flex-1 overflow-y-auto custom-scrollbar">
                     <div class="mb-8">
                         <div class="flex justify-between items-center mb-3">
-                            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Maintainers</h4>
+                            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">${store.ui.adminTeam || 'Maintainers'}</h4>
                             <span class="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-slate-500 font-bold">${folderGuardians.length}</span>
                         </div>
                         
@@ -304,13 +305,13 @@ class ArborAdminPanel extends HTMLElement {
         </div>`;
     }
 
-    getFacultyContent() {
+    getTeamContent() {
         const { adminData } = this.state;
         return `
         <div class="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-900">
             <div class="max-w-3xl mx-auto">
                 <div class="flex justify-between items-center mb-8">
-                    <div><h3 class="font-black text-xl text-slate-800 dark:text-white uppercase">Faculty</h3><p class="text-xs text-slate-500 mt-1">Contributors</p></div>
+                    <div><h3 class="font-black text-xl text-slate-800 dark:text-white uppercase">${store.ui.adminTeam || 'Maintainers'}</h3><p class="text-xs text-slate-500 mt-1">Contributors</p></div>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     ${adminData.users.map(u => `

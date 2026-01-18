@@ -127,7 +127,7 @@ class ArborModalWelcome extends HTMLElement {
                     </div>
 
                     <div class="mt-6 pt-6 border-t border-slate-200 dark:border-slate-800 text-center">
-                        <p class="text-[10px] text-slate-400">Arbor Open University</p>
+                        <p class="text-[10px] text-slate-400">Powered by Treesys</p>
                     </div>
                 </div>
 
