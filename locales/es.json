@@ -1,6 +1,6 @@
 {
   "appTitle": "ARBOR",
-  "appSubtitle": "Open University",
+  "appSubtitle": "Arbor Lyceum",
   "loading": "Cargando mapa de conocimiento abierto...",
   "leafLabel": "LECCIÓN",
   "searchPlaceholder": "Buscar temas...",
@@ -44,7 +44,7 @@
     },
     {
       "title": "Tus Datos son Privados (Offline)",
-      "text": "<strong>Important:</strong> Tu progreso vive 100% en este navegador. Para guardarlo o moverlo a otro dispositivo, ve a tu Perfil y <strong>Exporta</strong> tu archivo de mochila.",
+      "text": "<strong>Importante:</strong> Tu progreso vive 100% en este navegador. Para guardarlo o moverlo a otro dispositivo, ve a tu Perfil y <strong>Exporta</strong> tu archivo de mochila.",
       "icon": "🎒"
     }
   ],
@@ -100,7 +100,7 @@
   "certTitle": "CERTIFICADO DE FINALIZACIÓN",
   "certBody": "Se certifica que el estudiante ha completado con éxito el módulo:",
   "certDate": "Fecha",
-  "certSign": "Arbor Open University",
+  "certSign": "Arbor Lyceum",
   "printCert": "DESCARGAR DIPLOMA",
   "shareCert": "COMPARTIR LOGRO",
   "backToMap": "VOLVER AL MAPA",
@@ -381,6 +381,15 @@
   "tabManifesto": "Manifiesto",
   "tabPrivacy": "Privacidad",
   "tabLegal": "Legal",
+  "tabRoadmap": "Roadmap",
+  "roadmapTitle": "El Viaje por Delante",
+  "roadmapPhase1": "Fase 1: La Semilla",
+  "roadmapPhase1Desc": "Cimientos y Crecimiento. Priorizando cantidad y estabilidad.",
+  "roadmapPhase2": "Fase 2: El Retoño",
+  "roadmapPhase2Desc": "Comunidad y Colaboración. Mentores humanos y herramientas de IA.",
+  "roadmapPhase3": "Fase 3: El Bosque",
+  "roadmapPhase3Desc": "Ecosistema Descentralizado. Hacia la acreditación y espacios físicos.",
+  "roadmapCurrent": "Fase Actual",
   "graphReadOnly": "Solo Lectura",
   "graphMove": "Mover Nodo",
   "graphEdit": "Editar",

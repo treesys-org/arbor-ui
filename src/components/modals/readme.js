@@ -22,6 +22,31 @@ class ArborModalReadme extends HTMLElement {
         store.setModal(null);
     }
 
+    getRepoUrl() {
+        const sourceUrl = store.value.activeSource?.url;
+        if (!sourceUrl || !sourceUrl.startsWith('http')) return null;
+
+        try {
+            if (sourceUrl.includes('raw.githubusercontent.com')) {
+                const parts = new URL(sourceUrl).pathname.split('/');
+                if (parts.length >= 3) {
+                    return `https://github.com/${parts[1]}/${parts[2]}`;
+                }
+            } else if (sourceUrl.includes('github.io')) {
+                const url = new URL(sourceUrl);
+                const owner = url.hostname.split('.')[0];
+                const repo = url.pathname.split('/')[1];
+                if (owner && repo) {
+                    return `https://github.com/${owner}/${repo}`;
+                }
+            }
+        } catch (e) {
+            console.warn("Could not parse repo URL", e);
+            return null;
+        }
+        return null;
+    }
+
     async loadContent() {
         const rootNode = store.value.data;
         const activeSource = store.value.activeSource;
@@ -85,6 +110,7 @@ class ArborModalReadme extends HTMLElement {
 
         const title = activeSource.name;
         const icon = rootNode.icon || "🌳";
+        const repoUrl = this.getRepoUrl();
 
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/80 backdrop-blur-md p-4 animate-in fade-in duration-500">
@@ -115,6 +141,12 @@ class ArborModalReadme extends HTMLElement {
                         <span>🚀</span> Start Exploring
                     </button>
                     
+                    ${repoUrl ? `
+                        <button id="btn-view-repo" class="mt-3 w-full py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                            <span>🐙</span> View Author/Source
+                        </button>
+                    ` : ''}
+
                     <div class="mt-4 flex justify-center">
                         <label class="flex items-center gap-2 cursor-pointer group text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors select-none">
                             <input type="checkbox" id="chk-skip" class="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-0 cursor-pointer">
@@ -135,6 +167,11 @@ class ArborModalReadme extends HTMLElement {
         this.querySelector('#modal-backdrop').onclick = (e) => {
             if (e.target === e.currentTarget) this.close(false);
         };
+        
+        const repoBtn = this.querySelector('#btn-view-repo');
+        if (repoBtn && repoUrl) {
+            repoBtn.onclick = () => window.open(repoUrl, '_blank', 'noopener,noreferrer');
+        }
     }
 
     renderContent() {

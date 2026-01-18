@@ -4,7 +4,7 @@ import { store } from '../../store.js';
 class ArborModalAbout extends HTMLElement {
     constructor() {
         super();
-        this.activeTab = 'manifesto'; // 'manifesto' | 'privacy' | 'legal'
+        this.activeTab = 'manifesto'; // 'manifesto' | 'roadmap' | 'privacy' | 'legal'
         this.showImpressumDetails = false;
     }
 
@@ -62,6 +62,51 @@ class ArborModalAbout extends HTMLElement {
                     <blockquote class="text-slate-500 dark:text-slate-400 italic text-sm font-serif">"${ui.metaphorText}"</blockquote>
                 </div>
             </div>`;
+        } else if (this.activeTab === 'roadmap') {
+            // Roadmap Implementation
+            contentHtml = `
+            <div class="animate-in fade-in slide-in-from-bottom-2 pl-4">
+                <div class="flex items-center gap-3 mb-8">
+                    <span class="text-3xl">🗺️</span>
+                    <h2 class="text-xl font-black text-slate-800 dark:text-white">${ui.roadmapTitle || 'The Roadmap'}</h2>
+                </div>
+
+                <div class="relative space-y-8 border-l-2 border-slate-200 dark:border-slate-700 ml-3">
+                    
+                    <!-- Phase 1: Current -->
+                    <div class="relative pl-8">
+                        <div class="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-green-500 border-2 border-white dark:border-slate-900 shadow-sm animate-pulse"></div>
+                        <div class="bg-green-50 dark:bg-green-900/10 p-4 rounded-xl border border-green-200 dark:border-green-900/30">
+                            <span class="text-[10px] font-black uppercase text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded mb-2 inline-block">${ui.roadmapCurrent || "Current Phase"}</span>
+                            <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-1">🌱 ${ui.roadmapPhase1 || "Phase 1: The Seed"}</h3>
+                            <p class="text-sm text-slate-600 dark:text-slate-300">${ui.roadmapPhase1Desc || "Foundation & Content Growth"}</p>
+                        </div>
+                    </div>
+
+                    <!-- Phase 2 -->
+                    <div class="relative pl-8 opacity-80">
+                        <div class="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-slate-300 dark:bg-slate-600 border-2 border-white dark:border-slate-900"></div>
+                        <h3 class="text-base font-bold text-slate-700 dark:text-slate-200 mb-1">🌿 ${ui.roadmapPhase2 || "Phase 2: The Sapling"}</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">${ui.roadmapPhase2Desc || "Community & Collaboration"}</p>
+                    </div>
+
+                    <!-- Phase 3 -->
+                    <div class="relative pl-8 opacity-60">
+                        <div class="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-slate-900"></div>
+                        <h3 class="text-base font-bold text-slate-700 dark:text-slate-200 mb-1">🌳 ${ui.roadmapPhase3 || "Phase 3: The Forest"}</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">${ui.roadmapPhase3Desc || "Decentralized Ecosystem"}</p>
+                    </div>
+                </div>
+
+                <!-- Link to Live Repo -->
+                <div class="mt-12 text-center pl-4 pr-8">
+                    <a href="https://github.com/treesys-org/arbor-ui/blob/main/ROADMAP.md" target="_blank" class="inline-flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors border border-slate-200 dark:border-slate-700 px-4 py-2 rounded-full hover:bg-slate-50 dark:hover:bg-slate-800">
+                        <span>🚧</span>
+                        <span>View Live Technical Roadmap</span>
+                        <span class="text-[10px]">➜</span>
+                    </a>
+                </div>
+            </div>`;
         } else if (this.activeTab === 'privacy') {
             const privacyText = (ui.privacyText || "").replace('{impressum}', `<span class="text-slate-400 italic">[See Legal Tab]</span>`);
             contentHtml = `
@@ -117,6 +162,7 @@ class ArborModalAbout extends HTMLElement {
                 <!-- Navigation Tabs -->
                 <div class="flex px-6 pt-4 border-b border-slate-100 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-900">
                     <button class="tab-btn ${tabBtnClass(this.activeTab === 'manifesto')}" data-tab="manifesto">${ui.tabManifesto || 'Manifesto'}</button>
+                    <button class="tab-btn ${tabBtnClass(this.activeTab === 'roadmap')}" data-tab="roadmap">${ui.tabRoadmap || 'Roadmap'}</button>
                     <button class="tab-btn ${tabBtnClass(this.activeTab === 'privacy')}" data-tab="privacy">${ui.tabPrivacy || 'Privacy'}</button>
                     <button class="tab-btn ${tabBtnClass(this.activeTab === 'legal')}" data-tab="legal">${ui.tabLegal || 'Legal'}</button>
                 </div>
