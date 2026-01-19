@@ -157,10 +157,9 @@ class ArborGraph extends HTMLElement {
 
         store.addEventListener('graph-update', () => this.updateGraph());
         store.addEventListener('state-change', (e) => {
-             // Only redraw ground here if NO data (initial state), otherwise updateGraph handles it
-             if(this.g && !store.value.data) this.drawGround(); 
-             
-             if(e.detail.theme && this.svg) this.updateGraph();
+             // Redraw ground on state change to ensure theme/mode updates
+             // We need to pass valid coordinates if available, otherwise defaults
+             if(this.g) this.updateGraph(); // This will trigger drawGround correctly with data
              
              // Handle Construction Mode Toggle
              if(e.detail.constructionMode !== undefined) {
@@ -185,9 +184,7 @@ class ArborGraph extends HTMLElement {
                 this.height = container.clientHeight;
                 if(this.svg) {
                     this.svg.attr("viewBox", [0, 0, this.width, this.height]);
-                    // Only redraw here if static, usually updateGraph called on interaction
-                    if(!store.value.data) this.drawGround();
-                    else this.updateGraph();
+                    if(store.value.data) this.updateGraph();
                 }
             }
         });
@@ -453,7 +450,8 @@ class ArborGraph extends HTMLElement {
 
         this.nodeGroup = this.g.append("g").attr("class", "nodes");
 
-        this.drawGround(); // Initial default draw
+        // Initial default draw (will be overwritten by updateGraph with real data coords)
+        this.drawGround(0, 0, this.height); 
 
         // CLAUSTROPHOBIC ZOOM INIT
         // Restrict scale extent heavily so users can't zoom out too far
@@ -495,33 +493,31 @@ class ArborGraph extends HTMLElement {
         this.svg.transition().duration(duration).call(this.zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(k));
     }
 
-    drawGround(contentWidth = null) {
+    drawGround(minX, maxX, maxY) {
         this.groundGroup.selectAll("*").remove();
         if (store.value.constructionMode) return;
 
         const theme = store.value.theme;
         const color = theme === 'dark' ? '#334155' : '#22c55e'; // green-500
         
-        const cx = this.width / 2;
-        const groundY = this.height;
+        // FIX: Plant trunk deeply into ground
+        // Root is at maxY. Root radius is 60.
+        // We start ground at maxY + 20. This covers the bottom 40px of the root node.
+        const startY = maxY + 20; 
         
-        // Make it WIDE and DEEP to cover bottom area fully
-        const totalWidth = Math.max(this.width * 4, (contentWidth || 0) * 2);
-        const halfWidth = totalWidth / 2;
-        const deepBottom = groundY + 5000; // Go way down to ensure coverage
-
+        const infinityDepth = 100000; // Deep enough to never see bottom
+        const widthPadding = 100000; // Wide enough to never see sides
+        
         this.groundGroup.style("opacity", 1);
 
-        this.groundGroup.append("path")
-            .attr("d", `
-                M${cx - halfWidth},${groundY} 
-                Q${cx},${groundY - 120} ${cx + halfWidth},${groundY} 
-                L${cx + halfWidth},${deepBottom}
-                L${cx - halfWidth},${deepBottom}
-                Z
-            `)
+        // Simple massive block
+        this.groundGroup.append("rect")
+            .attr("x", minX - widthPadding)
+            .attr("y", startY)
+            .attr("width", (maxX - minX) + (widthPadding * 2))
+            .attr("height", infinityDepth)
             .attr("fill", color)
-            .style("pointer-events", "none"); 
+            .style("pointer-events", "none");
     }
 
     updateGraph() {
@@ -568,40 +564,40 @@ class ArborGraph extends HTMLElement {
             if (d.y < minY) minY = d.y; if (d.y > maxY) maxY = d.y;
         });
         
-        // --- CLAUSTROPHOBIC BOUNDS (TIGHTENED BUT RELAXED TO PREVENT SNAP) ---
+        // --- DYNAMIC ZOOM EXTENT (ELASTIC BOUNDS) ---
         if (this.zoom) {
-            const realTreeWidth = maxX - minX;
-            const realTreeHeight = maxY - minY;
+            // FIX: "Tiny Margin" (200px) but Elastic.
+            // This prevents snapping if the user has panned far away (vLeft/vRight outside bounds).
+            // The bounds will 'stick' to the user's position until they come back inside.
+            const padding = 200; 
             
-            // Calculate Min Scale to fit width OR be reasonably zoomed out
-            const fitScale = this.width / (realTreeWidth + 120);
-            const minScale = Math.max(0.4, Math.min(1, fitScale));
-            
-            this.zoom.scaleExtent([minScale, 3]);
-            
-            // Calculate Extent
-            // CRITICAL FIX: We increase padding significantly to prevent "Snapping" (Teleportation) 
-            // when the tree shrinks rapidly.
-            const padding = Math.max(this.width, this.height) * 2;
-            
-            const centerX = (minX + maxX) / 2;
-            const centerY = (minY + maxY) / 2;
-            
-            const targetWidth = Math.max(realTreeWidth, this.width / minScale);
-            const targetHeight = Math.max(realTreeHeight, this.height / minScale);
-            
-            const x0 = centerX - targetWidth / 2;
-            const x1 = centerX + targetWidth / 2;
-            const y0 = centerY - targetHeight / 2;
-            const y1 = centerY + targetHeight / 2;
+            // Current Viewport Calculation (Projected to World Space)
+            const t = d3.zoomTransform(this.svg.node());
+            const vLeft = -t.x / t.k;
+            const vRight = (this.width - t.x) / t.k;
+            const vTop = -t.y / t.k;
+            const vBottom = (this.height - t.y) / t.k;
 
-            // Apply extent with the huge padding
-            this.zoom.translateExtent([[x0 - padding, y0 - padding], [x1 + padding, y1 + padding]]);
+            // UNION of Tree Bounds + Current Viewport
+            // This creates the "Ratchet" effect: If you are out, the wall moves to you.
+            // If you move in, the wall follows you until it hits the `padding` limit.
+            const extX0 = Math.min(minX - padding, vLeft);
+            const extX1 = Math.max(maxX + padding, vRight);
+            const extY0 = Math.min(minY - padding, vTop);
+            const extY1 = Math.max(maxY + padding, vBottom);
+
+            this.zoom.translateExtent([[extX0, extY0], [extX1, extY1]]);
+            
+            // Standard Scale Extent
+            const realTreeWidth = maxX - minX;
+            const fitScale = this.width / (realTreeWidth + 200); 
+            const minScale = Math.max(0.4, Math.min(1, fitScale));
+            this.zoom.scaleExtent([minScale, 3]);
         }
 
         // --- DYNAMIC GROUND DRAWING ---
-        const realTreeWidth = maxX - minX;
-        this.drawGround(realTreeWidth);
+        // Pass coordinates to anchor ground to the tree content
+        this.drawGround(minX, maxX, maxY);
 
         // --- NODES ---
         const nodes = root.descendants();
@@ -974,7 +970,7 @@ class ArborGraph extends HTMLElement {
         if (targetY > this.height - safeMargin) targetY = this.height - safeMargin;
         const targetX = this.width / 2; 
         const dy = targetY - currentY; const dx = targetX - currentX;
-        this.svg.transition().duration(this.duration + 200).ease(d3.easeCubicOut).call(this.zoom.transform, t.translate(dx / t.k, dy / t.k));
+        this.svg.transition().duration(this.duration + 200).call(this.zoom.transform, t.translate(dx / t.k, dy / t.k));
     }
 
     focusNode(nodeId) {
