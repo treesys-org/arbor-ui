@@ -1,4 +1,5 @@
 
+
 import { store } from '../store.js';
 import { fileSystem } from '../services/filesystem.js';
 
@@ -771,6 +772,9 @@ class ArborGraph extends HTMLElement {
                 if (isHarvested) return '#D97706'; 
                 if (d.data.type === 'root') return '#8D6E63';
                 
+                // EMPTY STATE VISUAL
+                if (d.data.isEmpty) return '#cbd5e1'; // Gray
+
                 // MEMORY HEALTH CHECK (SRS)
                 if ((d.data.type === 'leaf' || d.data.type === 'exam') && store.isCompleted(d.data.id)) {
                     const memory = store.userStore.getMemoryStatus(d.data.id);

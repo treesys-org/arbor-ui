@@ -273,18 +273,27 @@ class Store extends EventTarget {
                 return;
             }
             
-            // Post-processing (Exam Prefixes)
+            // Post-processing: Exam Prefixes & Empty State Detection
             const examPrefix = this.ui.examLabelPrefix || "Exam: ";
-            if (examPrefix) {
-                const applyPrefix = (node) => {
-                    if (node.type === 'exam' && !node.name.startsWith(examPrefix)) node.name = examPrefix + node.name;
-                };
-                const traverse = (node) => {
-                    applyPrefix(node);
-                    if (node.children) node.children.forEach(traverse);
-                };
-                traverse(langData);
-            }
+            
+            const processNode = (node) => {
+                // 1. Exam Prefix
+                if (node.type === 'exam' && !node.name.startsWith(examPrefix)) {
+                    node.name = examPrefix + node.name;
+                }
+                
+                // 2. Empty State Detection (Fix for immediate visual feedback)
+                // If it is a container (branch/root), has no children, and is not waiting for network (unloaded)
+                if ((node.type === 'branch' || node.type === 'root') && 
+                    (!node.children || node.children.length === 0) && 
+                    !node.hasUnloadedChildren) {
+                    node.isEmpty = true;
+                }
+
+                if (node.children) node.children.forEach(processNode);
+            };
+            
+            processNode(langData);
             
             // SMART HYDRATION: Expand completed branches into leaves in memory
             this.hydrateCompletionState(langData);
@@ -531,7 +540,10 @@ class Store extends EventTarget {
                 this.update({ selectedNode: null, previewNode: null });
                 if (!node.expanded) {
                     if (node.hasUnloadedChildren) await this.loadNodeChildren(node);
-                    if (!node.children || node.children.length === 0) this.setModal({ type: 'emptyModule', node: node });
+                    if (!node.children || node.children.length === 0) {
+                        node.isEmpty = true; // Mark as empty state
+                        this.setModal({ type: 'emptyModule', node: node });
+                    }
                     node.expanded = true;
                 } else {
                     this.collapseRecursively(node);
@@ -569,6 +581,7 @@ class Store extends EventTarget {
                 
                 if (children.length === 0) {
                     node.children = [];
+                    node.isEmpty = true; // Mark as empty state
                     this.setModal({ type: 'emptyModule', node: node });
                 } else {
                     children.forEach(child => child.parentId = node.id);
