@@ -505,10 +505,10 @@ class ArborGraph extends HTMLElement {
         const cx = this.width / 2;
         const groundY = this.height;
         
-        // The ground now stretches just enough to cover the strict bounds + screen width
-        // We use a safe multiplier but since pan is restricted, we don't need infinite ground
-        const totalWidth = Math.max(this.width * 3, (contentWidth || 0) * 1.5);
+        // Make it WIDE and DEEP to cover bottom area fully
+        const totalWidth = Math.max(this.width * 4, (contentWidth || 0) * 2);
         const halfWidth = totalWidth / 2;
+        const deepBottom = groundY + 5000; // Go way down to ensure coverage
 
         this.groundGroup.style("opacity", 1);
 
@@ -516,6 +516,8 @@ class ArborGraph extends HTMLElement {
             .attr("d", `
                 M${cx - halfWidth},${groundY} 
                 Q${cx},${groundY - 120} ${cx + halfWidth},${groundY} 
+                L${cx + halfWidth},${deepBottom}
+                L${cx - halfWidth},${deepBottom}
                 Z
             `)
             .attr("fill", color)
@@ -566,38 +568,35 @@ class ArborGraph extends HTMLElement {
             if (d.y < minY) minY = d.y; if (d.y > maxY) maxY = d.y;
         });
         
-        // --- CLAUSTROPHOBIC BOUNDS (TIGHTENED) ---
+        // --- CLAUSTROPHOBIC BOUNDS (TIGHTENED BUT RELAXED TO PREVENT SNAP) ---
         if (this.zoom) {
-            const padding = isMobile ? 20 : 60; // Reduced padding for tighter fit
             const realTreeWidth = maxX - minX;
             const realTreeHeight = maxY - minY;
             
             // Calculate Min Scale to fit width OR be reasonably zoomed out
-            const fitScale = this.width / (realTreeWidth + padding * 2);
+            const fitScale = this.width / (realTreeWidth + 120);
             const minScale = Math.max(0.4, Math.min(1, fitScale));
             
             this.zoom.scaleExtent([minScale, 3]);
             
             // Calculate Extent
-            // The extent must be at least large enough to contain the viewport at minScale
-            const maxViewportWidth = this.width / minScale;
-            const maxViewportHeight = this.height / minScale;
+            // CRITICAL FIX: We increase padding significantly to prevent "Snapping" (Teleportation) 
+            // when the tree shrinks rapidly.
+            const padding = Math.max(this.width, this.height) * 2;
             
-            // Width Logic: Content Width vs Viewport Width
-            const targetWidth = Math.max(realTreeWidth + padding * 2, maxViewportWidth);
             const centerX = (minX + maxX) / 2;
+            const centerY = (minY + maxY) / 2;
+            
+            const targetWidth = Math.max(realTreeWidth, this.width / minScale);
+            const targetHeight = Math.max(realTreeHeight, this.height / minScale);
+            
             const x0 = centerX - targetWidth / 2;
             const x1 = centerX + targetWidth / 2;
-            
-            // Height Logic: Content Height vs Viewport Height
-            // We want to be able to scroll to the top and bottom freely
-            const targetHeight = Math.max(realTreeHeight + padding * 2, maxViewportHeight);
-            const centerY = (minY + maxY) / 2;
             const y0 = centerY - targetHeight / 2;
             const y1 = centerY + targetHeight / 2;
 
-            // Apply strict extent
-            this.zoom.translateExtent([[x0, y0], [x1, y1]]);
+            // Apply extent with the huge padding
+            this.zoom.translateExtent([[x0 - padding, y0 - padding], [x1 + padding, y1 + padding]]);
         }
 
         // --- DYNAMIC GROUND DRAWING ---
@@ -975,7 +974,7 @@ class ArborGraph extends HTMLElement {
         if (targetY > this.height - safeMargin) targetY = this.height - safeMargin;
         const targetX = this.width / 2; 
         const dy = targetY - currentY; const dx = targetX - currentX;
-        this.svg.transition().duration(this.duration + 200).call(this.zoom.transform, t.translate(dx / t.k, dy / t.k));
+        this.svg.transition().duration(this.duration + 200).ease(d3.easeCubicOut).call(this.zoom.transform, t.translate(dx / t.k, dy / t.k));
     }
 
     focusNode(nodeId) {

@@ -257,9 +257,10 @@ export class SourceManager {
         if (discoveredVersions && discoveredVersions.length > 0) {
             const archives = discoveredVersions.filter(v => v.type === 'archive');
             
-            // Check if user is NOT explicitly on "rolling" or a specific archive
-            // We assume if type is missing or generic, we can upgrade
-            const isSpecificVersion = source.type === 'archive';
+            // Check if user is explicitly on a specific version (archive OR rolling)
+            // If the user manually selected "Rolling", source.type will be 'rolling'.
+            // If it's a default boot, source.type is usually undefined/null or 'community'.
+            const isSpecificVersion = source.type === 'archive' || source.type === 'rolling';
             
             if (!isSpecificVersion && archives.length > 0) {
                 // Sort by ID descending (assuming date-based or semver-ish ID)
