@@ -81,7 +81,26 @@ class ArborModalEmptyModule extends HTMLElement {
         if(btnCreate) {
             btnCreate.onclick = () => {
                 this.close();
-                if(window.editFile) window.editFile(`${node.sourcePath}/01_Intro.md`);
+                
+                // Construct a new temporary node for the editor
+                // Ensure we strip 'meta.json' if the folder sourcePath included it
+                let parentPath = node.sourcePath;
+                if (parentPath.endsWith('/meta.json')) parentPath = parentPath.replace('/meta.json', '');
+                if (parentPath.endsWith('/')) parentPath = parentPath.slice(0, -1);
+
+                const newNode = {
+                    id: `new-${Date.now()}`,
+                    parentId: node.id,
+                    name: "New Lesson",
+                    type: "leaf",
+                    icon: "📄",
+                    description: "New content...",
+                    // Default path suggestion for the new file
+                    sourcePath: `${parentPath}/01_Intro.md`, 
+                    content: "# New Lesson\n\nStart writing here."
+                };
+                
+                store.openEditor(newNode);
             };
         }
     }

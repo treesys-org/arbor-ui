@@ -307,8 +307,11 @@ class Store extends EventTarget {
                 lastActionMessage: this.ui.sourceSwitchSuccess 
             });
             localStorage.setItem('arbor-active-source-id', finalSource.id);
+            localStorage.setItem('arbor-active-source-meta', JSON.stringify(finalSource));
             
             this.dispatchEvent(new CustomEvent('graph-update'));
+            setTimeout(() => this.dispatchEvent(new CustomEvent('reset-zoom')), 100);
+
             setTimeout(() => this.update({ lastActionMessage: null }), 3000);
             
             // --- README MODAL TRIGGER ---

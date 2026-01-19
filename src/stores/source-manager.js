@@ -76,19 +76,30 @@ export class SourceManager {
         this.state.communitySources = localSources;
 
         // 2. Determine Active Source
-        const savedActiveId = localStorage.getItem('arbor-active-source-id');
-        let activeSource = localSources.find(s => s.id === savedActiveId);
+        let activeSource = null;
+        try {
+            const savedMeta = localStorage.getItem('arbor-active-source-meta');
+            if (savedMeta) {
+                activeSource = JSON.parse(savedMeta);
+            }
+        } catch(e) { console.warn("Failed to parse saved source meta"); }
 
-        // If not in standard sources, check if it's a previously loaded local tree
-        if (!activeSource && savedActiveId && savedActiveId.startsWith('local-')) {
-             // We can reconstruct a temporary source object for local trees
-             // real validation happens in loadData
-             activeSource = {
-                 id: savedActiveId,
-                 name: 'My Private Garden', // A bit of a guess, but will be updated on load
-                 url: `local://${savedActiveId}`,
-                 type: 'local'
-             };
+        // Fallback for legacy ID storage (migration path)
+        if (!activeSource) {
+             const savedActiveId = localStorage.getItem('arbor-active-source-id');
+             if (savedActiveId) {
+                 activeSource = localSources.find(s => s.id === savedActiveId);
+                 
+                 // Check local
+                 if (!activeSource && savedActiveId.startsWith('local-')) {
+                     activeSource = {
+                         id: savedActiveId,
+                         name: 'My Private Garden',
+                         url: `local://${savedActiveId}`,
+                         type: 'local'
+                     };
+                 }
+             }
         }
 
         if (!activeSource) {
