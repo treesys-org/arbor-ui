@@ -1,4 +1,5 @@
 
+
 import { AVAILABLE_LANGUAGES } from './i18n.js';
 import { github } from './services/github.js';
 import { aiService } from './services/ai.js';
@@ -230,10 +231,12 @@ class Store extends EventTarget {
 
     async loadData(source, forceRefresh = true) {
         try {
-            const rawJson = await this.sourceManager.loadData(source, this.state.lang, forceRefresh, this.state.rawGraphData);
-            this.processLoadedData(rawJson);
+            const { json, finalSource } = await this.sourceManager.loadData(source, this.state.lang, forceRefresh, this.state.rawGraphData);
+            if (json) {
+                this.processLoadedData(json, finalSource);
+            }
         } catch(e) {
-            // Error handling is managed inside SourceManager -> update({error})
+            this.update({ loading: false, error: e.message });
         }
     }
     
@@ -251,7 +254,7 @@ class Store extends EventTarget {
         this.loadData(defaultSource);
     }
 
-    processLoadedData(json) {
+    processLoadedData(json, finalSource) {
         try {
             // Fallback for lang
             if (!this.state.i18nData) this.loadLanguage(this.state.lang);
@@ -287,12 +290,14 @@ class Store extends EventTarget {
             this.hydrateCompletionState(langData);
 
             this.update({ 
+                activeSource: finalSource,
                 data: langData, 
                 rawGraphData: json,
                 loading: false, 
                 path: [langData], 
                 lastActionMessage: this.ui.sourceSwitchSuccess 
             });
+            localStorage.setItem('arbor-active-source-id', finalSource.id);
             
             this.dispatchEvent(new CustomEvent('graph-update'));
             setTimeout(() => this.update({ lastActionMessage: null }), 3000);

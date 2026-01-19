@@ -1,4 +1,5 @@
 
+
 import { store } from '../store.js'; // Need reference to main store to access userStore
 
 const OFFICIAL_DOMAINS = [
@@ -217,34 +218,28 @@ export class SourceManager {
     }
 
     async loadData(source, currentLang = 'EN', forceRefresh = true, existingRawData = null) {
-        if (!source) return;
+        if (!source) return { json: null, finalSource: source };
         
-        this.update({ loading: true, error: null, activeSource: source });
-        this.state.activeSource = source;
-        
-        localStorage.setItem('arbor-active-source-id', source.id);
+        this.update({ loading: true, error: null });
 
         // --- LOCAL INTERCEPTOR ---
         if (source.url && source.url.startsWith('local://')) {
             try {
                 const id = source.url.split('://')[1];
-                // Access userStore via the global store instance imported
                 const data = store.userStore.getLocalTreeData(id);
                 
                 if (!data) throw new Error("Local tree not found.");
                 
-                // Simulate network delay for better UX
                 await new Promise(r => setTimeout(r, 300));
                 
-                // Reset releases for local mode
                 this.update({ availableReleases: [] });
                 
-                // Update active source name from loaded data
+                let finalSource = { ...source };
                 if (data.universeName && data.universeName !== source.name) {
-                    this.update({ activeSource: { ...source, name: data.universeName } });
+                    finalSource.name = data.universeName;
                 }
                 
-                return data;
+                return { json: data, finalSource: finalSource };
             } catch(e) {
                 this.update({ loading: false, error: "Failed to load local garden." });
                 throw e;
@@ -282,8 +277,6 @@ export class SourceManager {
                     url: latest.url,
                     type: 'archive'
                 };
-                
-                this.update({ activeSource: finalSourceObj });
             }
         }
 
@@ -304,17 +297,17 @@ export class SourceManager {
             }
             
             // Name Refresh Logic
-            if (json.universeName && json.universeName !== source.name) {
+            if (json.universeName && json.universeName !== finalSourceObj.name) {
                 // Only update base name if it wasn't a release redirect
                 if (finalSourceObj.type !== 'archive') {
                     const updatedCommunity = this.state.communitySources.map(s => s.id === source.id ? {...s, name: json.universeName} : s);
                     this.update({ communitySources: updatedCommunity });
                     localStorage.setItem('arbor-sources', JSON.stringify(updatedCommunity));
-                    this.update({ activeSource: { ...finalSourceObj, name: json.universeName } });
+                    finalSourceObj.name = json.universeName;
                 }
             }
 
-            return json;
+            return { json: json, finalSource: finalSourceObj };
 
         } catch (e) {
             console.error(e);
