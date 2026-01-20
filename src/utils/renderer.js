@@ -5,9 +5,16 @@ export const ContentRenderer = {
     renderBlock(b, ui, context) {
         const { getQuizState, isCompleted } = context;
 
+        // Standard Headers
         if (b.type === 'h1') return `<h1 id="${b.id}" class="text-3xl md:text-5xl font-black text-slate-900 dark:text-white mb-6 md:mb-8 pb-4 border-b border-slate-200 dark:border-slate-800 tracking-tight">${b.text}</h1>`;
         if (b.type === 'h2') return `<h2 id="${b.id}" class="text-2xl md:text-3xl font-bold text-slate-800 dark:text-sky-100 mt-10 md:mt-12 mb-6 group flex items-center gap-3">${b.text}</h2>`;
         if (b.type === 'h3') return `<h3 id="${b.id}" class="text-xl font-bold text-slate-700 dark:text-slate-200 mt-8 mb-4 flex items-center gap-2"><span class="w-2 h-2 bg-sky-500 rounded-full"></span><span>${b.text}</span></h3>`;
+        
+        // Arbor Semantic Headers (@section / @subsection)
+        // Treated visually as H1 and H2
+        if (b.type === 'section') return `<h1 id="${b.id}" class="text-3xl md:text-5xl font-black text-slate-900 dark:text-white mb-6 md:mb-8 pb-4 border-b border-slate-200 dark:border-slate-800 tracking-tight">${b.text}</h1>`;
+        if (b.type === 'subsection') return `<h2 id="${b.id}" class="text-2xl md:text-3xl font-bold text-slate-800 dark:text-sky-100 mt-10 md:mt-12 mb-6 group flex items-center gap-3">${b.text}</h2>`;
+
         if (b.type === 'p') return `<p class="mb-6 text-slate-600 dark:text-slate-300 leading-8 text-base md:text-lg">${b.text}</p>`;
         
         if (b.type === 'blockquote') return `<blockquote class="bg-yellow-50 dark:bg-yellow-900/10 border-l-4 border-yellow-400 p-6 my-8 rounded-r-xl italic text-slate-700 dark:text-yellow-100/80">"${b.text}"</blockquote>`;

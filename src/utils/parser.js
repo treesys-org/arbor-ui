@@ -46,7 +46,7 @@ export function parseContent(text) {
         let line = lines[i].trim();
         if (!line) { flushText(); continue; }
 
-        // Headers
+        // Headers (Standard Markdown)
         if (line.startsWith('# ')) {
             flushText();
             const t = line.substring(2);
@@ -57,6 +57,22 @@ export function parseContent(text) {
             flushText();
             const t = line.substring(3);
             blocks.push({ type: 'h2', text: t, id: slugify(t) });
+            continue;
+        }
+
+        // Headers (Arbor Semantic Tags)
+        if (line.startsWith('@section:')) {
+            flushText();
+            const t = line.substring(9).trim();
+            // Maps to Structural Section (Page Splitter)
+            blocks.push({ type: 'section', text: t, id: slugify(t) });
+            continue;
+        }
+        if (line.startsWith('@subsection:')) {
+            flushText();
+            const t = line.substring(12).trim();
+            // Maps to Sub-topic (In-page anchor)
+            blocks.push({ type: 'subsection', text: t, id: slugify(t) });
             continue;
         }
 
@@ -140,7 +156,7 @@ export function parseContent(text) {
 
         finalizeQuiz();
 
-        // Ignore metadata lines in body
+        // Ignore metadata lines in body (anything starting with @ that wasn't caught above)
         if (!line.startsWith('@')) {
             currentTextBuffer.push(line);
         }

@@ -374,11 +374,17 @@ class ArborEditor extends HTMLElement {
                 <div class="w-px h-6 bg-slate-400/30 mx-1"></div>
                 <button class="tool-btn px-3 py-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 font-bold text-sm transition-colors" data-cmd="bold">B</button>
                 <button class="tool-btn px-3 py-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 italic text-sm transition-colors" data-cmd="italic">I</button>
-                <button class="tool-btn px-3 py-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 font-mono text-xs transition-colors" data-cmd="formatBlock" data-val="H2">H2</button>
+                
+                <!-- Headers -->
+                <button class="tool-btn px-3 py-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 font-black text-xs transition-colors" data-cmd="formatBlock" data-val="H1">H1</button>
+                <button class="tool-btn px-3 py-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 font-bold text-xs transition-colors" data-cmd="formatBlock" data-val="H2">H2</button>
+                
                 <div class="w-px h-6 bg-slate-400/30 mx-1"></div>
+                
                 <button class="block-btn px-3 py-1.5 bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/30 rounded text-xs font-bold uppercase hover:bg-green-500/20 transition-colors" data-type="quiz">+ Quiz</button>
                 <button class="block-btn px-3 py-1.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30 rounded text-xs font-bold uppercase hover:bg-blue-500/20 transition-colors" data-type="section">+ Sect</button>
                 <button class="block-btn px-3 py-1.5 bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/30 rounded text-xs font-bold uppercase hover:bg-orange-500/20 transition-colors" data-type="callout">+ Note</button>
+                
                 <button id="btn-magic-draft" class="ml-auto px-3 py-1.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30 rounded text-xs font-bold uppercase hover:bg-purple-500/20 flex items-center gap-1 transition-colors">
                     <span>✨</span> AI
                 </button>

@@ -248,14 +248,23 @@ class ArborContent extends HTMLElement {
         const blocks = parseContent(this.currentNode.content);
         const items = [];
         
-        if (blocks.length > 0 && blocks[0].type !== 'h1' && blocks[0].type !== 'h2') {
+        if (blocks.length > 0 && !['h1', 'section'].includes(blocks[0].type)) {
              items.push({ text: store.ui.introLabel, level: 1, id: 'intro', isQuiz: false });
         }
         
         blocks.forEach((b) => {
-            if (b.type === 'h1') items.push({ text: b.text, level: 1, id: b.id, isQuiz: false });
-            if (b.type === 'h2') items.push({ text: b.text, level: 2, id: b.id, isQuiz: false });
-            if (b.type === 'quiz') items.push({ text: store.ui.quizLabel, level: 1, id: b.id, isQuiz: true });
+            // Level 1: Page Breakers
+            if (b.type === 'h1' || b.type === 'section') {
+                items.push({ text: b.text, level: 1, id: b.id, isQuiz: false });
+            }
+            // Level 2: Sub-topics
+            if (b.type === 'h2' || b.type === 'subsection') {
+                items.push({ text: b.text, level: 2, id: b.id, isQuiz: false });
+            }
+            // Quiz
+            if (b.type === 'quiz') {
+                items.push({ text: store.ui.quizLabel, level: 1, id: b.id, isQuiz: true });
+            }
         });
         
         if (items.length === 0) {
@@ -284,8 +293,10 @@ class ArborContent extends HTMLElement {
             const nextIndex = blocks.findIndex(b => b.id === nextItem.id);
             if (nextIndex !== -1) endIndex = nextIndex;
         } else {
+             // Handle case where we are at Intro but next item exists
              if (activeItem.id === 'intro') {
-                 const firstH = blocks.findIndex(b => b.type.startsWith('h') || b.type === 'quiz');
+                 // Stop at first structural block (h1, section, quiz)
+                 const firstH = blocks.findIndex(b => ['h1', 'section', 'quiz'].includes(b.type));
                  if (firstH !== -1) endIndex = firstH;
              }
         }
