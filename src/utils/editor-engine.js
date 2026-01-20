@@ -43,8 +43,18 @@ export const BLOCKS = {
         return `
         <div class="edit-block-wrapper arbor-section-edit my-8 pl-4 border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-r relative group" contenteditable="false">
             <div class="remove-btn absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center cursor-pointer shadow opacity-0 group-hover:opacity-100 transition-opacity z-10" onclick="this.parentElement.remove()">✕</div>
-            <span class="text-blue-800 dark:text-blue-300 font-bold text-xs uppercase block mb-1">${ui.editorBlockSection}</span>
-            <input type="text" class="section-input w-full bg-transparent border-none text-xl font-bold text-slate-800 dark:text-white outline-none placeholder-blue-300" value="${title}" placeholder="${ui.editorBlockPlaceholder}">
+            <span class="text-blue-800 dark:text-blue-300 font-bold text-xs uppercase block mb-1">${ui.editorBlockSection || 'SECTION (Page Break)'}</span>
+            <input type="text" class="section-input w-full bg-transparent border-none text-xl font-bold text-slate-800 dark:text-white outline-none placeholder-blue-300" value="${title}" placeholder="New Page Title...">
+        </div>
+        <p><br></p>`;
+    },
+    subsection: (title = "") => {
+        // Visual block for @subsection
+        return `
+        <div class="edit-block-wrapper arbor-subsection-edit my-6 pl-4 border-l-4 border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-r relative group" contenteditable="false">
+            <div class="remove-btn absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center cursor-pointer shadow opacity-0 group-hover:opacity-100 transition-opacity z-10" onclick="this.parentElement.remove()">✕</div>
+            <span class="text-slate-500 dark:text-slate-400 font-bold text-[10px] uppercase block mb-1">SUBSECTION (In-Page)</span>
+            <input type="text" class="subsection-input w-full bg-transparent border-none text-lg font-bold text-slate-700 dark:text-slate-200 outline-none placeholder-slate-400" value="${title}" placeholder="Subsection Title...">
         </div>
         <p><br></p>`;
     },
@@ -112,7 +122,8 @@ export function parseArborFile(content) {
                     const key = trim.substring(1, idx).trim().toLowerCase();
                     const val = trim.substring(idx + 1).trim();
                     // Identify content tags that break metadata reading
-                    if (['quiz', 'image', 'img', 'video', 'audio', 'section', 'correct', 'option'].includes(key)) {
+                    // ADDED 'subsection' to this list
+                    if (['quiz', 'image', 'img', 'video', 'audio', 'section', 'subsection', 'correct', 'option'].includes(key)) {
                         readingMeta = false; bodyLines.push(line);
                     } else {
                         // Standard metadata
@@ -170,6 +181,7 @@ export function markdownToVisualHTML(md) {
 
         // Custom Blocks
         if (line.startsWith('@section:')) { html += BLOCKS.section(line.substring(9).trim()); continue; }
+        if (line.startsWith('@subsection:')) { html += BLOCKS.subsection(line.substring(12).trim()); continue; }
         if (line.startsWith('@image:') || line.startsWith('@img:')) { html += BLOCKS.media('image', line.substring(line.indexOf(':')+1).trim()); continue; }
         if (line.startsWith('@video:')) { html += BLOCKS.media('video', line.substring(7).trim()); continue; }
         if (line.startsWith('@audio:')) { html += BLOCKS.media('audio', line.substring(7).trim()); continue; }
@@ -260,6 +272,12 @@ export function visualHTMLToMarkdown(rootElement) {
         if (node.classList.contains('arbor-section-edit')) { 
             const val = node.querySelector('input')?.value || "";
             md += `@section: ${val}\n\n`; continue; 
+        }
+
+        // Subsection
+        if (node.classList.contains('arbor-subsection-edit')) { 
+            const val = node.querySelector('input')?.value || "";
+            md += `@subsection: ${val}\n\n`; continue; 
         }
 
         // Media

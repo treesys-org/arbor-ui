@@ -225,6 +225,7 @@ class ArborEditor extends HTMLElement {
         if (!editor) return;
         let html = '';
         if (type === 'section') html = BLOCKS.section();
+        if (type === 'subsection') html = BLOCKS.subsection();
         if (type === 'quiz') html = BLOCKS.quiz();
         if (type === 'callout') html = BLOCKS.callout();
         if (type === 'image') html = BLOCKS.media('image');
@@ -383,6 +384,7 @@ class ArborEditor extends HTMLElement {
                 
                 <button class="block-btn px-3 py-1.5 bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/30 rounded text-xs font-bold uppercase hover:bg-green-500/20 transition-colors" data-type="quiz">+ Quiz</button>
                 <button class="block-btn px-3 py-1.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30 rounded text-xs font-bold uppercase hover:bg-blue-500/20 transition-colors" data-type="section">+ Sect</button>
+                <button class="block-btn px-3 py-1.5 bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/30 rounded text-xs font-bold uppercase hover:bg-sky-500/20 transition-colors" data-type="subsection">+ Sub</button>
                 <button class="block-btn px-3 py-1.5 bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/30 rounded text-xs font-bold uppercase hover:bg-orange-500/20 transition-colors" data-type="callout">+ Note</button>
                 
                 <button id="btn-magic-draft" class="ml-auto px-3 py-1.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30 rounded text-xs font-bold uppercase hover:bg-purple-500/20 flex items-center gap-1 transition-colors">
