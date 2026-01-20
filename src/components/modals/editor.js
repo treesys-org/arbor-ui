@@ -379,6 +379,7 @@ class ArborEditor extends HTMLElement {
                 <!-- Headers -->
                 <button class="tool-btn px-3 py-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 font-black text-xs transition-colors" data-cmd="formatBlock" data-val="H1">H1</button>
                 <button class="tool-btn px-3 py-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 font-bold text-xs transition-colors" data-cmd="formatBlock" data-val="H2">H2</button>
+                <button class="tool-btn px-3 py-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 font-bold text-xs transition-colors" data-cmd="formatBlock" data-val="H3">H3</button>
                 
                 <div class="w-px h-6 bg-slate-400/30 mx-1"></div>
                 

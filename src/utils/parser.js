@@ -59,6 +59,12 @@ export function parseContent(text) {
             blocks.push({ type: 'h2', text: t, id: slugify(t) });
             continue;
         }
+        if (line.startsWith('### ')) {
+            flushText();
+            const t = line.substring(4);
+            blocks.push({ type: 'h3', text: t, id: slugify(t) });
+            continue;
+        }
 
         // Headers (Arbor Semantic Tags)
         if (line.startsWith('@section:')) {
