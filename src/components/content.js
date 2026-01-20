@@ -261,6 +261,10 @@ class ArborContent extends HTMLElement {
             if (b.type === 'h2' || b.type === 'subsection') {
                 items.push({ text: b.text, level: 2, id: b.id, isQuiz: false });
             }
+            // Level 3: Micro-topics (ADDED for granularity)
+            if (b.type === 'h3') {
+                items.push({ text: b.text, level: 3, id: b.id, isQuiz: false });
+            }
             // Quiz
             if (b.type === 'quiz') {
                 items.push({ text: store.ui.quizLabel, level: 1, id: b.id, isQuiz: true });
@@ -296,7 +300,7 @@ class ArborContent extends HTMLElement {
              // Handle case where we are at Intro but next item exists
              if (activeItem.id === 'intro') {
                  // Stop at first structural block (h1, section, quiz)
-                 const firstH = blocks.findIndex(b => ['h1', 'section', 'quiz'].includes(b.type));
+                 const firstH = blocks.findIndex(b => ['h1', 'section', 'h2', 'subsection', 'h3', 'quiz'].includes(b.type));
                  if (firstH !== -1) endIndex = firstH;
              }
         }
@@ -497,14 +501,23 @@ class ArborContent extends HTMLElement {
                             <input id="toc-filter" type="text" placeholder="Filter..." class="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg pl-3 pr-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-sky-500 outline-none transition">
                         </div>
                         <nav class="flex flex-col gap-2 md:gap-1 w-full pb-20 md:pb-0">
-                             ${filteredToc.map((item, idx) => `
-                                <button class="btn-toc text-left py-3 md:py-2 px-3 rounded-lg text-sm font-bold transition-colors w-full flex items-start gap-3 whitespace-normal
+                             ${filteredToc.map((item, idx) => {
+                                 // INDENTATION LOGIC: Base indent + (Level-1)*Scale
+                                 // Level 1: 12px, Level 2: 28px, Level 3: 44px
+                                 const paddingLeft = 12 + (item.level - 1) * 16;
+                                 
+                                 // VISUAL HIERARCHY
+                                 const fontSize = item.level === 3 ? 'text-xs font-medium' : 'text-sm font-bold';
+                                 const iconSize = item.level === 3 ? 'w-5 h-5' : 'w-6 h-6';
+                                 
+                                 return `
+                                <button class="btn-toc text-left py-3 md:py-2 px-3 rounded-lg ${fontSize} transition-colors w-full flex items-start gap-3 whitespace-normal
                                     ${this.activeSectionIndex === toc.findIndex(t => t.id === item.id)
                                         ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'
                                         : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}"
-                                    data-idx="${toc.findIndex(t => t.id === item.id)}" style="padding-left: ${12 + (item.level - 1) * 16}px">
+                                    data-idx="${toc.findIndex(t => t.id === item.id)}" style="padding-left: ${paddingLeft}px">
                                     
-                                    <div class="js-toc-tick mt-0.5 flex-shrink-0 w-6 h-6 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors">
+                                    <div class="js-toc-tick mt-0.5 flex-shrink-0 ${iconSize} flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors">
                                         ${this.visitedSections.has(toc.findIndex(t => t.id === item.id)) 
                                             ? '<span class="text-green-500 font-bold">✓</span>' 
                                             : `<span class="w-2 h-2 rounded-full ${this.activeSectionIndex === toc.findIndex(t => t.id === item.id) ? 'bg-sky-500' : 'border border-slate-300'}"></span>` 
@@ -512,7 +525,8 @@ class ArborContent extends HTMLElement {
                                     </div>
                                     <span class="leading-tight break-words pt-0.5">${item.text}</span>
                                 </button>
-                             `).join('')}
+                             `;
+                             }).join('')}
                         </nav>
                     </div>
                 ` : ''}

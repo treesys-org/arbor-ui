@@ -376,10 +376,10 @@ class ArborEditor extends HTMLElement {
                 <button class="tool-btn px-3 py-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 font-bold text-sm transition-colors" data-cmd="bold">B</button>
                 <button class="tool-btn px-3 py-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 italic text-sm transition-colors" data-cmd="italic">I</button>
                 
-                <!-- Headers -->
-                <button class="tool-btn px-3 py-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 font-black text-xs transition-colors" data-cmd="formatBlock" data-val="H1">H1</button>
-                <button class="tool-btn px-3 py-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 font-bold text-xs transition-colors" data-cmd="formatBlock" data-val="H2">H2</button>
-                <button class="tool-btn px-3 py-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 font-bold text-xs transition-colors" data-cmd="formatBlock" data-val="H3">H3</button>
+                <!-- Headers (Renamed for Usability) -->
+                <button class="tool-btn px-3 py-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 font-black text-sm uppercase transition-colors" data-cmd="formatBlock" data-val="H1" title="Header 1 (Page Title)">Title</button>
+                <button class="tool-btn px-3 py-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 font-bold text-xs uppercase transition-colors" data-cmd="formatBlock" data-val="H2" title="Header 2 (Subsection)">Sub</button>
+                <button class="tool-btn px-3 py-1.5 rounded hover:bg-black/10 dark:hover:bg-white/10 font-bold text-[10px] uppercase transition-colors" data-cmd="formatBlock" data-val="H3" title="Header 3 (Micro-Topic)">Topic</button>
                 
                 <div class="w-px h-6 bg-slate-400/30 mx-1"></div>
                 
