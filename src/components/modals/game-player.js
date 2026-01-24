@@ -1,4 +1,6 @@
 
+
+
 import { store } from '../../store.js';
 import { aiService } from '../../services/ai.js';
 import { storageManager } from '../../stores/storage-manager.js';
@@ -26,10 +28,16 @@ class ArborModalGamePlayer extends HTMLElement {
         this.aiError = null;
         this.error = null;
         
+        // Check provider first
+        const isOllama = aiService.config.provider === 'ollama';
+        
         // Check for unified AI consent key
         const hasConsent = localStorage.getItem('arbor-ai-consent') === 'true';
         
-        if (!hasConsent) {
+        // PRIVACY LOGIC:
+        // If using Cloud (Puter) AND no consent => Show Warning.
+        // If using Local (Ollama) => Skip Warning (User owns the data).
+        if (!isOllama && !hasConsent) {
             this.needsConsent = true;
             this.render();
             return;
@@ -77,7 +85,6 @@ class ArborModalGamePlayer extends HTMLElement {
         // Notification Logic
         if (this.sessionXP > 0) {
             const ui = store.ui;
-            // "Session Complete: +50 XP"
             store.notify(`+${this.sessionXP} ${ui.xpUnit || 'XP'} - Session Complete`);
         }
         store.setModal('arcade'); 
@@ -86,7 +93,6 @@ class ArborModalGamePlayer extends HTMLElement {
     grantConsent() {
         localStorage.setItem('arbor-ai-consent', 'true');
         this.needsConsent = false;
-        // Reboot the component logic basically
         this.connectedCallback();
     }
     
@@ -122,7 +128,7 @@ class ArborModalGamePlayer extends HTMLElement {
         await collectLeaves(rootNode);
         this.cursorIndex = 0;
         if (this.playlist.length === 0) {
-            throw new Error("This module contains no playable lessons (Exams are excluded). Please select a different module.");
+            throw new Error("This module contains no playable lessons. Please select a different module.");
         }
     }
 
@@ -136,14 +142,10 @@ class ArborModalGamePlayer extends HTMLElement {
     
     setupBridge() {
         const gameId = store.value.modal.url;
-        // Generate a clean ID from the URL to use as storage key
-        // e.g. "https://.../firstjob/index.html" -> "firstjob"
         let storageId = "unknown_game";
         try {
             const urlObj = new URL(gameId);
             const pathParts = urlObj.pathname.split('/');
-            // Usually the folder name before index.html is a good ID
-            // .../arbor-games/firstjob/index.html
             if (pathParts.length >= 2) {
                 storageId = pathParts[pathParts.length - 2];
             }
@@ -170,6 +172,7 @@ class ArborModalGamePlayer extends HTMLElement {
 
             aiChat: async (promptMessages, contextNode) => {
                 try {
+                    // Calls Parent AI Service (which lazy loads if needed)
                     return await aiService.chat(promptMessages, contextNode);
                 } catch(e) {
                     console.error("AI Bridge Error:", e);
@@ -177,24 +180,20 @@ class ArborModalGamePlayer extends HTMLElement {
                 }
             },
             
-            // CONNECT TO STORAGE MANAGER
             save: (key, value) => {
                 try {
                     return storageManager.saveGameData(storageId, key, value);
                 } catch(e) {
                     console.error("Game Save Failed:", e);
-                    // Notify User via Toast or Alert
                     store.notify("⚠️ Storage Full! Delete old saves in Arcade menu.");
                     return false;
                 }
             },
             load: (key) => storageManager.loadGameData(storageId, key),
             
-            // --- MEMORY CORE API ---
             getDue: () => store.userStore.getDueNodes(),
             reportMemory: (nodeId, quality) => store.userStore.reportMemory(nodeId, quality),
             
-            // ERROR TRAPPING FOR CHILD IFRAME
             reportError: (msg) => {
                 console.error("Game Crash Reported:", msg);
                 this.error = "Game Crash: " + msg;
@@ -259,7 +258,7 @@ class ArborModalGamePlayer extends HTMLElement {
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
             
-            // INJECT ERROR TRAP (CRITICAL for debugging broken games)
+            // INJECT ERROR TRAP
             const errorTrapScript = doc.createElement('script');
             errorTrapScript.textContent = `
                 window.onerror = function(msg, url, line, col, error) {
@@ -283,11 +282,11 @@ class ArborModalGamePlayer extends HTMLElement {
                 script.setAttribute('src', blobUrl);
             }
 
-            const puterScript = doc.createElement('script');
-            puterScript.src = "https://js.puter.com/v2/";
-            doc.head.prepend(puterScript);
+            // PRIVACY FIX: REMOVED FORCED PUTER.JS INJECTION
+            // Games must use window.Arbor.ai via the bridge, which handles lazy loading in parent context.
+            // If a game manually needs puter.js, it must include it itself or update to use Arbor SDK.
 
-            // INJECTED SDK WITH TIMEOUT PROTECTION
+            // INJECTED SDK
             const sdkScriptContent = `
             (function() {
                 const bridge = window.parent.__ARBOR_GAME_BRIDGE__;
@@ -357,7 +356,6 @@ class ArborModalGamePlayer extends HTMLElement {
                 }
             });
 
-
             const finalHtml = doc.documentElement.outerHTML;
             iframe.srcdoc = finalHtml;
             iframe.onload = () => {
@@ -397,20 +395,13 @@ class ArborModalGamePlayer extends HTMLElement {
                             ${ui.gameAiRequiredDesc || "This game uses AI to generate content."}
                         </p>
                         
-                        ${isOllama ? `
-                            <div class="flex items-center gap-2 mt-3 p-2 bg-orange-900/20 rounded border border-orange-800/30">
-                                <span class="text-lg">🏠</span>
-                                <span class="text-[10px] text-orange-200 font-bold uppercase">Local Mode (Ollama)</span>
+                        <div class="flex items-center gap-2 mt-3 p-2 bg-blue-900/20 rounded border border-blue-800/30">
+                            <span class="text-lg">☁️</span>
+                            <div class="text-[10px] text-blue-200">
+                                <span class="font-bold uppercase">Puter Cloud</span><br>
+                                <span class="opacity-70">Data processed by Puter.com (US)</span>
                             </div>
-                        ` : `
-                            <div class="flex items-center gap-2 mt-3 p-2 bg-blue-900/20 rounded border border-blue-800/30">
-                                <span class="text-lg">☁️</span>
-                                <div class="text-[10px] text-blue-200">
-                                    <span class="font-bold uppercase">Puter Cloud</span><br>
-                                    <span class="opacity-70">Data processed by Puter.com</span>
-                                </div>
-                            </div>
-                        `}
+                        </div>
                     </div>
 
                     <div class="flex flex-col gap-3">
@@ -473,10 +464,6 @@ class ArborModalGamePlayer extends HTMLElement {
                     <div class="text-6xl mb-4 animate-bounce">🐛</div>
                     <h2 class="text-xl font-bold text-white mb-2">Game Crashed</h2>
                     <p class="text-xs text-red-300 font-mono mb-6 bg-black/50 p-3 rounded break-all">${this.error}</p>
-                    <div class="text-xs text-slate-400 mb-6">
-                        This is an error inside the game's code, not Arbor.<br>
-                        Developer hint: Check the browser console.
-                    </div>
                     <button class="btn-close px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition-colors w-full">
                         Close
                     </button>

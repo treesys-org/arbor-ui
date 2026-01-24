@@ -1,4 +1,5 @@
 
+
 // BOTANICAL SEEDS: More universal concept for knowledge trees
 const SEED_TYPES = ['🌲', '🌰', '🌾', '🍁', '🥥', '🥜', '🌰', '🫘', '🍄', '🌱'];
 
@@ -313,13 +314,47 @@ export class UserStore {
         return true;
     }
     
+    // IMPORT LOGIC: HANDLES .ARBOR ONLY (Strict Mode)
     importLocalTree(jsonData) {
-        if (!jsonData || !jsonData.universeName || !jsonData.languages) throw new Error("Invalid Arbor tree format.");
+        // STRICT CHECK: Must be an ARBOR_ARCHIVE
+        if (jsonData.magic !== "ARBOR_ARCHIVE" || !jsonData.tree) {
+            throw new Error("Invalid format. File must be a valid .arbor archive (with metadata and signature). Raw JSON is not supported.");
+        }
+        
+        const treeData = jsonData.tree;
+        
+        // Validate internal structure
+        if (!treeData.universeName || !treeData.languages) {
+            throw new Error("Corrupt archive: Missing universe definition.");
+        }
+        
+        // Generate new ID to avoid collisions with existing trees
         const id = 'local-' + crypto.randomUUID();
-        const newTree = { id, name: jsonData.universeName, updated: Date.now(), data: jsonData };
+        
+        const newTree = { id, name: treeData.universeName, updated: Date.now(), data: treeData };
         this.state.localTrees.push(newTree);
         this.persist();
         return newTree;
+    }
+    
+    // EXPORT LOGIC: CREATES .ARBOR ARCHIVE
+    getArborArchive(treeId) {
+        const treeEntry = this.state.localTrees.find(t => t.id === treeId);
+        if (!treeEntry) return null;
+        
+        // Create the standardized archive format
+        const archive = {
+            magic: "ARBOR_ARCHIVE",
+            version: 1,
+            meta: {
+                id: treeEntry.id,
+                name: treeEntry.name,
+                exportedAt: new Date().toISOString()
+            },
+            tree: treeEntry.data // This contains the full recursive structure including node content
+        };
+        
+        return JSON.stringify(archive, null, 2);
     }
 
     deleteLocalTree(id) {
@@ -403,7 +438,7 @@ export class UserStore {
         };
         
         for (const langKey in treeEntry.data.languages) {
-            updatePaths(treeEntry.data.languages[langKey], '');
+            updatePaths(treeEntry.data.languages[langKey]);
         }
         
         treeEntry.updated = Date.now();

@@ -1,4 +1,5 @@
 
+
 import { store } from '../../store.js';
 
 class ArborModalSources extends HTMLElement {
@@ -288,7 +289,7 @@ class ArborModalSources extends HTMLElement {
                 
                 <button data-action="import-tree" class="w-full py-4 px-4 mb-8 bg-white dark:bg-slate-900 border-2 border-dashed border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 font-bold rounded-2xl active:scale-95 transition-all flex items-center justify-center gap-3 group hover:border-sky-500 hover:text-sky-500 dark:hover:border-sky-400 dark:hover:text-sky-400">
                     <span class="text-2xl pointer-events-none group-hover:scale-110 transition-transform">📥</span> 
-                    <span class="text-sm pointer-events-none uppercase tracking-wider">${ui.importBtn || 'Import Tree'}</span>
+                    <span class="text-sm pointer-events-none uppercase tracking-wider">${ui.importBtn || 'Import Tree'} (.arbor / .json)</span>
                 </button>
 
                 <!-- Local Trees List -->
@@ -388,7 +389,27 @@ class ArborModalSources extends HTMLElement {
         // Local Actions
         if (action === 'import-tree') this.importTreeFromFile();
         if (action === 'load-local') this.loadLocalTree(id, name);
-        if (action === 'export-local') this.exportLocalTree(id, name);
+        if (action === 'export-local') {
+            // Immediate feedback logic
+            const originalContent = btn.innerHTML;
+            btn.innerHTML = `<span class="animate-spin text-lg">⏳</span> Packing...`;
+            btn.disabled = true;
+            btn.classList.add('opacity-75', 'cursor-not-allowed');
+            
+            // Defer execution to allow UI repaint
+            setTimeout(() => {
+                try {
+                    this.exportLocalTree(id, name);
+                } catch(err) {
+                    console.error(err);
+                    store.notify("Export failed", true);
+                } finally {
+                    btn.innerHTML = originalContent;
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-75', 'cursor-not-allowed');
+                }
+            }, 50);
+        }
     }
 
     // --- LOGIC METHODS (Copied from original) ---
@@ -429,7 +450,7 @@ class ArborModalSources extends HTMLElement {
     importTreeFromFile() {
         const input = document.createElement('input');
         input.type = 'file';
-        input.accept = '.json,application/json';
+        input.accept = '.json,application/json,.arbor';
         input.onchange = (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -457,14 +478,16 @@ class ArborModalSources extends HTMLElement {
     }
     
     exportLocalTree(id, name) {
-        const treeData = store.userStore.getLocalTreeData(id);
-        if (!treeData) return;
-        const blob = new Blob([JSON.stringify(treeData, null, 2)], {type: 'application/json'});
+        // Use new export method from store
+        const archiveJson = store.userStore.getArborArchive(id);
+        if (!archiveJson) return;
+        
+        const blob = new Blob([archiveJson], {type: 'application/json'});
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
         const safeName = name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-        a.download = `arbor-tree-${safeName}-${new Date().toISOString().slice(0, 10)}.json`;
+        a.download = `arbor-garden-${safeName}.arbor`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);

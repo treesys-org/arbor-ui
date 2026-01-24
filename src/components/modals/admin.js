@@ -1,5 +1,4 @@
 
-
 import { store } from '../../store.js';
 import { fileSystem } from '../../services/filesystem.js';
 import { github } from '../../services/github.js'; 
@@ -110,7 +109,7 @@ class ArborAdminPanel extends HTMLElement {
                         <div class="w-10 h-10 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center text-xl">🏛️</div>
                         <div>
                             <h2 id="repo-title" class="text-lg font-black text-slate-800 dark:text-white uppercase leading-none tracking-tight">Loading...</h2>
-                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Admin Console</p>
+                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">${ui.adminConsole || "Admin Console"}</p>
                         </div>
                     </div>
                     <div class="flex gap-2">
@@ -169,7 +168,7 @@ class ArborAdminPanel extends HTMLElement {
                 <input id="inp-token" type="password" placeholder="${ui.contribTokenPlaceholder}" class="w-full px-6 py-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 mb-4 focus:border-black dark:focus:border-white outline-none transition-colors text-lg font-bold text-center">
                 ${this.state.loginError ? `<p class="text-sm text-red-500 font-bold mb-6 animate-pulse bg-red-50 px-4 py-2 rounded-lg">${this.state.loginError}</p>` : ''}
                 <button id="btn-login" class="w-full py-4 bg-black dark:bg-white text-white dark:text-black font-black text-xl rounded-2xl shadow-xl hover:scale-105 active:scale-95 transition-all mb-6">
-                    ${this.state.isLoggingIn ? 'Connecting...' : ui.contribConnect}
+                    ${this.state.isLoggingIn ? (ui.syncing || 'Connecting...') : ui.contribConnect}
                 </button>
             </div>
         </div>`;
@@ -216,7 +215,7 @@ class ArborAdminPanel extends HTMLElement {
         
         let treeHtml = '';
         if (loadingTree || !accessTree) {
-            treeHtml = `<div class="p-8 text-center text-slate-400 text-xs animate-pulse flex flex-col gap-2"><span class="text-2xl">📡</span><span>Scanning territory...</span></div>`;
+            treeHtml = `<div class="p-8 text-center text-slate-400 text-xs animate-pulse flex flex-col gap-2"><span class="text-2xl">📡</span><span>${ui.loading || "Loading..."}</span></div>`;
         } else {
             treeHtml = `<div class="w-full whitespace-nowrap">${this.renderFolderTree(accessTree)}</div>`;
         }
@@ -226,10 +225,10 @@ class ArborAdminPanel extends HTMLElement {
             detailsHtml = `
             <div class="flex-1 flex flex-col items-center justify-center text-slate-400 text-center p-8">
                 <span class="text-6xl mb-4 opacity-10">🗺️</span>
-                <p class="text-sm font-bold text-slate-500">Select a folder from the list.</p>
+                <p class="text-sm font-bold text-slate-500">${ui.adminSelectFolder || "Select a folder from the list."}</p>
             </div>`;
         } else {
-            const folderName = selectedFolderPath === '/' ? 'Root Territory' : selectedFolderPath.split('/').filter(p => p).pop();
+            const folderName = selectedFolderPath === '/' ? (ui.adminRoot || 'Root Territory') : selectedFolderPath.split('/').filter(p => p).pop();
             const folderGuardians = accessRules.filter(r => r.path === selectedFolderPath);
             const userOptions = adminData.users.map(u => `<option value="@${u.login}">@${u.login}</option>`).join('');
 
@@ -253,7 +252,7 @@ class ArborAdminPanel extends HTMLElement {
                         </div>
                         
                         ${folderGuardians.length === 0 
-                            ? `<div class="p-4 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl text-center"><p class="text-sm text-slate-400 font-medium">No maintainers assigned.</p></div>`
+                            ? `<div class="p-4 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl text-center"><p class="text-sm text-slate-400 font-medium">${ui.adminNoMaintainers || "No maintainers assigned."}</p></div>`
                             : `<div class="space-y-2">
                                 ${folderGuardians.map(r => `
                                     <div class="flex items-center justify-between p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">
@@ -269,16 +268,16 @@ class ArborAdminPanel extends HTMLElement {
                     </div>
                     
                     <div class="bg-blue-50 dark:bg-blue-900/10 p-5 rounded-2xl border border-blue-100 dark:border-blue-800/30">
-                        <label class="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase mb-2 block tracking-wider">Grant Access</label>
+                        <label class="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase mb-2 block tracking-wider">${ui.adminGrantAccess || "Grant Access"}</label>
                         <div class="flex gap-2">
                             <div class="relative flex-1">
                                 <select id="inp-new-guardian" class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm outline-none font-bold text-slate-700 dark:text-white appearance-none focus:ring-2 focus:ring-blue-500">
-                                    <option value="" disabled selected>Select Contributor...</option>
+                                    <option value="" disabled selected>${ui.adminSelectContributor || "Select Contributor..."}</option>
                                     ${userOptions}
                                 </select>
                                 <div class="absolute right-4 top-3.5 pointer-events-none text-slate-400 text-xs">▼</div>
                             </div>
-                            <button data-action="add-guardian" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-xl font-bold text-xs shadow-lg shadow-blue-500/20 transition-transform active:scale-95">Add</button>
+                            <button data-action="add-guardian" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-xl font-bold text-xs shadow-lg shadow-blue-500/20 transition-transform active:scale-95">${ui.adminAdd || "Add"}</button>
                         </div>
                     </div>
                 </div>
@@ -289,7 +288,7 @@ class ArborAdminPanel extends HTMLElement {
         <div class="flex flex-col h-full bg-slate-50 dark:bg-slate-900 relative">
             <div class="flex-1 flex overflow-hidden">
                 <div class="w-1/3 md:w-72 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 overflow-y-auto overflow-x-auto custom-scrollbar p-3 pb-24 shrink-0">
-                    <div class="mb-4 px-2"><h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Map</h4></div>
+                    <div class="mb-4 px-2"><h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">${ui.adminMap || "Map"}</h4></div>
                     ${treeHtml}
                 </div>
                 <div class="flex-1 bg-slate-50 dark:bg-slate-900 overflow-hidden relative flex flex-col min-w-0">
@@ -307,11 +306,12 @@ class ArborAdminPanel extends HTMLElement {
 
     getTeamContent() {
         const { adminData } = this.state;
+        const ui = store.ui;
         return `
         <div class="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-900">
             <div class="max-w-3xl mx-auto">
                 <div class="flex justify-between items-center mb-8">
-                    <div><h3 class="font-black text-xl text-slate-800 dark:text-white uppercase">${store.ui.adminTeam || 'Maintainers'}</h3><p class="text-xs text-slate-500 mt-1">Contributors</p></div>
+                    <div><h3 class="font-black text-xl text-slate-800 dark:text-white uppercase">${ui.adminTeam || 'Maintainers'}</h3><p class="text-xs text-slate-500 mt-1">${ui.adminContributors || "Contributors"}</p></div>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     ${adminData.users.map(u => `
@@ -330,11 +330,12 @@ class ArborAdminPanel extends HTMLElement {
 
     getProposalsContent() {
         const { adminData } = this.state;
+        const ui = store.ui;
         return `<div class="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50 dark:bg-slate-900">
             ${adminData.prs.length === 0 ? `
                 <div class="flex flex-col items-center justify-center h-64 text-slate-400">
                     <span class="text-6xl mb-4 opacity-20">📭</span>
-                    <p class="font-bold">Inbox Zero</p>
+                    <p class="font-bold">${ui.adminInboxZero || "Inbox Zero"}</p>
                 </div>
             ` : 
             adminData.prs.map(pr => `
@@ -352,7 +353,7 @@ class ArborAdminPanel extends HTMLElement {
                             </div>
                         </div>
                     </div>
-                    <a href="${pr.html_url}" target="_blank" class="px-5 py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold rounded-xl text-xs shadow-lg hover:opacity-90 transition-all active:scale-95">Review</a>
+                    <a href="${pr.html_url}" target="_blank" class="px-5 py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold rounded-xl text-xs shadow-lg hover:opacity-90 transition-all active:scale-95">${ui.adminReview || "Review"}</a>
                 </div>
             `).join('')}
         </div>`;
@@ -361,26 +362,27 @@ class ArborAdminPanel extends HTMLElement {
     getArchivesContent() {
         const { releases, releasesLoading, newVersionName, creatingRelease } = this.state;
         const canWrite = fileSystem.features.canWrite;
+        const ui = store.ui;
         
         return `
         <div class="flex flex-col h-full bg-slate-50 dark:bg-slate-900">
             ${canWrite ? `
             <div class="p-6 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950/50">
-                <label class="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Create Archive Version</label>
+                <label class="text-[10px] font-bold text-slate-400 uppercase mb-2 block">${ui.adminCreateArchive || "Create Archive Version"}</label>
                 <div class="flex gap-2 max-w-lg">
                     <input id="inp-version" type="text" placeholder="e.g. v2.0" class="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 dark:text-white font-mono" value="${newVersionName}">
                     <button data-action="create-release" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-xl font-bold shadow-lg transition-all text-xs uppercase tracking-wider flex items-center gap-2" ${creatingRelease ? 'disabled' : ''}>
-                        ${creatingRelease ? '<span class="animate-spin">⏳</span>' : '<span>+ Create</span>'}
+                        ${creatingRelease ? '<span class="animate-spin">⏳</span>' : '<span>+ ' + (ui.releasesCreate || 'Create') + '</span>'}
                     </button>
                 </div>
             </div>` : ''}
             
             <div class="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-3">
-                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Version History</h4>
+                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">${ui.releasesHistory || "Version History"}</h4>
                 ${releasesLoading 
                     ? `<div class="p-12 text-center text-slate-400"><div class="animate-spin text-3xl mb-4 opacity-50">⏳</div></div>` 
                     : (releases.length === 0 
-                        ? `<div class="p-8 text-center text-slate-400 italic text-sm">No archives found.</div>`
+                        ? `<div class="p-8 text-center text-slate-400 italic text-sm">${ui.adminNoArchives || "No archives found."}</div>`
                         : releases.map(ver => `
                             <div class="flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
                                 <div class="flex items-center gap-4">
@@ -388,8 +390,8 @@ class ArborAdminPanel extends HTMLElement {
                                     <span class="font-black text-lg text-slate-700 dark:text-slate-200 font-mono">${ver}</span>
                                 </div>
                                 <div class="flex gap-2">
-                                    <button data-action="switch-release" data-ver="${ver}" class="px-5 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-blue-600 hover:text-white text-slate-600 dark:text-blue-200 text-xs font-bold rounded-xl transition-colors">Load</button>
-                                    <button data-action="delete-release" data-ver="${ver}" class="w-9 h-9 flex items-center justify-center bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors" title="Delete Archive">🗑️</button>
+                                    <button data-action="switch-release" data-ver="${ver}" class="px-5 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-blue-600 hover:text-white text-slate-600 dark:text-blue-200 text-xs font-bold rounded-xl transition-colors">${ui.releasesLoad || "Load"}</button>
+                                    <button data-action="delete-release" data-ver="${ver}" class="w-9 h-9 flex items-center justify-center bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors" title="${ui.releasesDelete || 'Delete'}">🗑️</button>
                                 </div>
                             </div>
                         `).join(''))

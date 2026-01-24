@@ -127,8 +127,6 @@ export class PdfGenerator {
 
     _getStyles() {
         return `
-            @import url('https://fonts.googleapis.com/css2?family=Georgia&family=Nunito:wght@400;700;900&display=swap');
-            
             :root {
                 --primary: #333;
                 --accent: #555;
@@ -139,14 +137,14 @@ export class PdfGenerator {
                 margin: 2.5cm;
                 @bottom-center {
                     content: "Page " counter(page);
-                    font-family: 'Nunito', sans-serif;
+                    font-family: system-ui, -apple-system, sans-serif;
                     font-size: 9pt;
                     color: #888;
                 }
             }
 
             body { 
-                font-family: 'Georgia', serif; 
+                font-family: Georgia, 'Times New Roman', serif; 
                 color: #222; 
                 line-height: 1.6; 
                 font-size: 11pt;
@@ -157,7 +155,7 @@ export class PdfGenerator {
             }
 
             /* --- Typography --- */
-            h1, h2, h3, h4 { font-family: 'Nunito', sans-serif; color: #111; font-weight: 800; }
+            h1, h2, h3, h4 { font-family: system-ui, -apple-system, sans-serif; color: #111; font-weight: 800; }
             
             h1 { font-size: 24pt; border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 25px; margin-top: 0; }
             h2 { font-size: 16pt; margin-top: 30px; margin-bottom: 15px; color: #333; }
@@ -198,7 +196,7 @@ export class PdfGenerator {
             /* --- Structural --- */
             .lesson-page { margin-bottom: 50px; }
             .lesson-header { margin-bottom: 30px; }
-            .meta { font-size: 9pt; color: #777; text-transform: uppercase; font-family: 'Nunito', sans-serif; letter-spacing: 1px; margin-top: -20px; }
+            .meta { font-size: 9pt; color: #777; text-transform: uppercase; font-family: system-ui, -apple-system, sans-serif; letter-spacing: 1px; margin-top: -20px; }
             
             .page-break-before { page-break-before: always; }
             .page-break-after { page-break-after: always; }
@@ -216,7 +214,7 @@ export class PdfGenerator {
                 position: relative;
             }
             .cover-content { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; width: 100%; }
-            .logo { font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 20pt; color: #444; margin-bottom: 40px; }
+            .logo { font-family: system-ui, -apple-system, sans-serif; font-weight: 900; font-size: 20pt; color: #444; margin-bottom: 40px; }
             .cover-title { font-size: 36pt; border: none; margin: 20px 0; line-height: 1.2; }
             .cover-subtitle { font-size: 14pt; color: #666; font-style: italic; margin-bottom: 40px; }
             
@@ -228,7 +226,7 @@ export class PdfGenerator {
                 background-color: #f9f9f9;
                 padding: 15px;
                 width: 90%;
-                font-family: 'Nunito', sans-serif;
+                font-family: system-ui, -apple-system, sans-serif;
                 text-align: left;
             }
             .legal-title {
@@ -246,7 +244,7 @@ export class PdfGenerator {
                 text-align: left;
             }
 
-            .cover-footer { margin-top: 20px; font-family: 'Nunito', sans-serif; color: #888; font-size: 10pt; }
+            .cover-footer { margin-top: 20px; font-family: system-ui, -apple-system, sans-serif; color: #888; font-size: 10pt; }
             .small { font-size: 9pt; opacity: 0.7; }
 
             /* --- Footer (Fixed) --- */
@@ -259,7 +257,7 @@ export class PdfGenerator {
                 padding-top: 10px;
                 background: white;
                 text-align: center;
-                font-family: 'Nunito', sans-serif;
+                font-family: system-ui, -apple-system, sans-serif;
                 font-size: 8pt;
                 color: #666;
             }

@@ -1,4 +1,6 @@
 
+
+
 import { store } from '../../store.js';
 
 class ArborModalPrivacy extends HTMLElement {
@@ -66,11 +68,24 @@ class ArborModalPrivacy extends HTMLElement {
                         
                         <hr class="my-6 border-slate-200 dark:border-slate-700">
                         
+                        <h3>Children's Privacy (Age Limit)</h3>
+                        <div class="bg-red-50 dark:bg-red-900/10 p-4 rounded-xl border border-red-100 dark:border-red-900/30 text-xs">
+                            <p class="font-bold text-red-700 dark:text-red-400 mb-2">Age Restriction (16+)</p>
+                            <p class="text-slate-600 dark:text-slate-300 mb-2">
+                                The optional cloud services provided by <strong>Puter.com</strong> (AI and Sync) are restricted to users who meet the minimum age of digital consent in their country (typically 16+ in the EU).
+                            </p>
+                            <p class="text-slate-600 dark:text-slate-300">
+                                We do not knowingly collect personal information from minors.
+                            </p>
+                        </div>
+
+                        <hr class="my-6 border-slate-200 dark:border-slate-700">
+                        
                         <h3>Technical Services (Processors)</h3>
                         <ul class="text-xs font-mono bg-slate-100 dark:bg-slate-800 p-4 rounded-lg list-none space-y-2">
                             <li><strong>Hosting:</strong> GitHub Pages (USA)</li>
                             <li><strong>AI & Sync (Optional):</strong> Puter.com (USA)</li>
-                            <li><strong>Fonts:</strong> Google Fonts (via CDN)</li>
+                            <li><strong>Fonts:</strong> System Fonts (Local / Privacy-Safe)</li>
                             <li><strong>Styles:</strong> TailwindCSS (via CDN)</li>
                         </ul>
 

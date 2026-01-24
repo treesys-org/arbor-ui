@@ -237,6 +237,12 @@ class ArborSage extends HTMLElement {
                         </p>
                     </div>
                     
+                    <div class="mb-6 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+                        <p class="text-xs font-bold text-red-600 dark:text-red-400 leading-tight">
+                            ${ui.sageGdprAge || '⚠️ Age Requirement: By using this service, you confirm you are 13+ years old (per Puter.com terms).'}
+                        </p>
+                    </div>
+                    
                     <button id="btn-accept-consent" class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-transform">
                         ${ui.sageGdprAccept || 'I Understand & Accept'}
                     </button>
@@ -249,7 +255,7 @@ class ArborSage extends HTMLElement {
                 </div>
                 
                 <div class="p-3 bg-slate-50 dark:bg-slate-950 text-center border-t border-slate-100 dark:border-slate-800">
-                    <p class="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Powered by Puter.com</p>
+                    <p class="text-[10px] text-slate-400 uppercase font-bold tracking-widest">${ui.sagePoweredBy || 'Powered by Puter.com'}</p>
                 </div>
             </div>
         `;
@@ -414,7 +420,7 @@ class ArborSage extends HTMLElement {
         
         const displayMessages = aiState.messages.length > 0 ? aiState.messages : [{ 
             role: 'assistant', 
-            content: isArchitect ? "👷 Ready to build. What shall we plant?" : ui.sageHello 
+            content: isArchitect ? (ui.sageArchitectIntro || "👷 Ready to build. What shall we plant?") : ui.sageHello 
         }];
         
         const displayStatus = aiState.status;
@@ -457,8 +463,8 @@ class ArborSage extends HTMLElement {
 
                     // Build the Card
                     const cardTitle = blueprint.title || 'Custom Course';
-                    const msgReady = store.value.lang === 'ES' ? "Plano Listo" : "Blueprint Ready";
-                    const btnLabel = store.value.lang === 'ES' ? "Construir Ahora" : "Build Structure";
+                    const msgReady = ui.sageBlueprintReady || "Blueprint Ready";
+                    const btnLabel = ui.sageBuildBtn || "Build Structure";
 
                     blueprintCard = `
                         <div class="mt-3 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm animate-in fade-in zoom-in duration-300">
@@ -542,7 +548,7 @@ class ArborSage extends HTMLElement {
                             ${isArchitect ? '<span class="absolute -top-1 -right-1 text-xs">⛑️</span>' : ''}
                         </div>
                         <div>
-                            <h3 class="font-black text-sm leading-none">${isArchitect ? 'Architect' : ui.sageTitle}</h3>
+                            <h3 class="font-black text-sm leading-none">${isArchitect ? (ui.sageArchitectTitle || 'Architect') : ui.sageTitle}</h3>
                             <div class="flex items-center gap-1 mt-0.5">
                                 <span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
                                 <p class="text-[10px] opacity-80 font-medium">${providerName}</p>
@@ -563,7 +569,7 @@ class ArborSage extends HTMLElement {
                 <!-- Puter Badge -->
                 ${!isOllama ? `
                 <div class="px-4 py-1 text-center bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0">
-                    <p class="text-[9px] text-slate-400 uppercase font-bold tracking-widest opacity-60">Powered by Puter.com</p>
+                    <p class="text-[9px] text-slate-400 uppercase font-bold tracking-widest opacity-60">${ui.sagePoweredBy || 'Powered by Puter.com'}</p>
                 </div>
                 ` : ''}
 
@@ -576,7 +582,7 @@ class ArborSage extends HTMLElement {
                 ` : ''}
 
                 <form id="sage-form" class="p-3 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex gap-2 shrink-0 pb-[calc(0.75rem+env(safe-area-inset-bottom,20px))] md:pb-3">
-                    <input id="sage-input" type="text" class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 ${isOllama || isArchitect ? 'focus:ring-orange-500' : 'focus:ring-teal-500'} dark:text-white placeholder:text-slate-400 disabled:opacity-50" placeholder="${isArchitect ? 'Instruct the Architect...' : ui.sageInputPlaceholder}" autocomplete="off" ${isThinking ? 'disabled style="cursor:not-allowed; opacity:0.5"' : ''}>
+                    <input id="sage-input" type="text" class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 ${isOllama || isArchitect ? 'focus:ring-orange-500' : 'focus:ring-teal-500'} dark:text-white placeholder:text-slate-400 disabled:opacity-50" placeholder="${isArchitect ? (ui.sageArchitectPlaceholder || 'Instruct the Architect...') : ui.sageInputPlaceholder}" autocomplete="off" ${isThinking ? 'disabled style="cursor:not-allowed; opacity:0.5"' : ''}>
                     <button type="submit" class="${btnClass}">
                         ${btnIcon}
                     </button>

@@ -1,5 +1,8 @@
 
+
+
 import { store } from "../store.js";
+import { puterSync } from "./puter-sync.js"; // Import to use the lazy loader
 
 // AI Service (Simplified: Puter Default + Local Ollama Option)
 class HybridAIService {
@@ -26,13 +29,14 @@ class HybridAIService {
     }
 
     isSmartMode() {
-        // Puter is "always on" if the script is loaded, Ollama is user configured
         return true; 
     }
 
     async initialize() {
-        // Puter doesn't need explicit init, it's global.
-        // Ollama doesn't need init, just connection check on demand.
+        // If provider is Puter, pre-load the library when AI is explicitly initialized
+        if (this.config.provider === 'puter') {
+            await puterSync.loadLibrary();
+        }
         return true;
     }
     
@@ -56,8 +60,8 @@ class HybridAIService {
             }
         } else {
             // Puter Check
-            // We assume if window.puter exists, the script loaded successfully.
-            // Actual service availability is checked during chat, but this confirms the library is present.
+            // We lazily load it here if needed
+            await puterSync.loadLibrary();
             return !!window.puter; 
         }
     }
@@ -182,7 +186,7 @@ class HybridAIService {
         const lastMsgObj = messages[messages.length - 1];
         const lastMsg = lastMsgObj.content;
         
-        // Detect Context Mode from Store (set by Sage input handler)
+        // Detect Context Mode from Store
         const mode = store.value.ai?.contextMode || 'normal';
 
         // 1. Check for LOCAL COMMANDS
@@ -194,46 +198,25 @@ class HybridAIService {
         let systemContext = "";
         
         if (mode === 'architect') {
-            // ARCHITECT PERSONA
             systemContext = `
             ROLE: You are the Sage Constructor (Architect) of the Arbor Knowledge Tree.
             TASK: Generate structured curriculum blueprints in JSON format.
-            
             IMPORTANT RULES:
             1. Output MUST include a JSON code block using \`\`\`json ... \`\`\`.
             2. The JSON schema must strictly follow:
-            {
-                "title": "Course Title",
-                "modules": [
-                    { 
-                        "title": "Module Name", 
-                        "description": "Short summary",
-                        "lessons": [
-                            { 
-                                "title": "Lesson Name", 
-                                "description": "Short summary",
-                                "outline": "Detailed markdown content for the lesson body." 
-                            }
-                        ] 
-                    }
-                ]
-            }
+            { "title": "Course Title", "modules": [ { "title": "Module", "description": "", "lessons": [ { "title": "Lesson", "description": "", "outline": "Markdown content" } ] } ] }
             3. Do not be chatty. Provide the blueprint immediately.
             `;
         } else if (contextNode && contextNode.content) {
-            // RAG PERSONA
             const relevantText = this.retrieveRelevantContext(lastMsg, contextNode.content);
             systemContext = `
             CONTEXT FROM CURRENT LESSON ("${contextNode.name}"):
             ${relevantText}
-            
             INSTRUCTIONS:
-            You are the Sage Owl of Arbor Academy.
-            Use the LESSON CONTEXT above to answer if possible.
+            You are the Sage Owl of Arbor Academy. Use the LESSON CONTEXT above to answer if possible.
             Keep answers concise and encouraging.
             `;
         } else {
-             // GENERAL PERSONA
              systemContext = "You are the Sage Owl of Arbor Academy. Answer general questions helpfully.";
         }
 
@@ -248,7 +231,6 @@ class HybridAIService {
                 ];
 
                 this.currentController = new AbortController();
-                
                 const timeoutId = setTimeout(() => {
                     if (this.currentController) this.currentController.abort();
                 }, 300000); 
@@ -260,10 +242,7 @@ class HybridAIService {
                         model: this.config.ollamaModel,
                         messages: ollamaMessages,
                         stream: false,
-                        options: {
-                            num_predict: 2048,
-                            temperature: 0.7
-                        }
+                        options: { num_predict: 2048, temperature: 0.7 }
                     }),
                     signal: this.currentController.signal
                 });
@@ -271,22 +250,14 @@ class HybridAIService {
                 clearTimeout(timeoutId);
                 this.currentController = null;
 
-                if (!response.ok) {
-                    throw new Error(`Ollama status: ${response.status}`);
-                }
+                if (!response.ok) throw new Error(`Ollama status: ${response.status}`);
 
                 const data = await response.json();
                 const txt = data.message.content;
-
                 const trimmedTxt = txt.trim();
-                // Check if the AI's response is likely JSON. If so, don't add a footer.
+                
                 if ((trimmedTxt.startsWith('{') && trimmedTxt.endsWith('}')) || (trimmedTxt.startsWith('[') && trimmedTxt.endsWith(']'))) {
-                    try {
-                        JSON.parse(trimmedTxt); // Verify it's valid JSON
-                        return { text: txt }; // It's JSON, return as-is
-                    } catch (e) {
-                        // Not valid JSON, fall through to add footer
-                    }
+                    try { JSON.parse(trimmedTxt); return { text: txt }; } catch (e) {}
                 }
                 
                 const footer = "<br><br><span class='text-[10px] text-orange-600 dark:text-orange-400 font-bold opacity-75'>⚡ Local Intelligence (Ollama)</span>";
@@ -300,10 +271,12 @@ class HybridAIService {
         }
 
         // --- PUTER.JS (DEFAULT CLOUD) ---
-        // Fallback to Puter if provider is 'puter' or anything else unknown
+        // Ensure library is loaded before call
+        await puterSync.loadLibrary();
+
         try {
             if (!window.puter) {
-                return { text: "🦉 Puter.js system not loaded. Please check your internet connection." };
+                return { text: "🦉 Puter.js system failed to load. Check blocklist or connection." };
             }
             
             const messagesFormat = [
@@ -315,17 +288,10 @@ class HybridAIService {
             const txt = response?.message?.content || response.toString();
             
             const trimmedTxt = txt.trim();
-            // Check if the AI's response is likely JSON. If so, don't add a footer.
             if ((trimmedTxt.startsWith('{') && trimmedTxt.endsWith('}')) || (trimmedTxt.startsWith('[') && trimmedTxt.endsWith(']'))) {
-                try {
-                    JSON.parse(trimmedTxt); // Verify it's valid JSON
-                    return { text: txt }; // It's JSON, return as-is
-                } catch (e) {
-                    // Not valid JSON, fall through to add footer
-                }
+                try { JSON.parse(trimmedTxt); return { text: txt }; } catch (e) {}
             }
             
-            // Interactive Footer for Cloud
             const footer = `<br><br><div class='pt-2 mt-1 border-t border-slate-200 dark:border-slate-700/50 flex items-center justify-between text-[10px] text-slate-400'>
                 <span class='font-bold opacity-75'>Powered by Puter.com</span>
                 <button class='btn-sage-privacy hover:text-blue-500 hover:underline transition-colors'>Disclaimer</button>
@@ -341,8 +307,6 @@ class HybridAIService {
 
     // --- ARCHITECT MODE (Structure Generation) ---
     async generateStructure(topic, instructions = "") {
-        // Construct prompt dynamically based on user instructions
-        // If instructions are missing, use the default suggestions as guidance
         const constraints = instructions 
             ? `USER INSTRUCTIONS: ${instructions}` 
             : `GUIDANCE: Create a standard course outline with at least 3 modules and 2 lessons per module.`;
@@ -350,41 +314,18 @@ class HybridAIService {
         const prompt = `
         Act as a curriculum architect. Create a structured course outline for: "${topic}".
         ${constraints}
-        
         Return strict JSON format with this structure:
-        {
-            "title": "Course Title",
-            "description": "Brief course description",
-            "modules": [
-                {
-                    "title": "Module Title",
-                    "description": "Module description",
-                    "lessons": [
-                        {
-                            "title": "Lesson Title",
-                            "description": "What is learned",
-                            "outline": "3 bullet points of content"
-                        }
-                    ]
-                }
-            ]
-        }
-        IMPORTANT: Return ONLY the JSON. No markdown code blocks.
+        { "title": "Course Title", "description": "Brief desc", "modules": [ { "title": "Module Title", "description": "", "lessons": [ { "title": "Lesson Title", "description": "", "outline": "3 bullet points" } ] } ] }
+        IMPORTANT: Return ONLY the JSON. No markdown.
         `;
 
         try {
             const response = await this.chat([{ role: 'user', content: prompt }]);
             let text = response.text;
-            
-            // Cleanup Markdown if AI disregards instruction
             text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-            // Strip any text before/after the JSON braces
             const start = text.indexOf('{');
             const end = text.lastIndexOf('}');
-            if (start !== -1 && end !== -1) {
-                text = text.substring(start, end + 1);
-            }
-
+            if (start !== -1 && end !== -1) text = text.substring(start, end + 1);
             return JSON.parse(text);
         } catch (e) {
             console.error("Architect Error:", e);
