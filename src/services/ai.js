@@ -202,11 +202,13 @@ class HybridAIService {
         const prompts = {
             EN: {
                 sage: "You are the Sage Owl of Arbor Academy. Answer general questions helpfully and concisely.",
+                guardrails: "SAFETY PROTOCOL: You are an educational assistant. If the user asks for medical, legal, or dangerous chemical advice for the REAL WORLD, refuse politely. ROLEPLAY EXCEPTION: If the user is playing an Arbor Arcade game or a specific scenario, you MAY generate fictional combat, magic, or fantasy descriptions, provided they are clearly distinguished as fiction.",
                 context: "CONTEXT FROM CURRENT LESSON",
                 architect: "ROLE: You are the Sage Constructor (Architect) of the Arbor Knowledge Tree.\nTASK: Generate structured curriculum blueprints in JSON format.\nRULES: Output MUST include a JSON block using ```json ... ``` following this schema: { \"title\": \"Title\", \"modules\": [ { \"title\": \"Module\", \"description\": \"\", \"lessons\": [ { \"title\": \"Lesson\", \"description\": \"\", \"outline\": \"Markdown content\" } ] } ] }"
             },
             ES: {
                 sage: "Eres el Búho Sabio de la Academia Arbor. Responde preguntas generales de forma útil y concisa.",
+                guardrails: "PROTOCOLO DE SEGURIDAD: Eres un asistente educativo. Si el usuario pide consejo médico, legal o químico peligroso para el MUNDO REAL, recházalo educadamente. EXCEPCIÓN DE ROL: Si el usuario está jugando a Arbor Arcade o en un escenario específico, PUEDES generar descripciones de combate ficticio, magia o fantasía, siempre que se distingan claramente como ficción.",
                 context: "CONTEXTO DE LA LECCIÓN ACTUAL",
                 architect: "ROL: Eres el Arquitecto Sabio del Árbol de Conocimiento.\nTAREA: Generar planos de currículo estructurados en formato JSON.\nREGLAS: La salida DEBE incluir un bloque JSON usando ```json ... ``` siguiendo este esquema: { \"title\": \"Título\", \"modules\": [ { \"title\": \"Módulo\", \"description\": \"\", \"lessons\": [ { \"title\": \"Lección\", \"description\": \"\", \"outline\": \"Contenido Markdown\" } ] } ] }"
             }
@@ -223,9 +225,10 @@ class HybridAIService {
             ${relevantText}
             INSTRUCTIONS:
             ${currentPrompts.sage}
+            ${currentPrompts.guardrails}
             `;
         } else {
-             systemContext = currentPrompts.sage;
+             systemContext = currentPrompts.sage + " " + currentPrompts.guardrails;
         }
 
         // 3. EXECUTE BASED ON PROVIDER
