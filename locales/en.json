@@ -12,13 +12,13 @@
   "tagExam": "EXAM",
   "tutorialTitle": "Arbor's Guide",
   "tutorialSkip": "Skip Intro",
-  "tutorialNext": "Next (Accept)",
+  "tutorialNext": "Next",
   "tutorialPrev": "Previous",
   "tutorialFinish": "Enter the Garden",
   "welcomeSteps": [
     {
       "title": "Welcome to Arbor",
-      "text": "You are entering a decentralized knowledge explorer. <br><br><strong>Important Notice:</strong> Arbor is an educational self-study tool. Certificates are symbolic, and content is community-managed. By continuing, you accept that your data is stored locally on this device.",
+      "text": "You are entering a decentralized knowledge explorer. This guide will help you understand how to navigate and grow your knowledge garden.",
       "icon": "🌳"
     },
     {
