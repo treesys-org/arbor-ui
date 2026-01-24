@@ -110,7 +110,7 @@ class HybridAIService {
                 body: JSON.stringify({ name })
             });
 
-            if (!response.ok) throw new Error("Pull failed");
+            if (!response.ok) throw new Error(store.ui.aiErrorPull || "Pull failed");
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
@@ -139,7 +139,7 @@ class HybridAIService {
             return true;
         } catch (e) {
             console.error("Pull failed", e);
-            if (progressCallback) progressCallback("Error: " + e.message);
+            if (progressCallback) progressCallback((store.ui.aiErrorPull || "Error: ") + e.message);
             return false;
         }
     }
@@ -182,6 +182,7 @@ class HybridAIService {
     async chat(messages, contextNode = null) {
         this.abort(); 
         const ui = store.ui;
+        const lang = store.value.lang || 'EN';
 
         const lastMsgObj = messages[messages.length - 1];
         const lastMsg = lastMsgObj.content;
@@ -197,27 +198,34 @@ class HybridAIService {
         // 2. Determine System Context
         let systemContext = "";
         
+        // Dynamic Prompts
+        const prompts = {
+            EN: {
+                sage: "You are the Sage Owl of Arbor Academy. Answer general questions helpfully and concisely.",
+                context: "CONTEXT FROM CURRENT LESSON",
+                architect: "ROLE: You are the Sage Constructor (Architect) of the Arbor Knowledge Tree.\nTASK: Generate structured curriculum blueprints in JSON format.\nRULES: Output MUST include a JSON block using ```json ... ``` following this schema: { \"title\": \"Title\", \"modules\": [ { \"title\": \"Module\", \"description\": \"\", \"lessons\": [ { \"title\": \"Lesson\", \"description\": \"\", \"outline\": \"Markdown content\" } ] } ] }"
+            },
+            ES: {
+                sage: "Eres el Búho Sabio de la Academia Arbor. Responde preguntas generales de forma útil y concisa.",
+                context: "CONTEXTO DE LA LECCIÓN ACTUAL",
+                architect: "ROL: Eres el Arquitecto Sabio del Árbol de Conocimiento.\nTAREA: Generar planos de currículo estructurados en formato JSON.\nREGLAS: La salida DEBE incluir un bloque JSON usando ```json ... ``` siguiendo este esquema: { \"title\": \"Título\", \"modules\": [ { \"title\": \"Módulo\", \"description\": \"\", \"lessons\": [ { \"title\": \"Lección\", \"description\": \"\", \"outline\": \"Contenido Markdown\" } ] } ] }"
+            }
+        };
+        
+        const currentPrompts = prompts[lang] || prompts['EN'];
+        
         if (mode === 'architect') {
-            systemContext = `
-            ROLE: You are the Sage Constructor (Architect) of the Arbor Knowledge Tree.
-            TASK: Generate structured curriculum blueprints in JSON format.
-            IMPORTANT RULES:
-            1. Output MUST include a JSON code block using \`\`\`json ... \`\`\`.
-            2. The JSON schema must strictly follow:
-            { "title": "Course Title", "modules": [ { "title": "Module", "description": "", "lessons": [ { "title": "Lesson", "description": "", "outline": "Markdown content" } ] } ] }
-            3. Do not be chatty. Provide the blueprint immediately.
-            `;
+            systemContext = currentPrompts.architect;
         } else if (contextNode && contextNode.content) {
             const relevantText = this.retrieveRelevantContext(lastMsg, contextNode.content);
             systemContext = `
-            CONTEXT FROM CURRENT LESSON ("${contextNode.name}"):
+            ${currentPrompts.context} ("${contextNode.name}"):
             ${relevantText}
             INSTRUCTIONS:
-            You are the Sage Owl of Arbor Academy. Use the LESSON CONTEXT above to answer if possible.
-            Keep answers concise and encouraging.
+            ${currentPrompts.sage}
             `;
         } else {
-             systemContext = "You are the Sage Owl of Arbor Academy. Answer general questions helpfully.";
+             systemContext = currentPrompts.sage;
         }
 
         // 3. EXECUTE BASED ON PROVIDER
@@ -266,7 +274,9 @@ class HybridAIService {
             } catch (e) {
                 this.currentController = null;
                 console.error("Ollama Error:", e);
-                return { text: `🦉 Error local: ${e.message}\nEnsure Ollama is running at ${this.config.ollamaHost}` };
+                // Use localized error prefix
+                const prefix = store.ui.aiErrorLocal || "Local AI Error: ";
+                return { text: `🦉 ${prefix}${e.message}\nEnsure Ollama is running at ${this.config.ollamaHost}` };
             }
         }
 
@@ -301,7 +311,9 @@ class HybridAIService {
 
         } catch (e) {
             console.error("Puter Error:", e);
-            return { text: "🦉 Error Puter Cloud: " + (e.message || "Connection failed") };
+            // Use localized error prefix
+            const prefix = store.ui.aiErrorCloud || "Cloud AI Error: ";
+            return { text: `🦉 ${prefix}${e.message || "Connection failed"}` };
         }
     }
 

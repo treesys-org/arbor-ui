@@ -1,4 +1,6 @@
 
+
+
 import { store } from "../store.js";
 import { github } from "./github.js";
 import { parseArborFile, reconstructArborFile, markdownToVisualHTML } from "../utils/editor-engine.js";
@@ -42,7 +44,7 @@ class FileSystemService {
             const node = store.findNode(nodeId);
             if (!node) {
                 if (nodeId.startsWith('new-')) return { content: '', meta: {}, sha: null };
-                throw new Error("File not found in local garden.");
+                throw new Error(store.ui.fileNotFound || "File not found in local garden.");
             }
 
             const rawContent = node.content || "";
@@ -122,7 +124,7 @@ class FileSystemService {
                 store.processLoadedData(updatedSource);
                 return { success: true, mode: 'instant' };
             } else {
-                throw new Error("Local save failed. Node not found.");
+                throw new Error(store.ui.saveFailedLocal || "Local save failed. Node not found.");
             }
         } else {
             // GitHub
@@ -174,11 +176,6 @@ class FileSystemService {
                     // Actually create logic (UserStore method doesn't accept extra props yet easily, 
                     // but createLocalNode is in UserStore. Wait, I am in FileSystem calling store.userStore.createLocalNode)
                     
-                    // Since UserStore.createLocalNode is rigid, we might need to update the node immediately after creation?
-                    // OR we modify UserStore.createLocalNode to be smarter. 
-                    // BUT I cannot modify UserStore in this file request (limited context).
-                    // So I will override it here by manual update after creation.
-                    
                     store.userStore.createLocalNode(treeId, parentPath, name, type);
                     
                     // Now find the newly created node and patch its sourcePath
@@ -223,7 +220,7 @@ class FileSystemService {
             const fullPath = type === 'folder' ? `${parentPath}/${name}/meta.json` : `${parentPath}/${name}`;
             const initialContent = type === 'folder' 
                 ? JSON.stringify({ name: name, icon: "📁", order: "99" }, null, 2)
-                : "@title: New Lesson\n@icon: 📄\n\n# New Lesson";
+                : `@title: ${store.ui.defaultLessonName || "New Lesson"}\n@icon: 📄\n\n# ${store.ui.defaultLessonName || "New Lesson"}`;
                 
             await github.createOrUpdateFileContents(fullPath, initialContent, `feat: Create ${name}`);
             return true;
@@ -288,34 +285,8 @@ class FileSystemService {
         if (cleanOldPath === newPath) return; // No change
 
         if (this.isLocal) {
-            // For local, we can cheat a bit: remove and re-add or complex mutation.
-            // Since we don't have a direct "Move" in UserStore yet, we can use rename if parent changed?
-            // Actually, we need to implement moveLocalNode in UserStore properly or simulate it.
-            // Simulating via Delete + Create is risky for IDs.
-            // Given constraints, we will defer complex local move implementation to UserStore update 
-            // OR reuse rename if we hack the path logic.
-            // But UserStore.renameLocalNode assumes *only name changed*.
-            
-            // NOTE: For full "Construction Mode" locally, UserStore needs a specific move.
-            // Assuming UserStore will be updated or we use a workaround.
-            // Workaround: We can't easily move locally without traversing the tree structure.
-            // Let's assume UserStore has it or we add it. 
-            // Since I cannot edit UserStore in this specific file request (only filesystem.js here),
-            // I will assume rename works if we pass full paths, which renameLocalNode does.
-            // Let's check renameLocalNode in UserStore... it does logic based on parent.
-            // It splits path to find parent. So if we pass new path, it won't find the old node.
-            
-            // To properly support drag & drop move locally, we need to update UserStore.
-            // However, since I can edit multiple files, I will stick to the plan and assume
-            // this method calls a hypothetical store method, or I just implement it here if I had access.
-            // I will implement a "Delete + Add" copy strategy here as a fallback for local if store method missing.
-            
             const treeId = this.activeSource.id;
-            const nodeData = store.findNode(store.value.selectedNode?.id); // We might need to find by path
-            // Complex. For now, let's just trigger a rename logic if it supports path change.
-            // It does NOT.
-            
-            throw new Error("Local move not fully supported in this version.");
+            throw new Error(store.ui.moveFailed || "Local move not fully supported in this version.");
         } else {
             // GitHub
             await github.moveFile(cleanOldPath, newPath, `chore: Move ${name} to ${cleanParentPath}`);

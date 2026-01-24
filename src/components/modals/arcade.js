@@ -111,10 +111,10 @@ class ArborModalArcade extends HTMLElement {
                             🎮 ${ui.arcadeFeatured || "Games"}
                         </button>
                         <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors border-transparent text-slate-400 hover:text-slate-600" id="tab-garden">
-                            🍂 Care
+                            🍂 ${ui.arcadeTabCare || "Care"}
                         </button>
                         <button class="flex-1 py-3 text-sm font-bold border-b-2 transition-colors border-transparent text-slate-400 hover:text-slate-600" id="tab-storage">
-                            💾 Data
+                            💾 ${ui.arcadeTabStorage || "Data"}
                         </button>
                     </div>
 
@@ -197,7 +197,7 @@ class ArborModalArcade extends HTMLElement {
 
     renderGamesList(container, ui) {
         if (this.isLoading) {
-            container.innerHTML = `<div class="p-12 text-center text-slate-400 animate-pulse">Loading Arcade...</div>`;
+            container.innerHTML = `<div class="p-12 text-center text-slate-400 animate-pulse">${ui.loading || 'Loading...'}</div>`;
             return;
         }
         
@@ -208,15 +208,15 @@ class ArborModalArcade extends HTMLElement {
             const targetNode = store.findNode(this.wateringTargetId);
             const targetName = targetNode ? targetNode.name : "Unknown Lesson";
             html += `
-            <div class="bg-blue-600 text-white p-4 rounded-xl shadow-lg mb-4 flex items-center justify-between animate-in slide-in-from-top-2">
+            <div class="bg-blue-600 text-white p-4 rounded-xl shadow-lg mb-4 flex items-center justify-center md:justify-between animate-in slide-in-from-top-2 flex-wrap gap-2">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center text-xl">💧</div>
                     <div>
-                        <p class="text-[10px] uppercase font-bold opacity-80">Watering Mission</p>
-                        <p class="font-bold text-sm">Select a game to review: <span class="underline">${targetName}</span></p>
+                        <p class="text-[10px] uppercase font-bold opacity-80">${ui.arcadeWateringMission || 'Watering Mission'}</p>
+                        <p class="font-bold text-sm">${ui.arcadeReviewTarget || 'Select a game to review:'} <span class="underline">${targetName}</span></p>
                     </div>
                 </div>
-                <button data-action="cancel-watering" class="bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">Cancel</button>
+                <button data-action="cancel-watering" class="bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">${ui.cancel || 'Cancel'}</button>
             </div>`;
         }
 
@@ -226,7 +226,7 @@ class ArborModalArcade extends HTMLElement {
         const allGames = [...this.discoveredGames, ...manualGames];
 
         if (allGames.length === 0) {
-            html += `<div class="p-8 text-center text-slate-400 italic">No games found.</div>`;
+            html += `<div class="p-8 text-center text-slate-400 italic">${ui.noResults || 'No games found.'}</div>`;
         } else {
             html += allGames.map((g, idx) => `
                 <div class="flex items-center justify-between p-4 bg-white dark:bg-slate-800 border ${this.wateringTargetId ? 'border-blue-200 dark:border-blue-900/30' : 'border-slate-200 dark:border-slate-700'} rounded-2xl hover:shadow-md transition-shadow group mb-3">
@@ -246,7 +246,7 @@ class ArborModalArcade extends HTMLElement {
                     <div class="flex gap-2">
                         <button class="px-4 py-2 ${this.wateringTargetId ? 'bg-blue-600 hover:bg-blue-500' : 'bg-slate-900 dark:bg-white hover:scale-105'} text-white dark:text-slate-900 text-xs font-bold rounded-xl shadow-lg transition-all active:scale-95" 
                                 data-action="prepare" data-idx="${idx}" data-manual="${g.isManual}">
-                            ${this.wateringTargetId ? "Water Here" : (ui.arcadePlay || "Play")}
+                            ${this.wateringTargetId ? (ui.arcadeWaterHere || "Water Here") : (ui.arcadePlay || "Play")}
                         </button>
                         ${g.isManual ? `
                         <button class="px-2 py-2 text-slate-400 hover:text-red-500 transition-colors" data-action="remove-game" data-id="${g.id}">✕</button>
@@ -259,9 +259,9 @@ class ArborModalArcade extends HTMLElement {
         // Add Custom
         html += `
         <div class="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
-            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-2">Add Single Game URL</label>
+            <label class="block text-[10px] font-bold text-slate-400 uppercase mb-2">${ui.arcadeAdd || "Add Game URL"}</label>
             <div class="flex gap-2">
-                <input id="inp-custom-game" type="text" placeholder="https://..." class="flex-1 bg-slate-100 dark:bg-slate-950 border-none rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-500 dark:text-white">
+                <input id="inp-custom-game" type="text" placeholder="${ui.arcadePlaceholder || "https://..."}" class="flex-1 bg-slate-100 dark:bg-slate-950 border-none rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-500 dark:text-white">
                 <button data-action="add-custom" class="bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 px-4 py-2 rounded-xl font-bold text-sm">
                     +
                 </button>
@@ -295,8 +295,8 @@ class ArborModalArcade extends HTMLElement {
             html += `
             <div class="p-12 text-center flex flex-col items-center">
                 <div class="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-5xl mb-4">🪴</div>
-                <h3 class="text-lg font-black text-slate-700 dark:text-white mb-2">Garden is Empty</h3>
-                <p class="text-sm text-slate-500 dark:text-slate-400 max-w-xs">Complete lessons to start cultivating your memory garden.</p>
+                <h3 class="text-lg font-black text-slate-700 dark:text-white mb-2">${ui.arcadeGardenEmptyTitle || "Garden is Empty"}</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400 max-w-xs">${ui.arcadeGardenEmptyDesc || "Complete lessons to start cultivating your memory garden."}</p>
             </div>`;
         } else {
             // Withered Section
@@ -304,7 +304,7 @@ class ArborModalArcade extends HTMLElement {
                 html += `
                 <div class="bg-red-50 dark:bg-red-900/10 p-4 rounded-xl border border-red-100 dark:border-red-900/30 mb-4 flex items-center gap-3">
                     <span class="text-2xl">🍂</span>
-                    <p class="text-xs text-red-800 dark:text-red-300 font-medium">These lessons are fading from memory. Play to refresh them!</p>
+                    <p class="text-xs text-red-800 dark:text-red-300 font-medium">${ui.arcadeWitheredMsg || "These lessons are fading from memory. Play to refresh them!"}</p>
                 </div>
                 <div class="space-y-2 mb-6">
                     ${dueIds.map(id => {
@@ -313,6 +313,7 @@ class ArborModalArcade extends HTMLElement {
                         const daysOverdue = Math.ceil((now - mem.dueDate) / (1000 * 60 * 60 * 24));
                         const name = node ? node.name : `Module ${id.substring(0, 8)}...`;
                         const icon = node ? (node.icon || '📄') : '📄';
+                        const daysText = (ui.arcadeWitheredDays || "Withered {days} days ago").replace('{days}', daysOverdue);
                         
                         return `
                         <div class="flex items-center justify-between p-3 bg-white dark:bg-slate-900 border border-red-200 dark:border-red-900/30 rounded-xl group hover:border-red-400 transition-colors">
@@ -322,11 +323,11 @@ class ArborModalArcade extends HTMLElement {
                                 </div>
                                 <div class="min-w-0">
                                     <h4 class="font-bold text-sm text-slate-800 dark:text-white truncate">${name}</h4>
-                                    <p class="text-[10px] text-red-500 font-bold">Withered ${daysOverdue} days ago</p>
+                                    <p class="text-[10px] text-red-500 font-bold">${daysText}</p>
                                 </div>
                             </div>
                             <button data-action="water-node" data-id="${id}" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg shadow-md hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
-                                <span>💧</span> Water
+                                <span>💧</span> ${ui.arcadeWaterBtn || "Water"}
                             </button>
                         </div>`;
                     }).join('')}
@@ -336,27 +337,28 @@ class ArborModalArcade extends HTMLElement {
                 <div class="bg-green-50 dark:bg-green-900/10 p-4 rounded-xl border border-green-100 dark:border-green-900/30 mb-6 flex items-center gap-3">
                     <span class="text-2xl">🌻</span>
                     <div>
-                        <p class="text-sm font-black text-green-700 dark:text-green-300">Garden is Healthy!</p>
-                        <p class="text-xs text-green-600 dark:text-green-400">All memories are fresh.</p>
+                        <p class="text-sm font-black text-green-700 dark:text-green-300">${ui.arcadeHealthyTitle || "Garden is Healthy!"}</p>
+                        <p class="text-xs text-green-600 dark:text-green-400">${ui.arcadeHealthyMsg || "All memories are fresh."}</p>
                     </div>
                 </div>`;
             }
 
             // Thriving Section
             if (healthyIds.length > 0) {
-                html += `<h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Thriving Plants (${healthyIds.length})</h4>`;
+                html += `<h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">${ui.arcadeThrivingTitle || "Thriving Plants"} (${healthyIds.length})</h4>`;
                 html += `<div class="space-y-2 opacity-80">
                     ${healthyIds.map(item => {
                         const node = store.findNode(item.id);
                         const daysLeft = Math.ceil((item.dueDate - now) / (1000 * 60 * 60 * 24));
                         const name = node ? node.name : `Module ${item.id.substring(0, 8)}...`;
                         const icon = node ? (node.icon || '📄') : '📄';
+                        const rainText = (ui.arcadeNextRain || "Next rain in {days} days").replace('{days}', daysLeft);
                         
                         // Strength indicator based on interval
-                        let strength = "🌱 Sprout";
-                        if (item.interval > 30) strength = "🌳 Tree";
-                        else if (item.interval > 14) strength = "🌿 Bush";
-                        else if (item.interval > 7) strength = "🪴 Plant";
+                        let strength = `${ui.arcadeStageSprout || "Sprout"}`;
+                        if (item.interval > 30) strength = `${ui.arcadeStageTree || "Tree"}`;
+                        else if (item.interval > 14) strength = `${ui.arcadeStageBush || "Bush"}`;
+                        else if (item.interval > 7) strength = `${ui.arcadeStagePlant || "Plant"}`;
 
                         return `
                         <div class="flex items-center justify-between p-3 bg-white dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 rounded-xl">
@@ -366,7 +368,7 @@ class ArborModalArcade extends HTMLElement {
                                 </div>
                                 <div class="min-w-0">
                                     <h4 class="font-bold text-sm text-slate-700 dark:text-slate-300 truncate">${name}</h4>
-                                    <p class="text-[10px] text-slate-400">Next rain in ${daysLeft} days</p>
+                                    <p class="text-[10px] text-slate-400">${rainText}</p>
                                 </div>
                             </div>
                             <span class="text-[9px] bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-slate-500 font-medium">${strength}</span>
@@ -387,22 +389,22 @@ class ArborModalArcade extends HTMLElement {
         container.innerHTML = `
         <div class="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 mb-6">
             <div class="flex justify-between items-center mb-2">
-                <span class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase">Total Usage</span>
+                <span class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase">${ui.arcadeStorageTotal || "Total Usage"}</span>
                 <span class="text-xs font-mono text-slate-500">${stats.arcade.usedFmt} / 3.5 MB</span>
             </div>
             <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden mb-1">
                 <div class="${barColor} h-2 rounded-full transition-all duration-500" style="width: ${usagePercent}%"></div>
             </div>
-            ${usagePercent > 90 ? '<p class="text-[10px] text-red-500 font-bold mt-1 text-center">⚠️ Storage Full. Delete some saves to play new games.</p>' : ''}
+            ${usagePercent > 90 ? `<p class="text-[10px] text-red-500 font-bold mt-1 text-center">⚠️ ${ui.arcadeStorageFull || "Storage Full"}</p>` : ''}
         </div>
         
         <div class="flex justify-between items-center mb-3">
-            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Saved Games</h3>
-            ${stats.arcade.games.length > 0 ? `<button data-action="delete-all-saves" class="text-[10px] text-red-500 hover:text-red-700 font-bold border border-red-200 dark:border-red-900/30 px-2 py-1 rounded bg-red-50 dark:bg-red-900/10">Delete All</button>` : ''}
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">${ui.arcadeSavedGames || "Saved Games"}</h3>
+            ${stats.arcade.games.length > 0 ? `<button data-action="delete-all-saves" class="text-[10px] text-red-500 hover:text-red-700 font-bold border border-red-200 dark:border-red-900/30 px-2 py-1 rounded bg-red-50 dark:bg-red-900/10">${ui.arcadeDeleteAll || "Delete All"}</button>` : ''}
         </div>
 
         <div class="space-y-2">
-            ${stats.arcade.games.length === 0 ? `<div class="p-8 text-center text-slate-400 italic text-sm">No game data saved.</div>` : 
+            ${stats.arcade.games.length === 0 ? `<div class="p-8 text-center text-slate-400 italic text-sm">${ui.noResults || "No game data saved."}</div>` : 
               stats.arcade.games.map(g => `
                 <div class="flex items-center justify-between p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl group hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
                     <div class="min-w-0 pr-4">
@@ -410,7 +412,7 @@ class ArborModalArcade extends HTMLElement {
                         <p class="text-[10px] text-slate-400 font-mono">${g.sizeFmt} • Updated: ${new Date(g.updated).toLocaleDateString()}</p>
                     </div>
                     <button data-action="delete-save" data-id="${g.id}" class="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-500 hover:text-red-600 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 transition-colors">
-                        Delete
+                        ${ui.graphDelete || "Delete"}
                     </button>
                 </div>
             `).join('')}
@@ -450,9 +452,9 @@ class ArborModalArcade extends HTMLElement {
                     let icon = n.icon;
                     if (!icon) icon = isLeaf ? '📄' : (isExam ? '⚔️' : '📁');
                     
-                    let typeBadge = `<span class="text-[9px] bg-slate-200 text-slate-600 px-1.5 rounded uppercase font-bold tracking-wider">Module</span>`;
-                    if (isLeaf) typeBadge = `<span class="text-[9px] bg-purple-100 text-purple-700 px-1.5 rounded uppercase font-bold tracking-wider">Lesson</span>`;
-                    if (isExam) typeBadge = `<span class="text-[9px] bg-red-100 text-red-700 px-1.5 rounded uppercase font-bold tracking-wider">Exam</span>`;
+                    let typeBadge = `<span class="text-[9px] bg-slate-200 text-slate-600 px-1.5 rounded uppercase font-bold tracking-wider">${ui.tagModule || "MODULE"}</span>`;
+                    if (isLeaf) typeBadge = `<span class="text-[9px] bg-purple-100 text-purple-700 px-1.5 rounded uppercase font-bold tracking-wider">${ui.tagLesson || "LESSON"}</span>`;
+                    if (isExam) typeBadge = `<span class="text-[9px] bg-red-100 text-red-700 px-1.5 rounded uppercase font-bold tracking-wider">${ui.tagExam || "EXAM"}</span>`;
                     
                     const indentClass = `pl-${Math.min(n.depth * 4, 12) + 3}`;
                     const isDisabled = isExam;
@@ -477,7 +479,7 @@ class ArborModalArcade extends HTMLElement {
                     </button>`;
                 }).join('')}
                 
-                ${filteredNodes.length === 0 ? `<div class="p-4 text-center text-xs text-slate-400">No matching content found. Try expanding the map first.</div>` : ''}
+                ${filteredNodes.length === 0 ? `<div class="p-4 text-center text-xs text-slate-400">${ui.noResults || "No matching content found."}</div>` : ''}
             </div>
         </div>
 

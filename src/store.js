@@ -1,5 +1,6 @@
 
 
+
 import { AVAILABLE_LANGUAGES } from './i18n.js';
 import { github } from './services/github.js';
 import { aiService } from './services/ai.js';
@@ -269,7 +270,7 @@ class Store extends EventTarget {
             }
 
             if (!langData) {
-                this.update({ loading: false, error: "No valid content found in this tree." });
+                this.update({ loading: false, error: this.ui.errorNoContent || "No valid content found in this tree." });
                 return;
             }
             
@@ -332,7 +333,7 @@ class Store extends EventTarget {
 
         } catch (e) {
             console.error("Data Processing Error", e);
-            this.update({ loading: false, error: "Failed to process data structure." });
+            this.update({ loading: false, error: this.ui.errorDataProcess || "Failed to process data structure." });
         }
     }
     
@@ -661,11 +662,11 @@ class Store extends EventTarget {
             const source = this.state.activeSource;
             await this.loadData(source, false);
             
-            this.notify("Node moved successfully!");
+            this.notify(this.ui.nodeMoved || "Node moved successfully!");
             
         } catch(e) {
             console.error(e);
-            this.update({ error: "Move failed: " + e.message });
+            this.update({ error: (this.ui.moveFailed || "Move failed: ") + e.message });
             setTimeout(() => this.update({ error: null }), 3000);
         } finally {
             this.update({ loading: false });
@@ -760,21 +761,21 @@ class Store extends EventTarget {
             const cloudData = await puterSync.load();
             if (cloudData) {
                 this.importProgress(JSON.stringify(cloudData));
-                this.notify("Sync complete. Cloud data loaded.");
+                this.notify(this.ui.syncComplete || "Sync complete. Cloud data loaded.");
             } else {
                 this.handleAutoSync(this.userStore.getPersistenceData());
-                this.notify("Connected. Local data saved to cloud.");
+                this.notify(this.ui.syncSaved || "Connected. Local data saved to cloud.");
             }
         } catch (e) {
             console.error(e);
-            this.notify("Sync Error: " + e.message);
+            this.notify((this.ui.syncError || "Sync Error: ") + e.message);
         }
     }
 
     async disconnectPuter() {
         await puterSync.signOut();
         this.update({ puterUser: null });
-        this.notify("Puter disconnected.");
+        this.notify(this.ui.syncDisconnected || "Puter disconnected.");
     }
 
     async handleAutoSync(data) {

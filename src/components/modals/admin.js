@@ -163,12 +163,12 @@ class ArborAdminPanel extends HTMLElement {
             <button id="btn-close-panel" class="absolute top-6 right-6 w-10 h-10 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 transition-colors flex items-center justify-center text-xl">✕</button>
             <div class="flex-1 flex flex-col items-center justify-center p-8 text-center max-w-md mx-auto animate-in fade-in zoom-in duration-300">
                 <div class="w-24 h-24 bg-black text-white rounded-3xl flex items-center justify-center text-5xl mb-8 shadow-2xl transform -rotate-6">🐙</div>
-                <h2 class="text-3xl font-black text-slate-800 dark:text-white mb-2">${ui.contribTitle}</h2>
-                <p class="text-lg text-slate-500 mb-10 font-medium leading-relaxed">${ui.contribDesc}</p>
-                <input id="inp-token" type="password" placeholder="${ui.contribTokenPlaceholder}" class="w-full px-6 py-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 mb-4 focus:border-black dark:focus:border-white outline-none transition-colors text-lg font-bold text-center">
+                <h2 class="text-3xl font-black text-slate-800 dark:text-white mb-2">${ui.contribTitle || "Editor Mode"}</h2>
+                <p class="text-lg text-slate-500 mb-10 font-medium leading-relaxed">${ui.contribDesc || "Help us grow the garden."}</p>
+                <input id="inp-token" type="password" placeholder="${ui.contribTokenPlaceholder || "ghp_..."}" class="w-full px-6 py-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 mb-4 focus:border-black dark:focus:border-white outline-none transition-colors text-lg font-bold text-center">
                 ${this.state.loginError ? `<p class="text-sm text-red-500 font-bold mb-6 animate-pulse bg-red-50 px-4 py-2 rounded-lg">${this.state.loginError}</p>` : ''}
                 <button id="btn-login" class="w-full py-4 bg-black dark:bg-white text-white dark:text-black font-black text-xl rounded-2xl shadow-xl hover:scale-105 active:scale-95 transition-all mb-6">
-                    ${this.state.isLoggingIn ? (ui.syncing || 'Connecting...') : ui.contribConnect}
+                    ${this.state.isLoggingIn ? (ui.syncing || 'Connecting...') : (ui.contribConnect || "Enable Editing")}
                 </button>
             </div>
         </div>`;
@@ -380,7 +380,7 @@ class ArborAdminPanel extends HTMLElement {
             <div class="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-3">
                 <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">${ui.releasesHistory || "Version History"}</h4>
                 ${releasesLoading 
-                    ? `<div class="p-12 text-center text-slate-400"><div class="animate-spin text-3xl mb-4 opacity-50">⏳</div></div>` 
+                    ? `<div class="p-12 text-center text-slate-400"><div class="animate-spin text-3xl mb-4 opacity-50">⏳</div>${ui.releasesScanning || "Scanning timeline..."}</div>` 
                     : (releases.length === 0 
                         ? `<div class="p-8 text-center text-slate-400 italic text-sm">${ui.adminNoArchives || "No archives found."}</div>`
                         : releases.map(ver => `

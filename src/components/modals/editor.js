@@ -1,4 +1,6 @@
 
+
+
 import { store } from '../../store.js';
 import { fileSystem } from '../../services/filesystem.js';
 import { aiService } from '../../services/ai.js';
@@ -325,13 +327,13 @@ class ArborEditor extends HTMLElement {
 
         const pathDisplay = this.node.sourcePath || 'New File';
         
-        const panelTitle = this.isMetaJson ? "Folder Properties" : (ui.editorTitle || 'Arbor Studio');
-        const saveLabel = this.isMetaJson ? "Save Props" : (ui.editorLocalSave || "Save");
+        const panelTitle = this.isMetaJson ? (ui.editorMetaWarning ? "Folder Properties" : "Folder") : (ui.editorTitle || 'Arbor Studio');
+        const saveLabel = this.isMetaJson ? (ui.editorBtnSave || "Save") : (ui.editorLocalSave || "Save");
 
         const bodyContent = this.isMetaJson 
             ? `<div class="p-8 text-center text-slate-400 italic border-2 border-dashed border-slate-500 rounded-xl">
                  <span class="text-4xl block mb-2">📂</span>
-                 FOLDER PROPERTIES<br><span class="text-xs">Edit metadata above</span>
+                 ${ui.editorMetaWarning || "FOLDER PROPERTIES"}<br><span class="text-xs">Edit metadata above</span>
                </div>`
             : bodyHTML;
 
@@ -341,11 +343,11 @@ class ArborEditor extends HTMLElement {
             <!-- AI PROMPT OVERLAY (Internal) -->
             <div id="ai-prompt-overlay" class="hidden absolute inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm animate-in fade-in">
                 <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-2xl w-full max-w-md border border-purple-500/50">
-                    <h3 class="text-lg font-black text-slate-800 dark:text-white mb-2 flex items-center gap-2"><span class="text-2xl">✨</span> Magic Draft</h3>
-                    <p class="text-sm text-slate-500 mb-4">What should this lesson be about?</p>
+                    <h3 class="text-lg font-black text-slate-800 dark:text-white mb-2 flex items-center gap-2"><span class="text-2xl">✨</span> ${ui.editorMagicDraft || "Magic Draft"}</h3>
+                    <p class="text-sm text-slate-500 mb-4">${ui.editorMagicDraftPrompt || "What should this lesson be about?"}</p>
                     <input id="inp-ai-prompt" type="text" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold mb-4 focus:ring-2 focus:ring-purple-500 outline-none dark:text-white" placeholder="e.g. Introduction to Quantum Physics">
                     <div class="flex gap-3">
-                        <button id="btn-cancel-ai" class="flex-1 py-2 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg font-bold text-xs uppercase">Cancel</button>
+                        <button id="btn-cancel-ai" class="flex-1 py-2 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg font-bold text-xs uppercase">${ui.editorCancelLoading || "Cancel"}</button>
                         <button id="btn-run-ai" class="flex-1 py-2 bg-purple-600 text-white rounded-lg font-bold text-xs uppercase hover:bg-purple-500">Draft</button>
                     </div>
                 </div>
@@ -383,7 +385,7 @@ class ArborEditor extends HTMLElement {
                 
                 <div class="w-px h-6 bg-slate-400/30 mx-1"></div>
                 
-                <button class="block-btn px-3 py-1.5 bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/30 rounded text-xs font-bold uppercase hover:bg-green-500/20 transition-colors" data-type="quiz">+ Quiz</button>
+                <button class="block-btn px-3 py-1.5 bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/30 rounded text-xs font-bold uppercase hover:bg-green-500/20 transition-colors" data-type="quiz">+ ${ui.quizLabel || "Quiz"}</button>
                 <button class="block-btn px-3 py-1.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30 rounded text-xs font-bold uppercase hover:bg-blue-500/20 transition-colors" data-type="section">+ Sect</button>
                 <button class="block-btn px-3 py-1.5 bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/30 rounded text-xs font-bold uppercase hover:bg-sky-500/20 transition-colors" data-type="subsection">+ Sub</button>
                 <button class="block-btn px-3 py-1.5 bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/30 rounded text-xs font-bold uppercase hover:bg-orange-500/20 transition-colors" data-type="callout">+ Note</button>
@@ -400,7 +402,7 @@ class ArborEditor extends HTMLElement {
                     <!-- METADATA GRID -->
                     <div class="grid grid-cols-12 gap-3 p-4 rounded-xl border border-slate-600/20 bg-black/5">
                          <div class="col-span-2 relative">
-                             <label class="text-[9px] uppercase font-bold opacity-50 block mb-1">Icon</label>
+                             <label class="text-[9px] uppercase font-bold opacity-50 block mb-1">${ui.editorLabelIcon || "Icon"}</label>
                              <button id="btn-emoji" class="w-full h-10 rounded text-xl flex items-center justify-center hover:brightness-110 transition-colors ${inputClass}">${this.meta.icon}</button>
                              <div id="emoji-picker" class="hidden absolute top-12 left-0 w-64 bg-slate-800 shadow-2xl rounded border border-slate-600 z-50 p-2 h-48 overflow-y-auto custom-scrollbar">
                                 ${Object.entries(EMOJI_DATA).map(([cat, emojis]) => `
@@ -412,15 +414,15 @@ class ArborEditor extends HTMLElement {
                              </div>
                          </div>
                          <div class="col-span-10">
-                             <label class="text-[9px] uppercase font-bold opacity-50 block mb-1">Title</label>
-                             <input id="meta-title" class="w-full h-10 px-3 rounded outline-none ${inputClass}" value="${this.meta.title}" placeholder="Lesson Title">
+                             <label class="text-[9px] uppercase font-bold opacity-50 block mb-1">${ui.editorLabelTitle || "Title"}</label>
+                             <input id="meta-title" class="w-full h-10 px-3 rounded outline-none ${inputClass}" value="${this.meta.title}" placeholder="${ui.editorBlockPlaceholder || "Title"}">
                          </div>
                          <div class="col-span-3">
-                             <label class="text-[9px] uppercase font-bold opacity-50 block mb-1">Order</label>
+                             <label class="text-[9px] uppercase font-bold opacity-50 block mb-1">${ui.editorLabelOrder || "Order"}</label>
                              <input id="meta-order" type="number" class="w-full h-8 px-2 rounded text-xs outline-none ${inputClass}" value="${this.meta.order}">
                          </div>
                          <div class="col-span-9">
-                             <label class="text-[9px] uppercase font-bold opacity-50 block mb-1">Description</label>
+                             <label class="text-[9px] uppercase font-bold opacity-50 block mb-1">${ui.editorLabelDesc || "Description"}</label>
                              <input id="meta-desc" class="w-full h-8 px-2 rounded text-xs outline-none ${inputClass}" value="${this.meta.description}" placeholder="...">
                          </div>
                     </div>
@@ -522,7 +524,7 @@ class ArborEditor extends HTMLElement {
                     this.closeEditor();
                 }
             } else {
-                throw new Error("Save operation reported failure.");
+                throw new Error(store.ui.saveError || "Save operation reported failure.");
             }
         } catch(e) {
             store.notify("Error: " + e.message, true);

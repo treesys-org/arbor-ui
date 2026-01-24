@@ -1,5 +1,6 @@
 
 
+
 // BOTANICAL SEEDS: More universal concept for knowledge trees
 const SEED_TYPES = ['🌲', '🌰', '🌾', '🍁', '🥥', '🥜', '🌰', '🫘', '🍄', '🌱'];
 
@@ -191,6 +192,12 @@ export class UserStore {
     plantTree(name) {
         const id = 'local-' + crypto.randomUUID();
         const now = new Date().toISOString();
+        const ui = this.getUi();
+        const defaultName = ui.defaultGardenName || "My Private Garden";
+        const lessonName = ui.defaultLessonName || "First Lesson";
+        const lessonContent = ui.defaultLessonContent || "Your very first lesson.";
+        const helloTitle = ui.defaultHello || "Hello World";
+
         const skeleton = {
             generatedAt: now,
             universeId: id,
@@ -198,13 +205,13 @@ export class UserStore {
             languages: {
                 "EN": {
                     id: `${id}-en-root`, name: name, type: "root", expanded: true,
-                    icon: "🌱", description: "My Private Garden", path: name,
+                    icon: "🌱", description: defaultName, path: name,
                     children: [{
                         id: `${id}-leaf-1`, parentId: `${id}-en-root`,
-                        name: "First Lesson", type: "leaf", icon: "📝",
-                        path: `${name} / First Lesson`, order: "1",
-                        description: "Your very first lesson.",
-                        content: "# Hello World\n\nClick Edit to change."
+                        name: lessonName, type: "leaf", icon: "📝",
+                        path: `${name} / ${lessonName}`, order: "1",
+                        description: lessonContent,
+                        content: `# ${helloTitle}\n\nClick Edit to change.`
                     }]
                 }
             }
@@ -480,18 +487,22 @@ export class UserStore {
         const treeEntry = this.state.localTrees.find(t => t.id === treeId);
         if (!treeEntry) return false;
         const parentName = parentPath.split('/').pop();
+        const ui = this.getUi();
         let created = false;
         const traverseAndAdd = (node) => {
             if (created) return;
             if (node.name === parentName) {
                 const newId = `local-${Date.now()}`;
+                const defaultContent = ui.defaultLessonContent || "New content.";
+                const defaultHello = ui.defaultHello || "New Lesson";
+                
                 const newNode = {
                     id: newId, parentId: node.id, name: name,
                     type: type === 'folder' ? 'branch' : 'leaf',
                     icon: type === 'folder' ? '📁' : '📄',
                     path: `${node.path} / ${name}`, order: "99",
                     children: type === 'folder' ? [] : undefined,
-                    content: type === 'folder' ? undefined : `# ${name}\n\nNew content.`
+                    content: type === 'folder' ? undefined : `# ${name}\n\n${defaultContent}`
                 };
                 if (!node.children) node.children = [];
                 node.children.push(newNode);

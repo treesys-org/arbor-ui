@@ -114,16 +114,17 @@ class ArborConstructionPanel extends HTMLElement {
     handleSave() {
         if (fileSystem.isLocal) {
             store.userStore.persist();
-            store.notify("✅ Local Garden Saved");
+            store.notify("✅ " + (store.ui.conLocalSaved || "Local Garden Saved"));
         } else {
-            store.notify("ℹ️ Remote changes are saved per-file.");
+            store.notify("ℹ️ " + (store.ui.conRemoteSaved || "Remote changes are saved per-file."));
         }
     }
 
     async handleRevert() {
-        if (await store.confirm("Revert to last saved state? Unsaved changes will be lost.", "Revert Changes")) {
+        const ui = store.ui;
+        if (await store.confirm(ui.conRevertConfirm || "Revert to last saved state? Unsaved changes will be lost.", ui.conRevertTitle || "Revert Changes")) {
             store.loadData(store.value.activeSource, store.value.lang, true);
-            store.notify("↩️ Changes Reverted");
+            store.notify("↩️ " + (ui.conReverted || "Changes Reverted"));
         }
     }
 
@@ -148,6 +149,7 @@ class ArborConstructionPanel extends HTMLElement {
         const repoName = activeSource?.name || "Local Garden";
         const isLocal = fileSystem.isLocal;
         const isContributor = isLocal || !!githubUser;
+        const ui = store.ui;
 
         const renderKey = JSON.stringify({
             activePopover, loading, isLoggingIn, loginError,
@@ -165,13 +167,13 @@ class ArborConstructionPanel extends HTMLElement {
         if (activePopover === 'login' && !githubUser) {
             popoverSlot.innerHTML = `
                 <div class="bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl p-4 w-80 animate-in slide-in-from-bottom-4 fade-in origin-bottom">
-                    <h4 class="text-xs font-black text-white uppercase tracking-widest mb-3">Connect Repository</h4>
-                    <input id="inp-gh-token" type="password" placeholder="GitHub Personal Token..." class="w-full bg-black/50 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white mb-2 focus:border-blue-500 outline-none">
+                    <h4 class="text-xs font-black text-white uppercase tracking-widest mb-3">${ui.conConnectRepo || "Connect Repository"}</h4>
+                    <input id="inp-gh-token" type="password" placeholder="${ui.conTokenPlaceholder || "GitHub Personal Token..."}" class="w-full bg-black/50 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white mb-2 focus:border-blue-500 outline-none">
                     ${loginError ? `<p class="text-xs text-red-400 mb-2 font-bold">${loginError}</p>` : ''}
                     <button id="btn-login-action" class="w-full py-2 bg-white text-black font-bold rounded-lg text-xs hover:bg-slate-200">
-                        ${isLoggingIn ? 'Connecting...' : 'Connect'}
+                        ${isLoggingIn ? (ui.syncing || 'Connecting...') : (ui.conLogin || 'Connect')}
                     </button>
-                    <p class="text-[9px] text-slate-500 mt-2">Requires 'repo' scope token.</p>
+                    <p class="text-[9px] text-slate-500 mt-2">${ui.conTokenScope || "Requires 'repo' scope token."}</p>
                 </div>`;
                 
             const btnLoginAction = popoverSlot.querySelector('#btn-login-action');
@@ -199,23 +201,23 @@ class ArborConstructionPanel extends HTMLElement {
 
         if (isContributor) {
             html += `
-                <button id="btn-save-all" class="${itemBaseClass} ${itemActionClass}" title="Save Changes"><span>💾</span></button>
-                <button id="btn-revert" class="${itemBaseClass} ${itemActionClass}" title="Undo / Revert"><span>↩️</span></button>
+                <button id="btn-save-all" class="${itemBaseClass} ${itemActionClass}" title="${ui.conSaveTooltip || "Save Changes"}"><span>💾</span></button>
+                <button id="btn-revert" class="${itemBaseClass} ${itemActionClass}" title="${ui.conRevertTooltip || "Undo / Revert"}"><span>↩️</span></button>
                 <div class="w-px h-6 bg-white/10 mx-1"></div>
                 
-                <button id="btn-architect" class="${itemBaseClass} ${itemSpecialClass}" title="AI Architect">
+                <button id="btn-architect" class="${itemBaseClass} ${itemSpecialClass}" title="${ui.conAiTooltip || "AI Architect"}">
                     <span class="relative">🦉<span class="absolute -top-2 -right-2 text-[10px] transform rotate-12 drop-shadow-md">⛑️</span></span>
                 </button>
                 
-                <button id="btn-governance" class="${itemBaseClass} ${itemBlueClass}" title="Governance"><span>🏛️</span></button>
+                <button id="btn-governance" class="${itemBaseClass} ${itemBlueClass}" title="${ui.conGovTooltip || "Governance"}"><span>🏛️</span></button>
             `;
         }
 
         if (!isLocal) {
             if (!githubUser) {
-                html += `<button id="btn-login-toggle" class="${btnLoginClass}"><span>Login</span></button>`;
+                html += `<button id="btn-login-toggle" class="${btnLoginClass}"><span>${ui.conLoginAction || "Login"}</span></button>`;
             } else {
-                html += `<button id="btn-logout" class="${btnLogoutClass}"><span>Logout</span></button>`;
+                html += `<button id="btn-logout" class="${btnLogoutClass}"><span>${ui.conLogout || "Logout"}</span></button>`;
             }
         }
 
