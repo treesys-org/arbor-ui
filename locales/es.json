@@ -1,3 +1,4 @@
+
 {
   "appTitle": "ARBOR",
   "appSubtitle": "Impulsado por Treesys",
@@ -12,7 +13,7 @@
   "tagExam": "EXAM",
   "tutorialTitle": "Guía de Arbor",
   "tutorialSkip": "Saltar Intro",
-  "tutorialNext": "Siguiente (Aceptar)",
+  "tutorialNext": "Siguiente",
   "tutorialPrev": "Anterior",
   "tutorialFinish": "Entrar al Jardín",
   "welcomeSteps": [
@@ -379,6 +380,7 @@
   "gameAiRequiredTitle": "Interfaz Neural Requerida",
   "gameAiRequiredDesc": "Este juego requiere una conexión de Inteligencia Artificial activa para generar niveles únicos basados en tus lecciones.",
   "gameAiConnect": "Activar y Jugar",
+  "gameDisclaimer": "Arbor actúa puramente como un cliente de visualización. No asumimos responsabilidad por el contenido generado por proveedores de IA de terceros.",
   "tabGlobal": "Bosque Global",
   "tabGarden": "Mi Jardín",
   "plantTree": "Plantar Árbol",

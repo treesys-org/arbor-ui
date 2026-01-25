@@ -11,12 +11,6 @@
   <!-- Local CSS (Premium Engine - Replaces Tailwind) -->
   <link rel="stylesheet" href="./src/style.css">
   
-  <!-- CRITICAL POLYFILLS FOR BROWSER COMPATIBILITY -->
-  <script>
-    // Fixes 'process is not defined' error common with node libraries like Octokit in browser
-    window.process = { env: { NODE_ENV: 'production' } };
-  </script>
-
   <style>
     /* NATIVE APP LOCK: Fixes the viewport to prevent swaying/rubber-banding */
     html {
