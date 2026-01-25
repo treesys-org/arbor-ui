@@ -625,7 +625,7 @@ class ArborGraph extends HTMLElement {
             body.removeAttribute('stroke-dasharray');
             if (d.type === 'root') fill = '#8D6E63';
             else if (d.type === 'leaf') fill = isCompleted ? '#22c55e' : '#a855f7';
-            else if (d.type === 'exam') fill = '#ef4444';
+            else if (d.type === 'exam') fill = isCompleted ? '#22c55e' : '#ef4444';
             
             if (d.isEmpty) fill = '#cbd5e1'; // Empty state
             if (isHarvested) { fill = '#D97706'; filter = 'url(#leaf-glow)'; }
@@ -637,6 +637,7 @@ class ArborGraph extends HTMLElement {
 
         // -- Icon --
         icon.textContent = d.icon || '📄';
+        if (!isConstruct && d.type === 'exam' && isCompleted) icon.textContent = '✔';
         if (isConstruct && d.type === 'root') icon.textContent = '🏗️';
         if (isConstruct && d.type === 'branch' && !d.icon) icon.textContent = '📁';
         

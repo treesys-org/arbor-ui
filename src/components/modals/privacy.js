@@ -57,9 +57,7 @@ class ArborModalPrivacy extends HTMLElement {
                         
                         <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800 mb-6 not-prose">
                             <p class="text-xs text-blue-800 dark:text-blue-300 font-bold leading-relaxed">
-                                🇩🇪 <strong>Hinweis für Nutzer in Deutschland:</strong><br>
-                                Diese Anwendung speichert standardmäßig alle Daten lokal in Ihrem Browser (LocalStorage). 
-                                Eine Datenübertragung an Dritte (z.B. Puter.com) findet NUR statt, wenn Sie sich explizit verbinden.
+                                <strong>Data Sovereignty:</strong> This application runs "Local-First". Your educational progress is stored in your browser's LocalStorage. No data is sent to our servers because we do not have servers.
                             </p>
                         </div>
 
@@ -80,12 +78,13 @@ class ArborModalPrivacy extends HTMLElement {
 
                         <hr class="my-6 border-slate-200 dark:border-slate-700">
                         
-                        <h3>Technical Services (Processors)</h3>
+                        <h3>Technical Stack (Transparency)</h3>
                         <ul class="text-xs font-mono bg-slate-100 dark:bg-slate-800 p-4 rounded-lg list-none space-y-2">
-                            <li><strong>Hosting:</strong> GitHub Pages (USA)</li>
-                            <li><strong>AI & Sync (Optional):</strong> Puter.com (USA)</li>
-                            <li><strong>Fonts:</strong> System Fonts (Local / Privacy-Safe)</li>
-                            <li><strong>Styles:</strong> TailwindCSS (via CDN)</li>
+                            <li><strong>Hosting:</strong> GitHub Pages (Static Hosting)</li>
+                            <li><strong>Cloud/AI (Optional):</strong> Puter.com (USA - Only if connected)</li>
+                            <li><strong>Fonts:</strong> System Fonts (Privacy-Safe / No Google Fonts)</li>
+                            <li><strong>Visualization:</strong> Custom Engine (No external trackers)</li>
+                            <li><strong>Styling:</strong> Internal CSS Engine (No external CDNs)</li>
                         </ul>
 
                     </div>
