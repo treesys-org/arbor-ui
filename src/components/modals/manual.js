@@ -182,7 +182,7 @@ class ArborModalManual extends HTMLElement {
 
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 backdrop-blur-md p-4 animate-in fade-in">
-            <div class="bg-slate-50 dark:bg-slate-900 rounded-[24px] shadow-2xl w-full max-w-5xl relative overflow-hidden flex flex-col md:flex-row border border-slate-200 dark:border-slate-800 transition-all duration-300 h-[650px] max-h-[90vh]">
+            <div class="bg-slate-50 dark:bg-slate-900 rounded-[24px] shadow-2xl w-full max-w-5xl relative overflow-hidden flex flex-col md:flex-row border border-slate-200 dark:border-slate-800 transition-all duration-300" style="height: 600px; max-height: 85vh;">
                 
                 <!-- Close Button -->
                 <button class="btn-close absolute top-4 right-4 z-50 w-10 h-10 flex items-center justify-center rounded-full bg-white/80 dark:bg-slate-800/80 hover:bg-red-50 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 transition-colors backdrop-blur-sm shadow-sm font-bold text-lg">✕</button>

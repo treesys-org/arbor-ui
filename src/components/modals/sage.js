@@ -331,7 +331,8 @@ class ArborSage extends HTMLElement {
         }
 
         this.innerHTML = `
-            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full relative overflow-hidden flex flex-col animate-in zoom-in duration-200 border border-slate-200 dark:border-slate-800 max-h-[90vh]">
+            <!-- Increased width to max-w-lg -->
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full relative overflow-hidden flex flex-col animate-in zoom-in duration-200 border border-slate-200 dark:border-slate-800 max-h-[90vh]">
                 <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950 shrink-0">
                     <div class="flex items-center gap-3">
                         <span class="text-3xl">⚙️</span>

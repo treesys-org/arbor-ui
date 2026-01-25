@@ -1,6 +1,4 @@
 
-
-
 import { AVAILABLE_LANGUAGES } from './i18n.js';
 import { github } from './services/github.js';
 import { aiService } from './services/ai.js';
@@ -8,89 +6,84 @@ import { puterSync } from './services/puter-sync.js';
 import { UserStore } from './stores/user-store.js';
 import { SourceManager } from './stores/source-manager.js';
 import { TreeUtils } from './utils/tree-utils.js';
-import { storageManager } from './stores/storage-manager.js'; // NEW
+import { storageManager } from './stores/storage-manager.js';
 import { fileSystem } from './services/filesystem.js';
+
+// --- NEW IMPORTS (Splitting Logic) ---
+import { DataProcessor } from './utils/data-processor.js';
+import { GraphLogic } from './stores/graph-logic.js';
 
 class Store extends EventTarget {
     constructor() {
         super();
         
-        // --- NEW LOGIC FOR INITIAL LANGUAGE ---
         let initialLang = localStorage.getItem('arbor-lang');
         if (!initialLang) {
-            // 'en-US' -> 'en' -> 'EN'
             const browserLang = navigator.language.split('-')[0].toUpperCase();
             const supportedLang = AVAILABLE_LANGUAGES.find(l => l.code === browserLang);
-            initialLang = supportedLang ? supportedLang.code : 'EN'; // Default to English
+            initialLang = supportedLang ? supportedLang.code : 'EN';
         }
         
-        // Internal Promise resolvers for Dialogs
         this._dialogResolver = null;
 
-        // 2. Initial State (Moved up to fix initialization race condition)
         this.state = {
             theme: localStorage.getItem('arbor-theme') || 'light',
-            lang: initialLang, // USE THE DETECTED LANGUAGE
+            lang: initialLang,
             i18nData: null, 
             
-            // Source & Data State (Managed via SourceManager)
             communitySources: [], 
             activeSource: null,
             availableReleases: [],
             manifestUrlAttempted: null, 
-            pendingUntrustedSource: null, // NEW: For URL param warning
+            pendingUntrustedSource: null,
             
-            data: null, // Current Language Tree
-            rawGraphData: null, // Full JSON
+            data: null, 
+            rawGraphData: null,
             
             searchCache: {}, 
             path: [], 
             
-            // AI State
             ai: { status: 'idle', progress: '', messages: [] },
             
-            // Cloud Sync State
             puterUser: null,
             isSyncing: false,
             lastSyncTime: null,
 
-            // UI State
             selectedNode: null, 
             previewNode: null,
             loading: true,
             error: null,
             lastErrorMessage: null,
             viewMode: 'explore', 
-            constructionMode: false, // NEW: Construction Mode
+            constructionMode: false,
             modal: null, 
             lastActionMessage: null,
             githubUser: null
         };
 
-        // 1. User Persistence Sub-Store
+        // 1. Sub-Stores & Managers
         this.userStore = new UserStore(
             () => this.ui,
             (data) => this.handleAutoSync(data) 
         );
 
-        // 3. Source Manager (Networking & Manifests)
         this.sourceManager = new SourceManager(
             (updates) => this.update(updates),
             () => this.ui
         );
         
-        // 4. Initialization
+        // Graph Logic Delegator
+        this.graphLogic = new GraphLogic(this);
+        
+        // 2. Initialization
         this.initialize().then(async () => {
              const streakMsg = this.userStore.checkStreak();
              if (streakMsg) this.notify(streakMsg);
              
-             // Initial Source Load
              const source = await this.sourceManager.init();
-             // IMPORTANT: init() might return null if it triggers a warning modal
              if (source) {
                  this.loadData(source);
              } else {
-                 // If init returns null, it means a modal is up, so we're not "loading"
                  if (!this.state.modal) {
                      this.update({ loading: false });
                  }
@@ -113,7 +106,6 @@ class Store extends EventTarget {
         if (pUser) this.update({ puterUser: pUser });
 
         const welcomeSeen = localStorage.getItem('arbor-welcome-seen');
-        // Only show welcome if no other modal is pending (like the security warning)
         if (!welcomeSeen && !this.state.modal) {
             setTimeout(() => this.setModal('welcome'), 50); 
         }
@@ -126,20 +118,11 @@ class Store extends EventTarget {
             return new Proxy({}, {
                 get: (target, prop) => {
                     if (prop === 'welcomeSteps') return Array(5).fill({ title: 'Loading...', text: '...', icon: '...' });
-                    
-                    // Smart Fallback to prevent ugly keys like "navAbout" from appearing
                     const key = String(prop);
-                    
-                    // 1. Handle common specific keys
                     if (key === 'loading') return 'Loading...';
                     if (key === 'appTitle') return 'Arbor';
-                    
-                    // 2. Strip "nav" prefix (e.g. navAbout -> About)
                     let clean = key.replace(/^nav/, '');
-                    
-                    // 3. Add space before capital letters (e.g. AboutUs -> About Us)
                     clean = clean.replace(/([A-Z])/g, ' $1').trim();
-                    
                     return clean;
                 }
             });
@@ -159,8 +142,6 @@ class Store extends EventTarget {
     get availableLanguages() { return AVAILABLE_LANGUAGES; }
     get currentLangInfo() { return AVAILABLE_LANGUAGES.find(l => l.code === this.state.lang); }
     get dailyXpGoal() { return this.userStore.dailyXpGoal; }
-    
-    // EXPOSE STORAGE MANAGER
     get storage() { return storageManager; }
 
     // --- STATE MANAGEMENT ---
@@ -188,14 +169,12 @@ class Store extends EventTarget {
         }
     }
 
-    // --- DIALOG SYSTEM (Replaces Alert/Confirm/Prompt) ---
-    // Returns a Promise that resolves when the user interacts with the dialog
     showDialog({ type = 'alert', title = '', body = '', placeholder = '', confirmText = 'OK', cancelText = 'Cancel', danger = false }) {
         return new Promise((resolve) => {
             this._dialogResolver = resolve;
             this.setModal({
                 type: 'dialog',
-                dialogType: type, // 'alert', 'confirm', 'prompt'
+                dialogType: type, 
                 title,
                 body,
                 placeholder,
@@ -207,7 +186,6 @@ class Store extends EventTarget {
     }
 
     closeDialog(result) {
-        // Resolve the promise waiting in showDialog
         if (this._dialogResolver) {
             this._dialogResolver(result);
             this._dialogResolver = null;
@@ -215,18 +193,9 @@ class Store extends EventTarget {
         this.setModal(null);
     }
 
-    // Shorthands
-    async alert(body, title = 'Notice') {
-        return this.showDialog({ type: 'alert', title, body });
-    }
-
-    async confirm(body, title = 'Confirm', danger = false) {
-        return this.showDialog({ type: 'confirm', title, body, danger });
-    }
-
-    async prompt(body, placeholder = '', title = 'Input') {
-        return this.showDialog({ type: 'prompt', title, body, placeholder });
-    }
+    async alert(body, title = 'Notice') { return this.showDialog({ type: 'alert', title, body }); }
+    async confirm(body, title = 'Confirm', danger = false) { return this.showDialog({ type: 'confirm', title, body, danger }); }
+    async prompt(body, placeholder = '', title = 'Input') { return this.showDialog({ type: 'prompt', title, body, placeholder }); }
 
     // --- SOURCE & DATA DELEGATION ---
 
@@ -234,7 +203,8 @@ class Store extends EventTarget {
         try {
             const { json, finalSource } = await this.sourceManager.loadData(source, this.state.lang, forceRefresh, this.state.rawGraphData);
             if (json) {
-                this.processLoadedData(json, finalSource);
+                // Delegate massive data processing to utility
+                DataProcessor.process(this, json, finalSource);
             }
         } catch(e) {
             this.update({ loading: false, error: e.message });
@@ -255,128 +225,9 @@ class Store extends EventTarget {
         this.loadData(defaultSource);
     }
 
-    processLoadedData(json, finalSource) {
-        try {
-            // Fallback for lang
-            if (!this.state.i18nData) this.loadLanguage(this.state.lang);
-
-            let langData = null;
-            if (json && json.languages) {
-                langData = json.languages[this.state.lang];
-                if (!langData) {
-                    const availableLangs = Object.keys(json.languages);
-                    if (availableLangs.length > 0) langData = json.languages[availableLangs[0]];
-                }
-            }
-
-            if (!langData) {
-                this.update({ loading: false, error: this.ui.errorNoContent || "No valid content found in this tree." });
-                return;
-            }
-            
-            // Post-processing: Exam Prefixes & Empty State Detection
-            const examPrefix = this.ui.examLabelPrefix || "Exam: ";
-            
-            const processNode = (node) => {
-                // 1. Exam Prefix
-                if (node.type === 'exam' && !node.name.startsWith(examPrefix)) {
-                    node.name = examPrefix + node.name;
-                }
-                
-                // 2. Empty State Detection (Fix for immediate visual feedback)
-                // If it is a container (branch/root), has no children, and is not waiting for network (unloaded)
-                if ((node.type === 'branch' || node.type === 'root') && 
-                    (!node.children || node.children.length === 0) && 
-                    !node.hasUnloadedChildren) {
-                    node.isEmpty = true;
-                }
-
-                if (node.children) node.children.forEach(processNode);
-            };
-            
-            processNode(langData);
-            
-            // SMART HYDRATION: Expand completed branches into leaves in memory
-            this.hydrateCompletionState(langData);
-
-            this.update({ 
-                activeSource: finalSource,
-                data: langData, 
-                rawGraphData: json,
-                loading: false, 
-                path: [langData], 
-                lastActionMessage: this.ui.sourceSwitchSuccess 
-            });
-            localStorage.setItem('arbor-active-source-id', finalSource.id);
-            localStorage.setItem('arbor-active-source-meta', JSON.stringify(finalSource));
-            
-            this.dispatchEvent(new CustomEvent('graph-update'));
-            setTimeout(() => this.dispatchEvent(new CustomEvent('reset-zoom')), 100);
-
-            setTimeout(() => this.update({ lastActionMessage: null }), 3000);
-            
-            // --- README MODAL TRIGGER ---
-            // If the user hasn't explicitly skipped the readme for this source, show it.
-            if (this.state.activeSource && !this.state.modal) {
-                const sourceId = this.state.activeSource.id.split('-')[0]; // Use base ID, ignoring version suffix for preferences
-                const skipKey = `arbor-skip-readme-${sourceId}`;
-                
-                // We show it if it's NOT skipped.
-                if (localStorage.getItem(skipKey) !== 'true') {
-                    // Small delay to allow UI to settle
-                    setTimeout(() => {
-                        // Only show if no other modal (like security warning) hijacked focus
-                        if (!this.state.modal) this.setModal('readme');
-                    }, 500);
-                }
-            }
-
-        } catch (e) {
-            console.error("Data Processing Error", e);
-            this.update({ loading: false, error: this.ui.errorDataProcess || "Failed to process data structure." });
-        }
-    }
-    
-    // --- SMART HYDRATION (THE COMPRESSION HACK) ---
-    // If a branch ID is in `completedNodes`, automatically add all its children to the Set in memory.
-    // This allows us to store just 1 ID in localStorage for an entire finished course.
-    hydrateCompletionState(rootNode) {
-        const completedSet = this.userStore.state.completedNodes;
-        let hydratedCount = 0;
-
-        const traverse = (node) => {
-            // If parent is complete, ensure children are complete in memory
-            if (completedSet.has(node.id)) {
-                // If it has loaded children, mark them
-                if (node.children) {
-                    node.children.forEach(child => {
-                        if (!completedSet.has(child.id)) {
-                            completedSet.add(child.id);
-                            hydratedCount++;
-                        }
-                        // Recurse down to ensure deep leaves are marked
-                        traverse(child);
-                    });
-                } 
-                // If children are unloaded but we have leafIds metadata
-                else if (node.leafIds && Array.isArray(node.leafIds)) {
-                    node.leafIds.forEach(id => {
-                        if (!completedSet.has(id)) {
-                            completedSet.add(id);
-                            hydratedCount++;
-                        }
-                    });
-                }
-            } else {
-                // Continue searching down
-                if (node.children) node.children.forEach(traverse);
-            }
-        };
-        
-        traverse(rootNode);
-        if (hydratedCount > 0) {
-            console.log(`Arbor Hydration: Expanded ${hydratedCount} implicit completions from compressed save.`);
-        }
+    // Keep this method as a bridge for saving files (filesystem needs to call it to update state)
+    processLoadedData(json) {
+        DataProcessor.process(this, json, this.state.activeSource);
     }
 
     requestAddCommunitySource(url) {
@@ -415,19 +266,14 @@ class Store extends EventTarget {
 
     async setLanguage(lang) { 
         if (this.state.lang === lang) return;
-
         const isWelcomeOpen = this.state.modal === 'welcome' || this.state.modal === 'tutorial';
-
         this.update({ loading: true, error: null });
         try {
             await this.loadLanguage(lang); 
             this.update({ lang, searchCache: {} });
             if (this.state.activeSource) await this.loadData(this.state.activeSource, false); 
             else this.update({ loading: false });
-            
-            if (!isWelcomeOpen) {
-                this.goHome();
-            }
+            if (!isWelcomeOpen) this.goHome();
         } catch (e) {
             this.update({ loading: false, error: `Language error: ${e.message}` });
             if (lang !== 'EN') this.setLanguage('EN');
@@ -438,240 +284,23 @@ class Store extends EventTarget {
     toggleTheme() { this.update({ theme: this.state.theme === 'light' ? 'dark' : 'light' }); }
     setModal(modal) { this.update({ modal }); }
     
-    toggleConstructionMode() {
-        this.update({ constructionMode: !this.state.constructionMode });
-    }
+    toggleConstructionMode() { this.update({ constructionMode: !this.state.constructionMode }); }
     
     setViewMode(viewMode) { 
         this.update({ viewMode });
         if(viewMode === 'certificates') this.update({ modal: null });
     }
 
-    // --- GRAPH & NAVIGATION LOGIC ---
+    // --- GRAPH & NAVIGATION DELEGATION ---
+    // All heavy graph methods moved to GraphLogic module
 
-    findNode(id) { return TreeUtils.findNode(id, this.state.data); }
-    
-    async navigateTo(nodeId, nodeData = null) {
-        if (!nodeData) {
-            const inTree = this.findNode(nodeId);
-            if (inTree) nodeData = inTree;
-            else return;
-        }
-
-        const pathStr = nodeData.path || nodeData.p;
-        if (!pathStr) return;
-
-        const pathNames = pathStr.split(' / ');
-        let currentNode = this.state.data;
-        
-        for (let i = 1; i < pathNames.length; i++) {
-            const ancestorName = pathNames[i];
-            
-            if (currentNode.hasUnloadedChildren) await this.loadNodeChildren(currentNode);
-
-            let nextNode = currentNode.children?.find(child => child.name === ancestorName);
-
-            if (!nextNode && currentNode.children) {
-                const cleanTarget = TreeUtils.cleanString(ancestorName).replace(/\s+/g, '');
-                nextNode = currentNode.children.find(child => {
-                     const cleanChild = TreeUtils.cleanString(child.name).replace(/\s+/g, '');
-                     return cleanChild === cleanTarget || child.name.includes(ancestorName);
-                });
-            }
-
-            if (!nextNode) return;
-
-            if (nextNode.type === 'branch' || nextNode.type === 'root') nextNode.expanded = true;
-            currentNode = nextNode;
-        }
-
-        this.dispatchEvent(new CustomEvent('graph-update'));
-        setTimeout(() => {
-            this.toggleNode(nodeId);
-            this.dispatchEvent(new CustomEvent('focus-node', { detail: nodeId }));
-        }, 100);
-    }
-
-    async navigateToNextLeaf() {
-        if (!this.state.selectedNode || !this.state.data) return;
-        const leaves = [];
-        const traverse = (node) => {
-            if (node.type === 'leaf' || node.type === 'exam') leaves.push(node);
-            if (node.children) node.children.forEach(traverse);
-        };
-        traverse(this.state.data);
-        const currentIndex = leaves.findIndex(n => n.id === this.state.selectedNode.id);
-        if (currentIndex !== -1 && currentIndex < leaves.length - 1) {
-            const nextNode = leaves[currentIndex + 1];
-            if (!nextNode.content && nextNode.contentPath) await this.loadNodeContent(nextNode);
-            await this.navigateTo(nextNode.id, nextNode);
-            this.update({ selectedNode: nextNode, previewNode: null });
-        } else {
-            this.closeContent();
-        }
-    }
-
-    async toggleNode(nodeId) {
-        const node = this.findNode(nodeId);
-        if (!node) return;
-        
-        // Prevent toggle if in construction mode dragging logic might conflict
-        // (Handled in graph.js via click suppression)
-
-        try {
-            let path = [];
-            let curr = node;
-            while(curr) {
-                path.unshift(curr);
-                curr = curr.parentId ? this.findNode(curr.parentId) : null;
-            }
-            this.update({ path });
-
-            if (!node.expanded) {
-                if (node.parentId) {
-                    const parent = this.findNode(node.parentId);
-                    if (parent && parent.children) {
-                        parent.children.forEach(sibling => {
-                            if (sibling.id !== nodeId && sibling.expanded) this.collapseRecursively(sibling);
-                        });
-                    }
-                }
-            }
-
-            if (node.type === 'leaf' || node.type === 'exam') {
-                this.update({ previewNode: node, selectedNode: null });
-            } else {
-                this.update({ selectedNode: null, previewNode: null });
-                if (!node.expanded) {
-                    if (node.hasUnloadedChildren) await this.loadNodeChildren(node);
-                    if (!node.children || node.children.length === 0) {
-                        node.isEmpty = true; // Mark as empty state
-                        this.setModal({ type: 'emptyModule', node: node });
-                    }
-                    node.expanded = true;
-                } else {
-                    this.collapseRecursively(node);
-                }
-            }
-            this.dispatchEvent(new CustomEvent('graph-update')); 
-
-        } catch (e) {
-            console.error(e);
-            this.update({ lastErrorMessage: "Error interacting with node: " + e.message });
-            setTimeout(() => this.update({ lastErrorMessage: null }), 5000);
-        }
-    }
-
-    collapseRecursively(node) {
-        node.expanded = false;
-        if (node.children) node.children.forEach(c => this.collapseRecursively(c));
-    }
-
-    async loadNodeChildren(node) {
-        if (!node.apiPath) return;
-        node.status = 'loading';
-        this.dispatchEvent(new CustomEvent('graph-update'));
-        
-        try {
-            const sourceUrl = this.state.activeSource.url;
-            const baseDir = sourceUrl.substring(0, sourceUrl.lastIndexOf('/') + 1);
-            const url = `${baseDir}nodes/${node.apiPath}.json`;
-            
-            const res = await fetch(url);
-            if (res.ok) {
-                let text = await res.text();
-                if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
-                const children = JSON.parse(text.trim());
-                
-                if (children.length === 0) {
-                    node.children = [];
-                    node.isEmpty = true; // Mark as empty state
-                    this.setModal({ type: 'emptyModule', node: node });
-                } else {
-                    children.forEach(child => child.parentId = node.id);
-                    node.children = children;
-                    const examPrefix = this.ui.examLabelPrefix || "Exam: ";
-                    if (examPrefix) {
-                        node.children.forEach(child => {
-                            if (child.type === 'exam' && !child.name.startsWith(examPrefix)) child.name = examPrefix + child.name;
-                        });
-                    }
-                }
-                node.hasUnloadedChildren = false;
-                
-                // HYDRATION CHECK: Since we just loaded children, check if they should be implicitly marked
-                this.hydrateCompletionState(node);
-                
-            } else {
-                throw new Error(`Failed to load children: ${node.apiPath}.json`);
-            }
-        } catch(e) { 
-            console.error(e);
-            this.update({ lastErrorMessage: e.message });
-        } finally {
-            node.status = 'available';
-            this.dispatchEvent(new CustomEvent('graph-update'));
-        }
-    }
-    
-    async loadNodeContent(node) {
-        if (node.content) return;
-        if (!node.contentPath) return; 
-        
-        this.update({ loading: true }); 
-        
-        try {
-            const sourceUrl = this.state.activeSource.url;
-            const baseDir = sourceUrl.substring(0, sourceUrl.lastIndexOf('/') + 1);
-            const url = `${baseDir}content/${node.contentPath}`;
-            
-            const res = await fetch(url);
-            if(res.ok) {
-                const json = await res.json();
-                node.content = json.content;
-            } else {
-                throw new Error(`Content missing for ${node.name}`);
-            }
-        } catch(e) {
-            console.error("Content fetch failed", e);
-            node.content = "Error loading content. Please check internet connection.";
-        } finally {
-            this.update({ loading: false });
-        }
-    }
-    
-    async moveNode(node, newParentId) {
-        this.update({ loading: true });
-        try {
-            const newParent = this.findNode(newParentId);
-            if(!newParent) throw new Error("Target parent not found");
-            
-            // Calculate new paths
-            // Note: This logic assumes 'node' is the d3 data object or has required fields
-            const oldPath = node.sourcePath;
-            // The fileSystem moveNode expects: (sourcePath, newParentPath)
-            // But we need the parent's sourcePath to construct the new path.
-            
-            const parentPath = newParent.sourcePath;
-            
-            // Call FileSystem
-            await fileSystem.moveNode(oldPath, parentPath);
-            
-            // Refresh
-            // For now, reload the whole tree as structural changes are complex to patch in-memory
-            const source = this.state.activeSource;
-            await this.loadData(source, false);
-            
-            this.notify(this.ui.nodeMoved || "Node moved successfully!");
-            
-        } catch(e) {
-            console.error(e);
-            this.update({ error: (this.ui.moveFailed || "Move failed: ") + e.message });
-            setTimeout(() => this.update({ error: null }), 3000);
-        } finally {
-            this.update({ loading: false });
-        }
-    }
+    findNode(id) { return this.graphLogic.findNode(id); }
+    async navigateTo(nodeId, nodeData = null) { return this.graphLogic.navigateTo(nodeId, nodeData); }
+    async navigateToNextLeaf() { return this.graphLogic.navigateToNextLeaf(); }
+    async toggleNode(nodeId) { return this.graphLogic.toggleNode(nodeId); }
+    async loadNodeChildren(node) { return this.graphLogic.loadNodeChildren(node); }
+    async loadNodeContent(node) { return this.graphLogic.loadNodeContent(node); }
+    async moveNode(node, newParentId) { return this.graphLogic.moveNode(node, newParentId); }
 
     enterLesson() {
         const node = this.state.previewNode;
@@ -727,7 +356,6 @@ class Store extends EventTarget {
     }
 
     async chatWithSage(userText) {
-        // Automatically open modal if it's not open (e.g. called from code)
         if (!this.state.modal || this.state.modal.type !== 'sage') {
             this.setModal({ type: 'sage' });
         }
@@ -753,7 +381,6 @@ class Store extends EventTarget {
         }
     }
 
-    // --- PUTER SYNC ---
     async connectPuter() {
         try {
             const user = await puterSync.signIn();
@@ -837,33 +464,28 @@ class Store extends EventTarget {
         this.checkForModuleCompletion(nodeId);
     }
 
-    // COMPRESSION OPTIMIZATION:
-    // When marking a branch complete, we add the branch ID to the set
-    // BUT we remove all children IDs from the set to save storage space.
-    // The `hydrateCompletionState` function will re-add them in memory upon reload.
     markBranchComplete(branchId) {
         if (!branchId) return;
-        constbranchNode = this.findNode(branchId);
+        const branchNode = this.findNode(branchId);
         
         if (branchNode) {
-            // 1. Mark Parent
+            // 1. Mark the Module (Branch)
             this.userStore.state.completedNodes.add(branchNode.id);
             
-            // 2. Optimization: Remove children from disk storage (Implied Completion)
-            const removeRecursive = (node) => {
-                if (node.id !== branchId) {
-                    this.userStore.state.completedNodes.delete(node.id);
-                }
-                if (node.children) node.children.forEach(removeRecursive);
-            };
-            removeRecursive(branchNode);
-            
-            if (branchNode.leafIds && Array.isArray(branchNode.leafIds)) {
-                branchNode.leafIds.forEach(id => this.userStore.state.completedNodes.delete(id));
+            // 2. Mark all Children (Siblings of the exam)
+            // Explicitly adding them to completedNodes ensures they turn green in graph immediately
+            if (branchNode.children) {
+                branchNode.children.forEach(child => {
+                    this.userStore.state.completedNodes.add(child.id);
+                });
             }
             
-            // 3. Ensure memory state is consistent immediately (Hydrate just this branch)
-            this.hydrateCompletionState(branchNode);
+            // 3. Handle unloaded children if present
+            if (branchNode.leafIds && Array.isArray(branchNode.leafIds)) {
+                branchNode.leafIds.forEach(id => this.userStore.state.completedNodes.add(id));
+            }
+            
+            DataProcessor.hydrateCompletionState(this, branchNode);
         }
         
         this.userStore.persist();
@@ -875,8 +497,6 @@ class Store extends EventTarget {
         const modules = this.getModulesStatus();
         modules.forEach(m => {
             if (m.isComplete) {
-                // If the module is newly complete, mark it explicitly
-                // This triggers the compression logic inside markBranchComplete
                 if (!this.userStore.state.completedNodes.has(m.id)) {
                      this.markBranchComplete(m.id);
                 }
@@ -925,7 +545,6 @@ class Store extends EventTarget {
                 localStorage.setItem('arbor-bookmarks', JSON.stringify(this.state.bookmarks));
             }
             
-            // NEW: Import game data
             if (data.d || data.gameData) {
                 this.userStore.state.gameData = { ...this.userStore.state.gameData, ...(data.d || data.gameData) };
             }
@@ -936,8 +555,7 @@ class Store extends EventTarget {
             this.userStore.state.completedNodes = merged;
             this.userStore.persist();
             
-            // Re-hydrate to ensure UI reflects implicit completions
-            if (this.state.data) this.hydrateCompletionState(this.state.data);
+            if (this.state.data) DataProcessor.hydrateCompletionState(this, this.state.data);
             
             this.update({});
             return true;

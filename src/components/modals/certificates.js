@@ -93,42 +93,30 @@ class ArborModalCertificates extends HTMLElement {
             </div>`;
         }
 
-        // Only use partial update if keys match to prevent flicker on search/filter
-        // But force full re-render if language changed (renderKey difference)
         if (renderKey === this.lastRenderKey) return;
         this.lastRenderKey = renderKey;
 
-        // Preserve structure strategy to prevent flicker, but update texts
         const container = this.querySelector('#certs-list-container');
         const toggleBtn = this.querySelector('#btn-toggle-certs');
         const searchInput = this.querySelector('#inp-cert-search');
         const titleEl = this.querySelector('#modal-title-text');
 
         if (container && toggleBtn && searchInput && titleEl) {
-            // Update Title (Translation)
             titleEl.textContent = ui.navCertificates || "Certificates";
-            
-            // Update Toggle Button
             toggleBtn.textContent = toggleBtnText;
             toggleBtn.className = `px-4 py-2 rounded-xl ${toggleBtnClass} font-bold text-xs whitespace-nowrap transition-colors shadow-sm`;
-            
-            // Update List
             container.innerHTML = listHtml;
-            
-            // Update Search Placeholder
             searchInput.placeholder = ui.searchCert || "Search...";
             
-            // Rebind
             this.querySelectorAll('.btn-view-cert').forEach(b => {
                 b.onclick = (e) => store.setModal({ type: 'certificate', moduleId: e.currentTarget.dataset.id });
             });
             return;
         }
 
-        // Full Render (First time) - INCREASED WIDTH HERE (max-w-6xl)
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
-            <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl max-w-6xl w-full relative overflow-hidden flex flex-col h-[85vh] border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
+            <div class="bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl max-w-6xl w-full relative overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800 cursor-auto" style="height: 700px; max-height: 90vh;">
                 <div class="p-6 md:p-8 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex flex-col gap-6 shrink-0">
                     <div class="flex justify-between items-center">
                         <div class="flex items-center gap-4">
@@ -143,7 +131,10 @@ class ArborModalCertificates extends HTMLElement {
 
                     <div class="flex flex-col md:flex-row gap-3">
                         <div class="relative flex-1">
-                            <span class="absolute left-4 top-3 text-slate-400 text-sm">🔍</span>
+                            <!-- Robust Flex Container for Icon -->
+                            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                <span class="text-slate-400 text-sm">🔍</span>
+                            </div>
                             <input id="inp-cert-search" type="text" placeholder="${ui.searchCert || "Search..."}" 
                                 class="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 pl-10 pr-4 text-sm font-bold text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-sky-500 shadow-sm"
                                 value="${this.state.searchQuery}">
@@ -154,7 +145,7 @@ class ArborModalCertificates extends HTMLElement {
                     </div>
                 </div>
                 
-                <div id="certs-list-container" class="p-6 md:p-8 flex-1 overflow-y-auto bg-slate-50/50 dark:bg-slate-900/50">
+                <div id="certs-list-container" class="p-6 md:p-8 flex-1 overflow-y-auto bg-slate-50/50 dark:bg-slate-900/50 min-h-0">
                     ${listHtml}
                 </div>
             </div>
@@ -173,12 +164,10 @@ class ArborModalCertificates extends HTMLElement {
                 this.state.searchQuery = e.target.value;
                 this.render();
                 
-                // Refocus after render (if we did a partial update, this keeps focus, if full, we need to restore)
                 setTimeout(() => {
                     const el = this.querySelector('#inp-cert-search');
                     if(el) {
                          el.focus();
-                         // Only set selection if value is same length (avoids jumping cursor if logic changed)
                          if (el.value.length === this.state.searchQuery.length) {
                              el.selectionStart = el.selectionEnd = el.value.length;
                          }

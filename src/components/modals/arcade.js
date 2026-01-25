@@ -86,9 +86,10 @@ class ArborModalArcade extends HTMLElement {
     renderSkeleton() {
         const ui = store.ui;
         
+        // INCREASED WIDTH to max-w-6xl and height to 700px
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
-            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-5xl w-full relative overflow-hidden flex flex-col h-[85vh] max-h-[90vh] border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-6xl w-full relative overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800 cursor-auto" style="height: 700px; max-height: 90vh;">
                 <button class="btn-close absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 z-20 transition-colors">✕</button>
 
                 <div class="p-6 h-full flex flex-col relative">
@@ -119,7 +120,7 @@ class ArborModalArcade extends HTMLElement {
                     </div>
 
                     <!-- Content Area -->
-                    <div id="modal-content" class="flex-1 overflow-y-auto custom-scrollbar p-1 py-4 flex flex-col">
+                    <div id="modal-content" class="flex-1 overflow-y-auto custom-scrollbar p-1 py-4 flex flex-col min-h-0">
                         <!-- Dynamic -->
                     </div>
                 </div>

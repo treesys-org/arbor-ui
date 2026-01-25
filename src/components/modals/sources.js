@@ -1,5 +1,4 @@
 
-
 import { store } from '../../store.js';
 
 class ArborModalSources extends HTMLElement {
@@ -39,10 +38,10 @@ class ArborModalSources extends HTMLElement {
     renderSkeleton() {
         const ui = store.ui;
         
-        // Increased to max-w-4xl and h-[85vh] for better visibility without scrolling
+        // Increased to max-w-5xl and height 700px
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
-            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-4xl w-full relative overflow-hidden flex flex-col h-[85vh] max-h-[900px] border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-5xl w-full relative overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800 cursor-auto" style="height: 700px; max-height: 90vh;">
                 <button class="btn-close absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 z-20 transition-colors">✕</button>
 
                 <div class="p-6 md:p-8 h-full flex flex-col relative">
@@ -70,7 +69,7 @@ class ArborModalSources extends HTMLElement {
                     </div>
 
                     <!-- Scrollable Content -->
-                    <div id="tab-content" class="flex-1 overflow-y-auto custom-scrollbar pr-1 pb-4">
+                    <div id="tab-content" class="flex-1 overflow-y-auto custom-scrollbar pr-1 pb-4 min-h-0">
                         <!-- Dynamic Content Injected Here -->
                     </div>
                 </div>
@@ -176,10 +175,10 @@ class ArborModalSources extends HTMLElement {
         const otherSources = (state.communitySources || []).filter(s => s.id !== activeSource.id);
 
         return `
-            <div class="space-y-8 pt-2">
-                <!-- ACTIVE TREE CARD -->
+            <div class="pt-2">
+                <!-- ACTIVE TREE CARD - Enforce Bottom Margin to prevent Overlap -->
                 ${!isLocalActive ? `
-                <div class="bg-slate-50 dark:bg-slate-950/50 p-6 rounded-2xl border-2 border-purple-500/30 relative overflow-hidden shadow-sm">
+                <div class="bg-slate-50 dark:bg-slate-950/50 p-6 rounded-2xl border-2 border-purple-500/30 relative overflow-hidden shadow-sm mb-8 block">
                     <div class="absolute top-0 right-0 bg-purple-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl uppercase tracking-widest shadow-sm">
                         ${ui.sourceActive}
                     </div>
@@ -192,7 +191,10 @@ class ArborModalSources extends HTMLElement {
                         <div class="flex-1">
                             <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1.5">Version</label>
                             <div class="relative">
-                                <select id="version-select" class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-purple-500 appearance-none transition-shadow hover:shadow-sm cursor-pointer">
+                                <!-- Enforced appearance-none via style to guarantee hiding native arrow -->
+                                <select id="version-select" 
+                                    class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-purple-500 appearance-none transition-shadow hover:shadow-sm cursor-pointer pr-10"
+                                    style="-webkit-appearance: none; -moz-appearance: none; appearance: none;">
                                     ${effectiveReleases.map(r => `
                                         <option value="${r.url}" ${normalize(r.url) === normalize(selectedUrl) ? 'selected' : ''}>
                                             ${r.type === 'rolling' ? '🌊 ' : (r.type === 'archive' ? '🏛️ ' : '📄 ')} 
@@ -200,7 +202,12 @@ class ArborModalSources extends HTMLElement {
                                         </option>
                                     `).join('')}
                                 </select>
-                                <div class="absolute right-4 top-3.5 pointer-events-none text-slate-400 text-xs">▼</div>
+                                <!-- Custom SVG Arrow (Replaces text arrow to avoid double rendering issues) -->
+                                <div class="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-slate-400">
+                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </div>
                             </div>
                         </div>
                         ${isDifferent ? `
@@ -215,15 +222,15 @@ class ArborModalSources extends HTMLElement {
                     </div>
                 </div>
                 ` : `
-                <div class="p-6 bg-purple-50 dark:bg-purple-900/10 rounded-2xl border border-purple-100 dark:border-purple-800 text-center flex flex-col items-center gap-3">
+                <div class="p-6 bg-purple-50 dark:bg-purple-900/10 rounded-2xl border border-purple-100 dark:border-purple-800 text-center flex flex-col items-center gap-3 mb-8 block">
                     <span class="text-4xl">🌱</span>
                     <p class="text-sm text-purple-700 dark:text-purple-300 font-bold">You are currently tending your local garden.</p>
                     <p class="text-xs text-slate-500 dark:text-slate-400">Select a tree below to return to the global forest.</p>
                 </div>
                 `}
 
-                <!-- SAVED TREES -->
-                <div>
+                <!-- SAVED TREES LIST -->
+                <div class="block">
                     <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                         <span>📡</span> Community Trees
                     </h3>

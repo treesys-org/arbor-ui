@@ -162,7 +162,8 @@ class ArborModalNodeProperties extends HTMLElement {
 
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
-            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full relative overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
+            <!-- Increased width to max-w-xl -->
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-xl w-full relative overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
                 
                 <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950">
                     <h3 class="font-black text-xl text-slate-800 dark:text-white">Node Properties</h3>

@@ -11,13 +11,9 @@
   <!-- Local CSS (Premium Engine - Replaces Tailwind) -->
   <link rel="stylesheet" href="./src/style.css">
   
-  <!-- D3.js -->
-  <script src="https://d3js.org/d3.v7.min.js"></script>
-  
   <!-- CRITICAL POLYFILLS FOR BROWSER COMPATIBILITY -->
   <script>
     // Fixes 'process is not defined' error common with node libraries like Octokit in browser
-    // Note: Kept for compatibility with some older libs if added later, though now strictly cleaner.
     window.process = { env: { NODE_ENV: 'production' } };
   </script>
 

@@ -25,7 +25,8 @@ class ArborModalSecurityWarning extends HTMLElement {
 
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
-            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full relative overflow-hidden flex flex-col max-h-[95vh] border border-red-500/50 dark:border-red-500/30 cursor-auto transition-all duration-300">
+            <!-- Increased width to max-w-lg -->
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full relative overflow-hidden flex flex-col max-h-[95vh] border border-red-500/50 dark:border-red-500/30 cursor-auto transition-all duration-300">
                 
                 <!-- Header -->
                 <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-red-50 dark:bg-red-900/10 shrink-0">

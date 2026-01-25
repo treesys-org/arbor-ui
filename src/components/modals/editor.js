@@ -322,7 +322,7 @@ class ArborEditor extends HTMLElement {
             ? "bg-[#34495e] border border-slate-600 text-yellow-400 font-mono focus:border-yellow-400" 
             : "bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500";
             
-        const editorBg = isConstruct ? "bg-[#34495e]/50 border-2 border-dashed border-slate-600" : "bg-white dark:bg-slate-900 shadow-inner";
+        const editorBg = isConstruct ? "bg-[#34495e] border-2 border-dashed border-slate-600" : "bg-white dark:bg-slate-900 shadow-inner";
         const proseClass = isConstruct ? "prose-invert font-mono prose-headings:text-yellow-400 prose-p:text-slate-300" : "prose-slate dark:prose-invert mx-auto max-w-3xl";
 
         const pathDisplay = this.node.sourcePath || 'New File';

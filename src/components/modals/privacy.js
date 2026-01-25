@@ -1,6 +1,4 @@
 
-
-
 import { store } from '../../store.js';
 
 class ArborModalPrivacy extends HTMLElement {
@@ -41,7 +39,8 @@ class ArborModalPrivacy extends HTMLElement {
 
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
-            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-2xl w-full relative overflow-hidden flex flex-col max-h-[90vh] border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
+            <!-- Increased width to max-w-3xl -->
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-3xl w-full relative overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800 cursor-auto" style="height: 600px; max-height: 85vh;">
                 
                 <!-- Header -->
                 <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950 shrink-0">
@@ -53,7 +52,7 @@ class ArborModalPrivacy extends HTMLElement {
                 </div>
 
                 <!-- Content -->
-                <div class="p-8 overflow-y-auto custom-scrollbar">
+                <div class="p-8 overflow-y-auto custom-scrollbar flex-1 min-h-0">
                     <div class="prose prose-sm prose-slate dark:prose-invert max-w-none">
                         
                         <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800 mb-6 not-prose">

@@ -187,7 +187,8 @@ class ArborModalAbout extends HTMLElement {
 
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
-            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full relative overflow-hidden flex flex-col h-[650px] max-h-[90vh] border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
+            <!-- Increased width to max-w-2xl -->
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-2xl w-full relative overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800 cursor-auto" style="height: 600px; max-height: 85vh;">
                 <button class="btn-close absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 z-20 transition-colors">✕</button>
 
                 <!-- Navigation Tabs -->
@@ -198,7 +199,7 @@ class ArborModalAbout extends HTMLElement {
                     <button class="${tabBtnClass(this.activeTab === 'legal')}" data-tab="legal">${ui.tabLegal || 'Legal'}</button>
                 </div>
 
-                <!-- Added min-h-0 and pb-12 to ensure proper scrolling and visibility of bottom content -->
+                <!-- Content Area -->
                 <div id="about-content-scroll" class="p-8 overflow-y-auto custom-scrollbar flex-1 min-h-0 pb-12">
                     ${contentHtml}
                 </div>

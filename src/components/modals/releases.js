@@ -214,7 +214,7 @@ class ArborModalReleases extends HTMLElement {
 
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
-            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-2xl w-full relative overflow-hidden flex flex-col max-h-[90vh] border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300">
+            <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-2xl w-full relative overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800 cursor-auto transition-all duration-300" style="height: 600px; max-height: 85vh;">
                 
                 <!-- Header -->
                 <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950 shrink-0">
@@ -245,7 +245,7 @@ class ArborModalReleases extends HTMLElement {
                     ` : ''}
 
                     <!-- List Section -->
-                    <div class="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6">
+                    <div class="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6 min-h-0">
                         
                         <!-- Line Connector (Visual) -->
                         <div class="absolute left-10 top-0 bottom-0 w-0.5 bg-slate-100 dark:bg-slate-800 -z-10"></div>
