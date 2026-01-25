@@ -1,3 +1,4 @@
+
 import { store } from "../store.js";
 import { utf8_to_b64 } from "../utils/editor-engine.js";
 
@@ -11,61 +12,49 @@ class GitHubService {
         this.baseUrl = "https://api.github.com";
     }
 
-    // --- CORE HTTP CLIENT ---
-    
-    async request(endpoint, options = {}) {
+    // --- NATIVE FETCH HELPER ---
+    async req(endpoint, method = 'GET', body = null) {
         if (!this.token) throw new Error("Not authenticated");
         
-        const url = `${this.baseUrl}${endpoint}`;
+        const url = endpoint.startsWith('http') ? endpoint : `${this.baseUrl}${endpoint}`;
         const headers = {
-            'Authorization': `Bearer ${this.token}`,
-            'Accept': 'application/vnd.github.v3+json',
-            'Content-Type': 'application/json',
-            ...options.headers
+            "Authorization": `token ${this.token}`,
+            "Accept": "application/vnd.github.v3+json",
+            "Content-Type": "application/json"
         };
 
-        const config = {
-            method: options.method || 'GET',
-            headers: headers
-        };
-
-        if (options.body) {
-            config.body = JSON.stringify(options.body);
-        }
+        const config = { method, headers };
+        if (body) config.body = JSON.stringify(body);
 
         const response = await fetch(url, config);
-
-        // Handle empty responses (like 204 No Content)
-        if (response.status === 204) return null;
-
+        
         if (!response.ok) {
-            // Parse error if possible
-            let errorMessage = `GitHub API Error: ${response.status}`;
+            let errorMsg = `GitHub API Error: ${response.status}`;
             try {
-                const errorData = await response.json();
-                errorMessage = errorData.message || errorMessage;
+                const errJson = await response.json();
+                if (errJson.message) errorMsg += ` - ${errJson.message}`;
             } catch (e) {}
             
-            const error = new Error(errorMessage);
+            // Handle rate limits or specific errors if needed
+            const error = new Error(errorMsg);
             error.status = response.status;
             throw error;
         }
+        
+        // Handle 204 No Content (e.g. DELETE)
+        if (response.status === 204) return null;
 
         return await response.json();
     }
-
-    // --- AUTH & INIT ---
 
     async initialize(token) {
         if (!token) return null;
         this.token = token;
         try {
-            // Verify token and get user
-            this.currentUser = await this.request("/user");
-            
-            // Load CODEOWNERS if we are in a repo context
-            this.loadCodeOwners().catch(e => console.warn("Could not load CODEOWNERS", e));
-            
+            const user = await this.req("/user");
+            this.currentUser = user;
+            // Background load owners, don't block
+            this.loadCodeOwners().catch(console.warn);
             return this.currentUser;
         } catch (e) {
             console.error("GitHub Auth Failed", e);
@@ -89,7 +78,6 @@ class GitHubService {
         try {
             if (url.includes('raw.githubusercontent.com')) {
                 const parts = new URL(url).pathname.split('/');
-                // /Owner/Repo/...
                 this.repoCache = { owner: parts[1], repo: parts[2] };
             } else if (url.includes('github.io')) {
                 const hostParts = new URL(url).hostname.split('.');
@@ -105,56 +93,118 @@ class GitHubService {
         try {
             const repo = this.getRepositoryInfo();
             if (!repo) return false;
-            // Lightweight check: get contents of root content folder
-            await this.request(`/repos/${repo.owner}/${repo.repo}/contents/content`);
+            // Lightweight check
+            await this.req(`/repos/${repo.owner}/${repo.repo}`);
             return true;
         } catch (e) { return false; }
     }
 
-    // --- FILE OPERATIONS ---
+    async initializeSkeleton() {
+        const repo = this.getRepositoryInfo();
+        if (!repo) throw new Error("No repository detected.");
+        const files = [
+            { path: 'content/EN/01_Welcome/meta.json', content: JSON.stringify({ name: "Welcome", icon: "👋", order: "1" }, null, 2) },
+            { path: 'content/EN/01_Welcome/01_Intro.md', content: "@title: Hello World\n@icon: 🌍\n@description: Your first lesson.\n\n# Welcome to Arbor\n\nThis is your first lesson. Click 'Edit' to change it!" },
+            { path: '.github/CODEOWNERS', content: "# ARBOR GOVERNANCE\n# Define folder owners here\n/content/EN/ @"+this.currentUser.login }
+        ];
+        for (const file of files) {
+            try { await this.commitFile(file.path, file.content, "chore: Initialize Arbor Skeleton"); } catch(e) {}
+        }
+        return true;
+    }
+
+    async protectBranch() {
+        if (!this.token) throw new Error("Not authenticated");
+        const repo = this.getRepositoryInfo();
+        const repoData = await this.req(`/repos/${repo.owner}/${repo.repo}`);
+        
+        await this.req(`/repos/${repo.owner}/${repo.repo}/branches/${repoData.default_branch}/protection`, 'PUT', {
+            required_status_checks: null, enforce_admins: false,
+            required_pull_request_reviews: { dismiss_stale_reviews: false, require_code_owner_reviews: false, required_approving_review_count: 0 },
+            restrictions: null
+        });
+        return true;
+    }
 
     async getFileContent(path) {
         if (!this.token) throw new Error("Editor Mode not connected.");
         const repo = this.getRepositoryInfo();
         try {
-            // Add timestamp to prevent caching
-            const data = await this.request(`/repos/${repo.owner}/${repo.repo}/contents/${path}?t=${Date.now()}`);
-            
-            // GitHub returns content as base64 with newlines
+            const data = await this.req(`/repos/${repo.owner}/${repo.repo}/contents/${path}?timestamp=${Date.now()}`);
             const cleanContent = data.content.replace(/\s/g, '');
+            // Native browser decoding
             const decoded = new TextDecoder().decode(Uint8Array.from(atob(cleanContent), c => c.charCodeAt(0)));
-            
             return { content: decoded, sha: data.sha };
-        } catch (e) { 
-            throw new Error(`File not found: ${path}`); 
-        }
+        } catch (e) { throw new Error(`File not found: ${path}`); }
     }
 
     async getRecursiveTree(path = 'content', forceRefresh = false) {
         if (this.treeCache && !forceRefresh) return this.treeCache.filter(node => node.path.startsWith(path));
         if (!this.token) return [];
-        
         const repo = this.getRepositoryInfo();
         if (!repo) return [];
-        
         try {
-            // 1. Get default branch name
-            const repoData = await this.request(`/repos/${repo.owner}/${repo.repo}`);
-            const branch = repoData.default_branch;
+            const repoData = await this.req(`/repos/${repo.owner}/${repo.repo}`);
+            const defaultBranch = repoData.default_branch;
             
-            // 2. Get Branch SHA
-            const refData = await this.request(`/repos/${repo.owner}/${repo.repo}/git/ref/heads/${branch}`);
-            const sha = refData.object.sha;
+            // Get HEAD ref to find tree SHA
+            const refData = await this.req(`/repos/${repo.owner}/${repo.repo}/git/ref/heads/${defaultBranch}`);
+            const treeSha = refData.object.sha;
             
-            // 3. Get Tree Recursive
-            const treeData = await this.request(`/repos/${repo.owner}/${repo.repo}/git/trees/${sha}?recursive=true`);
+            const treeData = await this.req(`/repos/${repo.owner}/${repo.repo}/git/trees/${treeSha}?recursive=1`);
             
             this.treeCache = treeData.tree;
             return treeData.tree.filter(node => node.path.startsWith(path));
         } catch (e) { 
-            console.error("Tree fetch failed", e);
+            console.error("Tree Fetch Error", e);
             return []; 
         }
+    }
+
+    async createPullRequest(filePath, newContent, message, branchName = null) {
+        if (!this.token) throw new Error("Not authenticated");
+        const repo = this.getRepositoryInfo();
+        
+        // 1. Get Default Branch
+        const repoData = await this.req(`/repos/${repo.owner}/${repo.repo}`);
+        const baseBranch = repoData.default_branch;
+        
+        // 2. Create Branch
+        const branch = branchName || `contrib/edit-${Date.now()}`;
+        const refData = await this.req(`/repos/${repo.owner}/${repo.repo}/git/ref/heads/${baseBranch}`);
+        
+        try {
+            await this.req(`/repos/${repo.owner}/${repo.repo}/git/refs`, 'POST', {
+                ref: `refs/heads/${branch}`,
+                sha: refData.object.sha
+            });
+        } catch(e) {
+            // Branch might exist, continue
+        }
+
+        // 3. Get File SHA (if exists)
+        let fileSha = null;
+        try {
+            const fileData = await this.req(`/repos/${repo.owner}/${repo.repo}/contents/${filePath}`);
+            fileSha = fileData.sha;
+        } catch (e) {}
+
+        // 4. Update File on New Branch
+        await this.req(`/repos/${repo.owner}/${repo.repo}/contents/${filePath}`, 'PUT', {
+            message: message,
+            content: utf8_to_b64(newContent),
+            branch: branch,
+            sha: fileSha
+        });
+
+        // 5. Create Pull Request
+        const pr = await this.req(`/repos/${repo.owner}/${repo.repo}/pulls`, 'POST', {
+            title: message,
+            body: `Edit via Arbor UI`,
+            head: branch,
+            base: baseBranch
+        });
+        return pr.html_url;
     }
 
     async commitFile(filePath, newContent, message, sha = null) {
@@ -167,110 +217,41 @@ class GitHubService {
         };
         if (sha) body.sha = sha;
 
-        const data = await this.request(`/repos/${repo.owner}/${repo.repo}/contents/${filePath}`, {
-            method: 'PUT',
-            body: body
-        });
-        return data;
-    }
-
-    async deleteFile(filePath, message, sha) {
-        if (!this.token) throw new Error("Not authenticated");
-        const repo = this.getRepositoryInfo();
-        
-        await this.request(`/repos/${repo.owner}/${repo.repo}/contents/${filePath}`, {
-            method: 'DELETE',
-            body: {
-                message: message,
-                sha: sha
-            }
-        });
+        return await this.req(`/repos/${repo.owner}/${repo.repo}/contents/${filePath}`, 'PUT', body);
     }
 
     async createOrUpdateFileContents(filePath, newContent, message, sha = null) {
         return this.commitFile(filePath, newContent, message, sha);
     }
 
-    // --- PULL REQUESTS & BRANCHING ---
-
-    async createPullRequest(filePath, newContent, message, branchName = null) {
+    async deleteFile(filePath, message, sha) {
         if (!this.token) throw new Error("Not authenticated");
         const repo = this.getRepositoryInfo();
         
-        // 1. Get Default Branch & SHA
-        const repoData = await this.request(`/repos/${repo.owner}/${repo.repo}`);
-        const baseBranch = repoData.default_branch;
-        
-        const refData = await this.request(`/repos/${repo.owner}/${repo.repo}/git/ref/heads/${baseBranch}`);
-        const baseSha = refData.object.sha;
-
-        // 2. Create New Branch
-        const newBranch = branchName || `contrib/edit-${Date.now()}`;
-        try {
-            await this.request(`/repos/${repo.owner}/${repo.repo}/git/refs`, {
-                method: 'POST',
-                body: {
-                    ref: `refs/heads/${newBranch}`,
-                    sha: baseSha
-                }
-            });
-        } catch (e) {
-            // Ignore if branch exists, otherwise throw
-            if (e.status !== 422) throw e;
-        }
-
-        // 3. Get file SHA (if it exists) to allow update
-        let fileSha = null;
-        try {
-            const fileData = await this.request(`/repos/${repo.owner}/${repo.repo}/contents/${filePath}?ref=${newBranch}`);
-            fileSha = fileData.sha;
-        } catch (e) {}
-
-        // 4. Commit to New Branch
-        await this.request(`/repos/${repo.owner}/${repo.repo}/contents/${filePath}`, {
-            method: 'PUT',
-            body: {
-                message: message,
-                content: utf8_to_b64(newContent),
-                branch: newBranch,
-                sha: fileSha
-            }
+        return await this.req(`/repos/${repo.owner}/${repo.repo}/contents/${filePath}`, 'DELETE', {
+            message: message,
+            sha: sha
         });
-
-        // 5. Create PR
-        const pr = await this.request(`/repos/${repo.owner}/${repo.repo}/pulls`, {
-            method: 'POST',
-            body: {
-                title: message,
-                body: "Edit via Arbor UI",
-                head: newBranch,
-                base: baseBranch
-            }
-        });
-
-        return pr.html_url;
     }
 
-    // --- ADVANCED MOVE (File/Folder) ---
-    
+    // --- ENHANCED MOVE LOGIC (FILE & FOLDER) ---
     async moveFile(oldPath, newPath, message) {
         if (!this.token) throw new Error("Not authenticated");
 
-        // 1. Try simple file move first
+        // 1. Is it a file?
         try {
             const fileData = await this.getFileContent(oldPath);
-            // Create new
+            // It's a file, perform simple move
             await this.commitFile(newPath, fileData.content, message);
-            // Delete old
             await this.deleteFile(oldPath, `chore: Move ${oldPath}`, fileData.sha);
             return true;
         } catch(e) {
-            // Not a simple file, treat as folder
+            // It's likely a folder or doesn't exist
         }
 
-        // 2. Folder Recursion
+        // 2. Handle Folder Recursion
         const allFiles = await this.getRecursiveTree(oldPath, true);
-        const folderFiles = allFiles.filter(f => f.type === 'blob');
+        const folderFiles = allFiles.filter(f => f.type === 'blob'); // Only move blobs
 
         if (folderFiles.length === 0) throw new Error("Cannot move: Path is empty or invalid.");
 
@@ -279,9 +260,13 @@ class GitHubService {
             const relativePath = file.path.substring(oldPath.length);
             const targetPath = newPath + relativePath;
             
+            // Get content
             const { content, sha } = await this.getFileContent(file.path);
             
+            // Write to new location
             await this.commitFile(targetPath, content, `${message} (${movedCount + 1}/${folderFiles.length})`);
+            
+            // Delete old
             await this.deleteFile(file.path, `chore: Cleanup after move`, sha);
             movedCount++;
         }
@@ -289,8 +274,7 @@ class GitHubService {
         return true;
     }
 
-    // --- GOVERNANCE & PERMISSIONS ---
-
+    // --- PERMISSION ENGINE (CODEOWNERS) ---
     async loadCodeOwners() {
         if (!this.token) return;
         const paths = ['.github/CODEOWNERS', 'CODEOWNERS'];
@@ -302,7 +286,6 @@ class GitHubService {
                 break;
             } catch(e) {}
         }
-        
         this.codeOwnersRules = [];
         if (content) {
             content.split('\n').forEach(line => {
@@ -334,14 +317,11 @@ class GitHubService {
     canEdit(path) {
         if (!this.currentUser) return false;
         const username = '@' + this.currentUser.login.toLowerCase();
-        
         let applicableRule = null;
         let maxLen = 0;
-        
         this.codeOwnersRules.forEach(rule => {
             const normRulePath = rule.path.startsWith('/') ? rule.path.substring(1) : rule.path;
             const normFilePath = path.startsWith('/') ? path.substring(1) : path;
-            
             if (normFilePath.startsWith(normRulePath)) {
                 if (normRulePath.length > maxLen) {
                     maxLen = normRulePath.length;
@@ -349,7 +329,6 @@ class GitHubService {
                 }
             }
         });
-        
         if (applicableRule) return applicableRule.owner.toLowerCase() === username;
         return true; 
     }
@@ -359,14 +338,14 @@ class GitHubService {
         const repo = this.getRepositoryInfo();
         if (!repo) return false;
         try {
-            const perms = await this.request(`/repos/${repo.owner}/${repo.repo}/collaborators/${this.currentUser.login}/permission`);
+            const perms = await this.req(`/repos/${repo.owner}/${repo.repo}/collaborators/${this.currentUser.login}/permission`);
             return perms.permission === 'admin';
         } catch (e) { return false; }
     }
 
     async getCollaborators() {
         const repo = this.getRepositoryInfo();
-        const data = await this.request(`/repos/${repo.owner}/${repo.repo}/collaborators`);
+        const data = await this.req(`/repos/${repo.owner}/${repo.repo}/collaborators`);
         return data.map(u => ({
             login: u.login,
             avatar: u.avatar_url,
@@ -376,21 +355,12 @@ class GitHubService {
 
     async inviteUser(username) {
         const repo = this.getRepositoryInfo();
-        await this.request(`/repos/${repo.owner}/${repo.repo}/collaborators/${username}`, {
-            method: 'PUT',
-            body: { permission: 'push' }
-        });
+        await this.req(`/repos/${repo.owner}/${repo.repo}/collaborators/${username}`, 'PUT', { permission: 'push' });
     }
 
     async getPullRequests() {
         const repo = this.getRepositoryInfo();
-        return await this.request(`/repos/${repo.owner}/${repo.repo}/pulls?state=open`);
-    }
-    
-    // --- UTILS ---
-    async initializeSkeleton() {
-        // Not implemented in lightweight client yet (rare admin action)
-        return true;
+        return await this.req(`/repos/${repo.owner}/${repo.repo}/pulls?state=open`);
     }
 }
 

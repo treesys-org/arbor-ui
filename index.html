@@ -5,177 +5,109 @@
   <title>Arbor: Visual Knowledge Explorer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover">
   
-  <!-- 
-    GDPR / PRIVACY ARCHITECTURE:
-    No external scripts (CDNs) are loaded by default.
-    The 'bootloader' script below handles consent logic before injecting dependencies.
-  -->
+  <!-- Optimization: Preconnect to CDNs -->
+  <link rel="preconnect" href="https://esm.sh">
 
-  <style>
-    /* CRITICAL SYSTEM STYLES (Inline to avoid external requests) */
-    html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background-color: #0f172a; font-family: system-ui, -apple-system, sans-serif; color: #e2e8f0; }
-    
-    /* Gatekeeper UI */
-    #gatekeeper { display: flex; flex-direction: column; align-items: center; justify-content: center; position: fixed; inset: 0; z-index: 9999; background: #0f172a; padding: 20px; text-align: center; transition: opacity 0.5s; }
-    .gate-card { max-width: 480px; background: #1e293b; border: 1px solid #334155; border-radius: 24px; padding: 40px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); }
-    .gate-icon { font-size: 64px; margin-bottom: 24px; display: block; }
-    .gate-title { font-size: 24px; font-weight: 900; margin: 0 0 16px 0; color: #fff; letter-spacing: -0.02em; }
-    .gate-text { font-size: 15px; line-height: 1.6; color: #94a3b8; margin-bottom: 32px; }
-    .gate-btn { background: #fff; color: #0f172a; border: none; padding: 16px 32px; font-size: 16px; font-weight: 800; border-radius: 12px; cursor: pointer; transition: transform 0.1s, opacity 0.2s; width: 100%; text-transform: uppercase; letter-spacing: 0.05em; }
-    .gate-btn:hover { opacity: 0.9; transform: scale(1.02); }
-    .gate-btn:active { transform: scale(0.98); }
-    .gate-links { margin-top: 24px; font-size: 12px; color: #475569; }
-    .gate-links a { color: #64748b; text-decoration: underline; }
-    
-    /* Loading Spinner for Boot phase */
-    #boot-loader { display: none; position: fixed; inset: 0; z-index: 9000; background: #0f172a; align-items: center; justify-content: center; flex-direction: column; }
-    .spinner { width: 40px; height: 40px; border: 4px solid #334155; border-top-color: #22c55e; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 16px; }
-    .boot-text { font-family: monospace; font-size: 12px; color: #22c55e; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* Hide App until loaded */
-    #app { display: none; }
-    
-    /* Utility */
-    .hidden { display: none !important; }
-  </style>
-
-  <!-- POLYFILLS -->
+  <!-- Local CSS (Premium Engine - Replaces Tailwind) -->
+  <link rel="stylesheet" href="./src/style.css">
+  
+  <!-- D3.js -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  
+  <!-- CRITICAL POLYFILLS FOR BROWSER COMPATIBILITY -->
   <script>
+    // Fixes 'process is not defined' error common with node libraries like Octokit in browser
+    // Note: Kept for compatibility with some older libs if added later, though now strictly cleaner.
     window.process = { env: { NODE_ENV: 'production' } };
   </script>
+
+  <style>
+    /* NATIVE APP LOCK: Fixes the viewport to prevent swaying/rubber-banding */
+    html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      overscroll-behavior: none;
+    }
+
+    body {
+      width: 100%;
+      height: 100%;
+      position: fixed; /* Locks the body in place relative to the viewport */
+      overflow: hidden; 
+      overscroll-behavior: none; /* Disables pull-to-refresh/bounce effects */
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      margin: 0;
+      padding: 0;
+    }
+    
+    /* ACCESSIBILITY & FOCUS MANAGEMENT */
+    /* Remove default focus outline for mouse users */
+    :focus:not(:focus-visible) {
+      outline: none !important;
+      box-shadow: none !important;
+    }
+    
+    /* High-visibility focus ring ONLY for keyboard navigation */
+    :focus-visible {
+      outline: 2px solid #3b82f6; 
+      outline-offset: 2px;
+    }
+    
+    /* Web Component loading helper */
+    :not(:defined) { display: none; }
+
+    /* TREE VIEW STYLES */
+    .tree-item.drag-over {
+        background-color: #e0f2fe;
+        border: 1px dashed #3b82f6;
+    }
+    .dark .tree-item.drag-over {
+        background-color: #0c4a6e;
+        border: 1px dashed #38bdf8;
+    }
+    .tree-item.dragging {
+        opacity: 0.5;
+    }
+  </style>
 </head>
-<body>
-
-  <!-- 1. THE GATEKEEPER (Privacy & Resources Consent) -->
-  <div id="gatekeeper">
-    <div class="gate-card">
-        <span class="gate-icon">🌳</span>
-        <h1 class="gate-title">Welcome to Arbor</h1>
-        <div class="gate-text">
-            <p><strong>Consent & Initialization:</strong></p>
-            <p>Arbor is a "Zero-Build" browser application. To function, it requires your permission to load necessary styles and visualization engines.</p>
-            <p style="font-size: 13px; background: #334155; padding: 12px; border-radius: 8px; margin-top:16px;">
-                By clicking "Enter", you agree to the <strong>Privacy Policy</strong> (Local Storage usage) and consent to loading: <br>
-                1. <strong>TailwindCSS</strong> (UI Styling) <br>
-                2. <strong>D3.js</strong> (Graph Visualization)
-            </p>
-        </div>
-        <button id="btn-accept" class="gate-btn">Accept & Enter</button>
-        <div class="gate-links">
-            Your progress is saved locally on this device.
-        </div>
-    </div>
-  </div>
-
-  <!-- 2. BOOT LOADER (Visual feedback during injection) -->
-  <div id="boot-loader">
-      <div class="spinner"></div>
-      <div class="boot-text" id="boot-status">INITIALIZING...</div>
-  </div>
-
-  <!-- 3. THE APP CONTAINER -->
-  <div id="app" class="h-full w-full flex relative overflow-hidden bg-[#f7f9fa] dark:bg-slate-950 text-slate-700 dark:text-slate-200 transition-colors duration-300">
-     <!-- Components will be injected here by main.js -->
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-200 transition-colors duration-300">
+  
+  <div id="app" class="h-full w-full flex relative overflow-hidden">
+     <!-- Sidebar -->
      <arbor-sidebar></arbor-sidebar>
+     
      <main class="flex-1 relative flex flex-col h-full pt-16 md:pt-0">
+        <!-- Graph Area -->
         <div class="w-full h-full absolute inset-0 z-10">
             <arbor-graph></arbor-graph>
         </div>
      </main>
+     
+     <!-- Content Panel (Slide over) -->
      <arbor-content></arbor-content>
+     
+     <!-- Construction Panel -->
      <arbor-construction-panel></arbor-construction-panel>
+
+     <!-- Modals Container -->
      <arbor-modals></arbor-modals>
+     
+     <!-- Editor Modal -->
      <arbor-editor></arbor-editor>
+
+     <!-- Sage (AI) Modal -->
      <arbor-sage></arbor-sage>
+
+     <!-- Version Widget (Top Right, left of Progress) -->
      <arbor-version-widget></arbor-version-widget>
+
+     <!-- Progress Widget (Top Right) -->
      <arbor-progress-widget></arbor-progress-widget>
   </div>
 
-  <!-- 4. BOOTLOADER SCRIPT -->
-  <script>
-    (function() {
-        const STORAGE_KEY = 'arbor-consent-v1';
-        const gatekeeper = document.getElementById('gatekeeper');
-        const bootLoader = document.getElementById('boot-loader');
-        const bootStatus = document.getElementById('boot-status');
-        const app = document.getElementById('app');
-        const btnAccept = document.getElementById('btn-accept');
-
-        // DEPENDENCIES: ONLY THE ESSENTIALS
-        const SCRIPTS = [
-            { src: "https://d3js.org/d3.v7.min.js", name: "D3 Visualization" },
-            { src: "https://cdn.tailwindcss.com", name: "UI Framework" }
-        ];
-
-        function log(msg) {
-            console.log(`[Arbor Boot] ${msg}`);
-            if(bootStatus) bootStatus.innerText = msg;
-        }
-
-        async function injectDependencies() {
-            gatekeeper.classList.add('hidden');
-            bootLoader.style.display = 'flex';
-
-            try {
-                // 1. Inject CSS/Libs
-                for (const lib of SCRIPTS) {
-                    log(`Loading ${lib.name}...`);
-                    await new Promise((resolve, reject) => {
-                        const s = document.createElement('script');
-                        s.src = lib.src;
-                        s.onload = resolve;
-                        s.onerror = reject;
-                        document.head.appendChild(s);
-                    });
-                }
-
-                // 2. Configure Tailwind
-                log("Configuring Styles...");
-                if (window.tailwind) {
-                    window.tailwind.config = {
-                        darkMode: 'class',
-                        theme: {
-                            extend: {
-                                fontFamily: {
-                                    sans: ['system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
-                                    mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', 'monospace']
-                                }
-                            }
-                        }
-                    };
-                }
-
-                // 3. Launch App
-                log("Launching Arbor...");
-                const mainScript = document.createElement('script');
-                mainScript.type = 'module';
-                mainScript.src = './src/main.js';
-                mainScript.onload = () => {
-                    bootLoader.style.display = 'none';
-                    app.style.display = 'flex';
-                };
-                document.body.appendChild(mainScript);
-
-            } catch (e) {
-                log("BOOT ERROR: " + e.message);
-                alert("Failed to load resources. Check internet connection.");
-            }
-        }
-
-        // INIT LOGIC
-        const hasConsent = localStorage.getItem(STORAGE_KEY);
-
-        if (hasConsent) {
-            injectDependencies();
-        } else {
-            // Show Gatekeeper (already visible by CSS, but ensure listeners)
-            btnAccept.onclick = () => {
-                localStorage.setItem(STORAGE_KEY, 'true');
-                injectDependencies();
-            };
-        }
-    })();
-  </script>
+  <!-- Entry Point -->
+  <script type="module" src="./src/main.js"></script>
 </body>
 </html>

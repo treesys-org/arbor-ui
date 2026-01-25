@@ -49,8 +49,8 @@ class ArborSidebar extends HTMLElement {
         let mobileMenuHtml = '';
         if (this.isMobileMenuOpen) {
             mobileMenuHtml = `
-            <div id="mobile-menu-backdrop" class="md:hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100]"></div>
-            <div id="mobile-menu" class="md:hidden fixed top-16 right-4 w-[280px] bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 z-[110] p-2 animate-in fade-in slide-in-from-top-4 duration-200">
+            <div id="mobile-menu-backdrop" class="md:hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50"></div>
+            <div id="mobile-menu" class="md:hidden fixed top-16 right-4 w-72 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 z-[60] p-2 animate-in">
                 <!-- User Profile -->
                 <div class="p-2 border-b border-slate-100 dark:border-slate-700 mb-2">
                     <button class="js-btn-profile w-full flex items-center gap-3 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-left">
@@ -88,42 +88,30 @@ class ArborSidebar extends HTMLElement {
 
         this.innerHTML = `
         <style>
+            .sidebar-btn-wrapper { position: relative; }
+            .sidebar-btn-wrapper:hover .tooltip { opacity: 1; transform: translateY(-50%) translateX(0); }
             .tooltip {
-                position: absolute; left: 80px; top: 50%; transform: translateY(-50%);
+                position: absolute; left: 100%; top: 50%; 
                 background-color: #1e293b; color: white; font-size: 12px; font-weight: bold;
                 padding: 4px 8px; border-radius: 4px;
                 opacity: 0; transition: all 0.2s; pointer-events: none;
                 white-space: nowrap; z-index: 100;
                 transform: translateY(-50%) translateX(-10px);
+                margin-left: 10px;
             }
-            .group:hover .tooltip { opacity: 1; transform: translateY(-50%) translateX(0); }
             .menu-item {
-                display: flex;
-                align-items: center;
-                gap: 0.75rem;
-                width: 100%;
-                text-align: left;
-                padding: 0.75rem;
-                border-radius: 0.5rem;
-                font-size: 0.875rem;
-                font-weight: 600;
-                color: #475569;
+                display: flex; align-items: center; gap: 0.75rem; width: 100%;
+                text-align: left; padding: 0.75rem; border-radius: 0.5rem;
+                font-size: 0.875rem; font-weight: 600; color: var(--slate-600);
                 transition: background-color 0.2s, color 0.2s;
             }
-            .dark .menu-item { color: #cbd5e1; }
-            .menu-item:hover { background-color: #f1f5f9; }
-            .dark .menu-item:hover { background-color: #334155; }
-            .menu-item > span:first-child {
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                width: 1.25rem;
-                font-weight: bold;
-            }
+            .dark .menu-item { color: var(--slate-300); }
+            .menu-item:hover { background-color: var(--slate-100); }
+            .dark .menu-item:hover { background-color: var(--slate-800); }
         </style>
 
         <!-- MOBILE HEADER -->
-        <header class="md:hidden fixed top-0 left-0 right-0 h-16 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 z-50 flex items-center justify-between px-4 shadow-sm transition-transform duration-300">
+        <header class="md:hidden fixed top-0 left-0 right-0 h-16 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800 z-50 flex items-center justify-between px-4 shadow-sm transition-transform duration-300">
              <button class="js-btn-home flex items-center gap-2 active:scale-95 transition-transform" aria-label="Home">
                  <span class="text-2xl">🌳</span>
                  <span class="font-black text-slate-800 dark:text-white tracking-tight">ARBOR</span>
@@ -149,34 +137,35 @@ class ArborSidebar extends HTMLElement {
         </header>
 
         <!-- DESKTOP SIDEBAR -->
-        <aside class="hidden md:flex flex-col w-[80px] bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 z-30 h-full items-center py-6 shadow-xl justify-between">
+        <!-- Fixed width w-20 used instead of arbitrary value for safety -->
+        <aside class="hidden md:flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 z-30 h-full items-center py-6 shadow-xl justify-between w-20 shrink-0">
             <!-- TOP SECTION -->
             <div class="flex flex-col items-center gap-4 w-full">
-                <button class="w-12 h-12 flex items-center justify-center bg-gradient-to-br from-green-400 to-green-600 text-white rounded-xl text-2xl mb-2 shadow-lg shadow-green-500/30 cursor-pointer js-btn-home hover:scale-105 transition-transform" aria-label="Home">🌳</button>
+                <button class="w-12 h-12 flex items-center justify-center bg-green-500 text-white rounded-xl text-2xl mb-2 shadow-lg cursor-pointer js-btn-home hover:scale-105 transition-transform" aria-label="Home">🌳</button>
                 
                 <div class="w-8 h-px bg-slate-200 dark:bg-slate-700 my-1"></div>
 
-                <div class="relative group"><button class="js-btn-search w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-sky-500 hover:text-white transition-colors" aria-label="${ui.navSearch}"><svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg></button><span class="tooltip">${ui.navSearch}</span></div>
+                <div class="sidebar-btn-wrapper"><button class="js-btn-search w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-sky-500 hover:text-white transition-colors" aria-label="${ui.navSearch}"><svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg></button><span class="tooltip">${ui.navSearch}</span></div>
                 
-                <div class="relative group">
+                <div class="sidebar-btn-wrapper">
                     <button class="js-btn-certs w-10 h-10 rounded-xl flex items-center justify-center transition-colors
-                        ${store.value.viewMode === 'certificates' ? 'bg-yellow-500 text-white' : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500 hover:text-white'}" aria-label="${ui.navCertificates}">
+                        ${store.value.viewMode === 'certificates' ? 'bg-yellow-500 text-white' : 'bg-yellow-100 dark:bg-yellow-900 text-yellow-500 dark:text-yellow-400 hover:bg-yellow-500 hover:text-white'}" aria-label="${ui.navCertificates}">
                         <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0V5.625a2.25 2.25 0 00-2.25-2.25h-1.5a2.25 2.25 0 00-2.25-2.25v7.875" /></svg>
                     </button>
                     <span class="tooltip">${ui.navCertificates}</span>
                 </div>
 
-                <div class="relative group"><button class="js-btn-sources w-10 h-10 rounded-xl flex items-center justify-center bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-600 hover:text-white transition-colors" aria-label="${ui.navSources}"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" /></svg></button><span class="tooltip">${ui.navSources}</span></div>
+                <div class="sidebar-btn-wrapper"><button class="js-btn-sources w-10 h-10 rounded-xl flex items-center justify-center bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-400 hover:bg-purple-600 hover:text-white transition-colors" aria-label="${ui.navSources}"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" /></svg></button><span class="tooltip">${ui.navSources}</span></div>
                 
-                <div class="relative group">
-                    <button class="js-btn-arcade w-10 h-10 rounded-xl flex items-center justify-center bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 hover:bg-orange-600 hover:text-white transition-colors relative" aria-label="${ui.navArcade || 'Arcade'}">
+                <div class="sidebar-btn-wrapper">
+                    <button class="js-btn-arcade w-10 h-10 rounded-xl flex items-center justify-center bg-orange-100 dark:bg-orange-900 text-orange-600 dark:text-orange-400 hover:bg-orange-600 hover:text-white transition-colors relative" aria-label="${ui.navArcade || 'Arcade'}">
                         🎮
                         ${dueCount > 0 ? '<span class="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-white dark:border-slate-900 animate-pulse"></span>' : ''}
                     </button>
                     <span class="tooltip">${ui.navArcade || 'Arcade'} ${dueCount > 0 ? `(${dueCount})` : ''}</span>
                 </div>
 
-                <div class="relative group">
+                <div class="sidebar-btn-wrapper">
                      <button class="js-btn-sage w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-purple-500 hover:text-white transition-all" aria-label="${ui.navSage}">🦉</button>
                      <span class="tooltip">${ui.navSage}</span>
                 </div>
@@ -184,7 +173,7 @@ class ArborSidebar extends HTMLElement {
                 <div class="w-8 h-px bg-slate-200 dark:bg-slate-700 my-1"></div>
                 
                 <!-- FIELD GUIDE BUTTON (Manual) -->
-                <div class="relative group">
+                <div class="sidebar-btn-wrapper">
                      <button class="js-btn-manual w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-blue-500 hover:text-white transition-all" aria-label="${ui.navManual || 'Field Guide'}">
                         <span class="font-black text-lg">?</span>
                      </button>
@@ -192,8 +181,8 @@ class ArborSidebar extends HTMLElement {
                 </div>
 
                 <!-- CONSTRUCTION MODE -->
-                <div class="relative group">
-                     <button class="js-btn-construct w-10 h-10 rounded-xl flex items-center justify-center transition-all ${constructionMode ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30 animate-pulse' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-orange-500 hover:text-white'}" aria-label="Construction Mode">🏗️</button>
+                <div class="sidebar-btn-wrapper">
+                     <button class="js-btn-construct w-10 h-10 rounded-xl flex items-center justify-center transition-all ${constructionMode ? 'bg-orange-500 text-white shadow-lg animate-pulse' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-orange-500 hover:text-white'}" aria-label="Construction Mode">🏗️</button>
                      <span class="tooltip">${ui.navConstruct || 'Construction Mode'}</span>
                 </div>
             </div>
@@ -201,17 +190,17 @@ class ArborSidebar extends HTMLElement {
             <!-- BOTTOM SECTION -->
             <div class="flex flex-col gap-3 items-center w-full">
                 
-                <div class="relative group"><button class="js-btn-lang w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 text-xl flex items-center justify-center" aria-label="${ui.languageTitle}">${store.currentLangInfo.flag}</button><span class="tooltip">${ui.languageTitle}</span></div>
-                <div class="relative group"><button class="js-btn-theme w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 text-xl flex items-center justify-center" aria-label="Toggle Theme">${store.value.theme === 'light' ? '🌙' : '☀️'}</button><span class="tooltip">Toggle Theme</span></div>
+                <div class="sidebar-btn-wrapper"><button class="js-btn-lang w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 text-xl flex items-center justify-center" aria-label="${ui.languageTitle}">${store.currentLangInfo.flag}</button><span class="tooltip">${ui.languageTitle}</span></div>
+                <div class="sidebar-btn-wrapper"><button class="js-btn-theme w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 text-xl flex items-center justify-center" aria-label="Toggle Theme">${store.value.theme === 'light' ? '🌙' : '☀️'}</button><span class="tooltip">Toggle Theme</span></div>
                 
-                <div class="relative group">
+                <div class="sidebar-btn-wrapper">
                     <button class="js-btn-profile w-10 h-10 rounded-full border-2 border-slate-200 dark:border-slate-700 p-0.5 overflow-hidden relative transition-transform hover:scale-105 active:scale-95" aria-label="${ui.navProfile}">
                          <div class="w-full h-full rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 text-2xl">${g.avatar || '👤'}</div>
                     </button>
                     <span class="tooltip">${g.username || ui.navProfile}</span>
                 </div>
                 
-                <div class="js-btn-about text-[9px] text-slate-400 font-bold opacity-60 hover:opacity-100 transition-opacity cursor-pointer mt-2 text-center">
+                <div class="js-btn-about text-xs text-slate-400 font-bold opacity-60 hover:opacity-100 transition-opacity cursor-pointer mt-2 text-center" style="font-size: 9px">
                     ${ui.createdBy}<br><span class="text-sky-500">Treesys</span>
                 </div>
             </div>

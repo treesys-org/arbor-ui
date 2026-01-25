@@ -129,14 +129,17 @@ class ArborConstructionPanel extends HTMLElement {
     }
 
     renderStructure() {
-        this.className = "fixed bottom-8 left-1/2 -translate-x-1/2 z-[50] flex flex-col items-center pointer-events-auto";
+        // Explicitly set positioning to bottom-4 (1rem from floor)
+        // flex-col ensure popover (first child) sits ABOVE dock (second child)
+        this.className = "fixed bottom-4 left-0 w-full z-[60] flex flex-col items-center justify-end pointer-events-none";
+        
         this.innerHTML = `
-            <!-- Popover Container (Above Dock) -->
-            <div id="popover-slot" class="mb-2 w-full flex justify-center empty:hidden"></div>
-            
-            <!-- Dock -->
-            <div id="dock-container" class="bg-slate-900/90 dark:bg-black/90 backdrop-blur-xl border border-slate-700/50 shadow-2xl rounded-full p-1.5 flex items-center gap-2 transition-all duration-300 animate-in slide-in-from-bottom-10 hover:scale-105">
-                <!-- Content injected via JS to maintain event bindings better if needed, or static here -->
+            <!-- Popover Container (Visually floats above the dock) -->
+            <div id="popover-slot" class="mb-3 flex justify-center empty:hidden pointer-events-auto"></div>
+
+            <!-- Dock Bar -->
+            <div id="dock-container" class="pointer-events-auto bg-slate-900/90 dark:bg-black/90 backdrop-blur-xl border border-slate-700/50 shadow-2xl rounded-full p-1.5 flex items-center gap-2 transition-all duration-300 animate-in slide-in-from-bottom-10 hover:scale-105">
+                <!-- Content injected via JS -->
             </div>
         `;
     }
@@ -147,7 +150,9 @@ class ArborConstructionPanel extends HTMLElement {
         const { activeSource, githubUser } = store.value;
         const { activePopover, loading, isLoggingIn, loginError } = this.state;
         const repoName = activeSource?.name || "Local Garden";
-        const isLocal = fileSystem.isLocal;
+        
+        const isLocal = activeSource && (activeSource.type === 'local' || (activeSource.url && activeSource.url.startsWith('local://')));
+        
         const isContributor = isLocal || !!githubUser;
         const ui = store.ui;
 
@@ -156,7 +161,8 @@ class ArborConstructionPanel extends HTMLElement {
             sourceId: activeSource?.id,
             sourceName: activeSource?.name,
             user: githubUser?.login,
-            isLocal
+            isLocal,
+            hasGithubUser: !!githubUser
         });
 
         if (renderKey === this.lastRenderKey) return;
@@ -213,6 +219,7 @@ class ArborConstructionPanel extends HTMLElement {
             `;
         }
 
+        // Logic for Login/Logout Button
         if (!isLocal) {
             if (!githubUser) {
                 html += `<button id="btn-login-toggle" class="${btnLoginClass}"><span>${ui.conLoginAction || "Login"}</span></button>`;

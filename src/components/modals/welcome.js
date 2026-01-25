@@ -1,5 +1,4 @@
 
-
 import { store } from '../../store.js';
 
 class ArborModalWelcome extends HTMLElement {
@@ -109,8 +108,8 @@ class ArborModalWelcome extends HTMLElement {
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in">
             
-            <!-- Main Card -->
-            <div class="bg-slate-50 dark:bg-slate-900 rounded-[24px] shadow-2xl w-full max-w-5xl md:h-[600px] h-auto max-h-[90vh] relative overflow-hidden flex flex-col md:flex-row border border-slate-200 dark:border-slate-800 transition-all duration-300">
+            <!-- Main Card: Uses specific desktop sizing classes fixed via CSS override -->
+            <div class="bg-slate-50 dark:bg-slate-900 rounded-[24px] shadow-2xl w-full h-auto max-h-[90vh] relative overflow-hidden flex flex-col md:flex-row border border-slate-200 dark:border-slate-800 transition-all duration-300">
                 
                 <!-- Close Button -->
                 <button class="btn-close absolute top-4 right-4 z-50 w-8 h-8 flex items-center justify-center rounded-full bg-white/50 dark:bg-slate-800/50 hover:bg-red-50 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 transition-colors backdrop-blur-sm" title="${ui.close}">✕</button>
@@ -132,7 +131,7 @@ class ArborModalWelcome extends HTMLElement {
                 </div>
 
                 <!-- RIGHT CONTENT (Page) -->
-                <div class="flex-1 flex flex-col relative bg-white dark:bg-slate-900">
+                <div class="flex-1 flex flex-col relative bg-white dark:bg-slate-900 h-full">
                     
                     <!-- Mobile Progress Bar -->
                     <div class="md:hidden flex gap-1 p-4 pb-0">
@@ -185,7 +184,7 @@ class ArborModalWelcome extends HTMLElement {
                     </div>
 
                     <!-- Footer Controls -->
-                    <div class="p-6 md:p-8 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900 z-10">
+                    <div class="p-6 md:p-8 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900 z-10 shrink-0">
                         
                         <!-- Previous / Skip -->
                         <div>

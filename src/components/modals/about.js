@@ -33,15 +33,9 @@ class ArborModalAbout extends HTMLElement {
         this.render();
     }
 
-    render() {
-        const ui = store.ui;
-
-        const tabBtnClass = (isActive) => `flex-1 py-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${isActive ? 'border-slate-800 text-slate-800 dark:border-white dark:text-white' : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`;
-
-        let contentHtml = '';
-
+    getContent(ui) {
         if (this.activeTab === 'manifesto') {
-            contentHtml = `
+            return `
             <div class="animate-in fade-in slide-in-from-bottom-2">
                 <div class="text-center mb-8">
                     <div class="w-20 h-20 bg-slate-50 dark:bg-slate-800 rounded-full mx-auto flex items-center justify-center text-5xl mb-4 shadow-sm">ℹ️</div>
@@ -62,9 +56,9 @@ class ArborModalAbout extends HTMLElement {
                     <blockquote class="text-slate-500 dark:text-slate-400 italic text-sm font-serif">"${ui.metaphorText}"</blockquote>
                 </div>
             </div>`;
-        } else if (this.activeTab === 'roadmap') {
-            // Roadmap Implementation
-            contentHtml = `
+        } 
+        else if (this.activeTab === 'roadmap') {
+            return `
             <div class="animate-in fade-in slide-in-from-bottom-2 pl-4">
                 <div class="flex items-center gap-3 mb-8">
                     <span class="text-3xl">🗺️</span>
@@ -107,9 +101,10 @@ class ArborModalAbout extends HTMLElement {
                     </a>
                 </div>
             </div>`;
-        } else if (this.activeTab === 'privacy') {
+        } 
+        else if (this.activeTab === 'privacy') {
             const privacyText = (ui.privacyText || "").replace('{impressum}', `<span class="text-slate-400 italic">[See Legal Tab]</span>`);
-            contentHtml = `
+            return `
             <div class="animate-in fade-in slide-in-from-bottom-2">
                 <div class="flex items-center gap-3 mb-6">
                     <span class="text-3xl">🛡️</span>
@@ -124,8 +119,9 @@ class ArborModalAbout extends HTMLElement {
                     ${privacyText}
                 </div>
             </div>`;
-        } else if (this.activeTab === 'legal') {
-            contentHtml = `
+        } 
+        else if (this.activeTab === 'legal') {
+            return `
             <div class="animate-in fade-in slide-in-from-bottom-2">
                 <div class="flex items-center gap-3 mb-6">
                     <span class="text-3xl">⚖️</span>
@@ -153,6 +149,41 @@ class ArborModalAbout extends HTMLElement {
                 </div>
             </div>`;
         }
+    }
+
+    render() {
+        const ui = store.ui;
+        const contentHtml = this.getContent(ui);
+
+        // PARTIAL UPDATE STRATEGY
+        // If container exists, just update content and tab states to avoid re-animation jumping
+        const contentContainer = this.querySelector('#about-content-scroll');
+        if (contentContainer) {
+            contentContainer.innerHTML = contentHtml;
+            
+            // Update Tab Classes
+            this.querySelectorAll('.tab-btn').forEach(btn => {
+                const isActive = btn.dataset.tab === this.activeTab;
+                // Classes to Add/Remove based on state
+                const activeClasses = ['border-slate-800', 'text-slate-800', 'dark:border-white', 'dark:text-white'];
+                const inactiveClasses = ['border-transparent', 'text-slate-400', 'hover:text-slate-600', 'dark:hover:text-slate-300'];
+                
+                if (isActive) {
+                    btn.classList.add(...activeClasses);
+                    btn.classList.remove(...inactiveClasses);
+                } else {
+                    btn.classList.remove(...activeClasses);
+                    btn.classList.add(...inactiveClasses);
+                }
+            });
+            
+            // Rebind content events
+            this.bindContentEvents();
+            return;
+        }
+
+        // FULL RENDER (Initial)
+        const tabBtnClass = (isActive) => `tab-btn flex-1 py-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${isActive ? 'border-slate-800 text-slate-800 dark:border-white dark:text-white' : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`;
 
         this.innerHTML = `
         <div id="modal-backdrop" class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in">
@@ -161,14 +192,14 @@ class ArborModalAbout extends HTMLElement {
 
                 <!-- Navigation Tabs -->
                 <div class="flex px-6 pt-4 border-b border-slate-100 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-900">
-                    <button class="tab-btn ${tabBtnClass(this.activeTab === 'manifesto')}" data-tab="manifesto">${ui.tabManifesto || 'Manifesto'}</button>
-                    <button class="tab-btn ${tabBtnClass(this.activeTab === 'roadmap')}" data-tab="roadmap">${ui.tabRoadmap || 'Roadmap'}</button>
-                    <button class="tab-btn ${tabBtnClass(this.activeTab === 'privacy')}" data-tab="privacy">${ui.tabPrivacy || 'Privacy'}</button>
-                    <button class="tab-btn ${tabBtnClass(this.activeTab === 'legal')}" data-tab="legal">${ui.tabLegal || 'Legal'}</button>
+                    <button class="${tabBtnClass(this.activeTab === 'manifesto')}" data-tab="manifesto">${ui.tabManifesto || 'Manifesto'}</button>
+                    <button class="${tabBtnClass(this.activeTab === 'roadmap')}" data-tab="roadmap">${ui.tabRoadmap || 'Roadmap'}</button>
+                    <button class="${tabBtnClass(this.activeTab === 'privacy')}" data-tab="privacy">${ui.tabPrivacy || 'Privacy'}</button>
+                    <button class="${tabBtnClass(this.activeTab === 'legal')}" data-tab="legal">${ui.tabLegal || 'Legal'}</button>
                 </div>
 
                 <!-- Added min-h-0 and pb-12 to ensure proper scrolling and visibility of bottom content -->
-                <div class="p-8 overflow-y-auto custom-scrollbar flex-1 min-h-0 pb-12">
+                <div id="about-content-scroll" class="p-8 overflow-y-auto custom-scrollbar flex-1 min-h-0 pb-12">
                     ${contentHtml}
                 </div>
             </div>
@@ -180,6 +211,10 @@ class ArborModalAbout extends HTMLElement {
             btn.onclick = () => this.setTab(btn.dataset.tab);
         });
 
+        this.bindContentEvents();
+    }
+
+    bindContentEvents() {
         const btnShow = this.querySelector('#btn-show-imp');
         if (btnShow) {
             btnShow.onclick = () => this.toggleDetails();
