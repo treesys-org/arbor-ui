@@ -269,14 +269,23 @@ class Store extends EventTarget {
         const isWelcomeOpen = this.state.modal === 'welcome' || this.state.modal === 'tutorial';
         this.update({ loading: true, error: null });
         try {
-            await this.loadLanguage(lang); 
-            this.update({ lang, searchCache: {} });
+            // Fetch language data but don't update state yet.
+            const path = `./locales/${lang.toLowerCase()}.json`;
+            const res = await fetch(path, { cache: 'no-cache' });
+            if (!res.ok) throw new Error(`Missing language file: ${path}`);
+            const i18nData = await res.json();
+            
+            // Batch the two main state changes to reduce re-renders.
+            this.update({ lang, i18nData, searchCache: {} });
+            
+            // Proceed with data loading for the new language context.
             if (this.state.activeSource) await this.loadData(this.state.activeSource, false); 
             else this.update({ loading: false });
+            
             if (!isWelcomeOpen) this.goHome();
         } catch (e) {
             this.update({ loading: false, error: `Language error: ${e.message}` });
-            if (lang !== 'EN') this.setLanguage('EN');
+            if (lang !== 'EN') this.setLanguage('EN'); // Fallback to English on error
         }
     }
 

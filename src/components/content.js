@@ -471,7 +471,7 @@ class ArborContent extends HTMLElement {
                     </div>
 
                     <!-- Bottom Section: Actions & Desktop Close -->
-                    <div class="flex items-center gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0 no-scrollbar w-full md:w-auto justify-start md:justify-end">
+                    <div class="flex items-center gap-2 overflow-x-auto md:overflow-visible pb-1 md:pb-0 no-scrollbar w-full md:w-auto justify-start md:justify-end shrink-0">
                         ${actionButtonsHtml}
                         <div class="hidden md:block ml-2">
                             ${closeBtnHtml('desktop')}
