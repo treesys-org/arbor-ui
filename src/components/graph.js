@@ -13,7 +13,7 @@ class ArborGraph extends HTMLElement {
         
         // State
         this.nodePositions = new Map(); // Store x,y for animation interpolation
-        this.renderedNodes = new Map(); // DOM Cache for diffing
+        this.renderedNodes = new Map(); // DOM Cache for diffing & lookups
         this.renderedLinks = new Map();
         
         // Construction Mode
@@ -288,7 +288,13 @@ class ArborGraph extends HTMLElement {
 
     renderLinks(links, isConstruct, allNodes) {
         const existing = new Map();
-        Array.from(this.linksLayer.children).forEach(el => existing.set(el.dataset.id, el));
+        const exitingLinks = []; // Collection for trajectory correction
+
+        // Separate existing vs exiting for better management
+        Array.from(this.linksLayer.children).forEach(el => {
+            if (!el.classList.contains('exiting')) existing.set(el.dataset.id, el);
+            else exitingLinks.push(el);
+        });
         
         const touched = new Set();
 
@@ -342,31 +348,77 @@ class ArborGraph extends HTMLElement {
             else path.removeAttribute('stroke-dasharray');
         });
 
-        // 2. Exit Links (Collapse to Parent)
+        // 2. Exit Links (Start collapse animation)
         existing.forEach((el, id) => {
             if (!touched.has(id)) {
-                // Find where the source node is currently
-                const [sourceId] = id.split('->');
-                const parentNode = allNodes.find(n => n.id === sourceId);
-                
-                if (parentNode) {
-                    // Collapse into parent
-                    const collapsedD = this.engine.diagonal(parentNode, parentNode, isConstruct);
-                    el.setAttribute('d', collapsedD);
-                    el.style.opacity = '0';
-                } else {
-                    // Parent also gone, just fade
-                    el.style.opacity = '0';
-                }
+                el.classList.add('exiting');
+                el.style.pointerEvents = 'none';
+                el.style.opacity = '0'; // Fade out
+                exitingLinks.push(el); // Add to list for trajectory update
                 
                 setTimeout(() => el.remove(), 600); // Match CSS duration
-                existing.delete(id);
+            }
+        });
+
+        // 3. Trajectory Correction for ALL exiting links (ensure they follow moving parents)
+        exitingLinks.forEach(el => {
+            const id = el.dataset.id;
+            const [sourceId] = id.split('->');
+            
+            let targetX = 0, targetY = 0;
+            let foundTarget = false;
+
+            // A: Source is visible in new layout?
+            const visibleSource = allNodes.find(n => n.id === sourceId);
+            if (visibleSource) {
+                targetX = visibleSource.x;
+                targetY = visibleSource.y;
+                foundTarget = true;
+            } else {
+                // B: Source is hidden/removed. Find source's nearest visible ancestor.
+                // Try to find the DOM element for the source node to get lineage
+                // Use a querySelector because it might be in 'exiting' state too.
+                const sourceEl = this.nodesLayer.querySelector(`.node-group[data-id="${sourceId}"]`);
+                
+                if (sourceEl && sourceEl._layoutNode) {
+                    let ancestor = sourceEl._layoutNode.parent;
+                    while(ancestor) {
+                        const vis = allNodes.find(n => n.id === ancestor.id);
+                        if (vis) {
+                            targetX = vis.x;
+                            targetY = vis.y;
+                            foundTarget = true;
+                            break;
+                        }
+                        ancestor = ancestor.parent;
+                    }
+                }
+            }
+            
+            if (foundTarget) {
+                // Collapse into ancestor position
+                const collapsedD = this.engine.diagonal({x: targetX, y: targetY}, {x: targetX, y: targetY}, isConstruct);
+                el.setAttribute('d', collapsedD);
             }
         });
     }
 
     renderNodes(nodes, isConstruct) {
-        const existing = this.renderedNodes;
+        const existing = new Map();
+        const exitingNodes = [];
+
+        // Separate existing vs exiting
+        Array.from(this.nodesLayer.children).forEach(el => {
+            if (!el.classList.contains('exiting')) {
+                existing.set(el.dataset.id, el);
+            } else {
+                exitingNodes.push(el);
+            }
+        });
+
+        // Clear active registry to only contain valid nodes for this frame
+        this.renderedNodes.clear();
+
         const touched = new Set();
         const harvested = store.value.gamification.seeds || [];
 
@@ -411,35 +463,75 @@ class ArborGraph extends HTMLElement {
                 g.style.opacity = '1';
             }
             
+            // CRITICAL: Attach current layout data to DOM element for future lookups (ancestor traversal)
+            g._layoutNode = n; 
+            
+            // Populate registry for Drag & Drop and Link rendering
+            this.renderedNodes.set(n.id, g);
+            
             // Update Visuals based on State
             this.updateNodeVisuals(g, n, isConstruct, isSelected, isCompleted, isHarvested);
         });
 
-        // 2. Exit Nodes (Shrink into Parent)
+        // 2. Exit Nodes (Start Shrink Animation)
         existing.forEach((el, id) => {
             if (!touched.has(id)) {
-                const parentId = el.dataset.parentId;
-                // Find parent in the NEW layout to see where to shrink to
-                const parentNode = nodes.find(n => n.id === parentId);
-                
-                if (parentNode) {
-                    // Shrink into parent
-                    el.setAttribute('transform', `translate(${parentNode.x}, ${parentNode.y}) scale(0.1)`);
-                } else {
-                    // Parent also gone, just shrink in place
-                    const currentTransform = el.getAttribute('transform');
-                    // Retain translation, force scale to 0
-                    if (currentTransform) {
-                        const translateMatch = currentTransform.match(/translate\(([^)]+)\)/);
-                        if (translateMatch) {
-                            el.setAttribute('transform', `${translateMatch[0]} scale(0.1)`);
-                        }
-                    }
-                }
-                
+                // Mark as exiting
+                el.classList.add('exiting');
+                el.style.pointerEvents = 'none'; // Disable interactions on exiting nodes
                 el.style.opacity = '0';
+                
+                exitingNodes.push(el); // Add to list for trajectory update
+                
                 setTimeout(() => el.remove(), 600);
-                existing.delete(id);
+            }
+        });
+
+        // 3. Continuous Trajectory Correction for ALL Exiting Nodes
+        // This ensures that even if the parent moves mid-animation, the shrinking node
+        // updates its target to follow the parent, preventing "floating" nodes.
+        exitingNodes.forEach(el => {
+            let targetX = 0, targetY = 0;
+            let foundTarget = false;
+            
+            const oldNode = el._layoutNode; // Layout data from PREVIOUS frame
+            
+            // A. Try immediate parent ID from dataset first (fast path)
+            const parentId = el.dataset.parentId;
+            const parentInNewLayout = nodes.find(n => n.id === parentId);
+            
+            if (parentInNewLayout) {
+                targetX = parentInNewLayout.x;
+                targetY = parentInNewLayout.y;
+                foundTarget = true;
+            } 
+            // B. Deep collapse fallback: Traverse up using the old layout structure
+            else if (oldNode && oldNode.parent) {
+                let ancestor = oldNode.parent;
+                // Keep going up until we find an ancestor that exists in the NEW layout
+                while(ancestor) {
+                    const visibleAncestor = nodes.find(n => n.id === ancestor.id);
+                    if (visibleAncestor) {
+                        targetX = visibleAncestor.x;
+                        targetY = visibleAncestor.y;
+                        foundTarget = true;
+                        break;
+                    }
+                    ancestor = ancestor.parent;
+                }
+            }
+            
+            if (foundTarget) {
+                // Update transformation to the NEW target coordinates
+                // We preserve scale(0.1) to ensure the shrink effect continues
+                el.setAttribute('transform', `translate(${targetX}, ${targetY}) scale(0.1)`);
+            } else {
+                // Parent also gone and no visible ancestor found? 
+                // Just shrink in place (fallback to avoid jumping to 0,0)
+                const currentTransform = el.getAttribute('transform');
+                if (currentTransform && !currentTransform.includes('translate')) {
+                     // Only if not already set, otherwise let it keep existing transform
+                }
             }
         });
     }
