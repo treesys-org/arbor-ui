@@ -1,4 +1,5 @@
 
+
 /**
  * ARBOR GRAPH ENGINE
  * A lightweight, dependency-free layout engine for visualization.
@@ -134,6 +135,8 @@ export class ViewportSystem {
         this.g = contentGroup;
         this.transform = { x: 0, y: 0, k: 1 };
         this.isDragging = false;
+        this.hasMoved = false; // Track intentional movement vs click
+        this.startClient = { x: 0, y: 0 };
         this.lastPoint = { x: 0, y: 0 };
         this.onZoom = null; // Callback
         
@@ -284,11 +287,13 @@ export class ViewportSystem {
     }
 
     handlePointerDown(e) {
-        // Prevent dragging if clicking on a node or link (interactive elements)
-        // Checks for .node-group (Nodes) or .link-path (Links)
-        if (e.target.closest('.node-group') || e.target.closest('.link-path')) return; 
+        // MOBILE IMPROVEMENT: Allow starting pan from anywhere (even on nodes),
+        // unless explicitly stopped by a child (like drag-and-drop handles in construction mode).
+        // Since ArborGraph doesn't stopPropagation on normal node clicks, we can catch it here.
         
         this.isDragging = true;
+        this.hasMoved = false;
+        this.startClient = { x: e.clientX, y: e.clientY };
         this.lastPoint = this.getPoint(e);
         this.svg.setPointerCapture(e.pointerId);
         this.svg.style.cursor = 'grabbing';
@@ -296,6 +301,15 @@ export class ViewportSystem {
 
     handlePointerMove(e) {
         if (!this.isDragging) return;
+        
+        const currentClient = { x: e.clientX, y: e.clientY };
+        const dist = Math.hypot(currentClient.x - this.startClient.x, currentClient.y - this.startClient.y);
+        
+        // Threshold to distinguish Click vs Drag (5px)
+        if (dist > 5) {
+            this.hasMoved = true;
+        }
+
         const p = this.getPoint(e);
         const dx = p.x - this.lastPoint.x;
         const dy = p.y - this.lastPoint.y;

@@ -1,4 +1,5 @@
 
+
 import { store } from '../store.js';
 import { fileSystem } from '../services/filesystem.js';
 import { GraphEngine, ViewportSystem } from '../utils/graph-engine.js';
@@ -750,6 +751,9 @@ class ArborGraph extends HTMLElement {
     // --- INTERACTIONS ---
 
     handleNodeClick(e, nodeData) {
+        // IMPROVED: Prevent click if map was panned (mobile fix)
+        if (this.viewport && this.viewport.hasMoved) return;
+        
         e.stopPropagation();
         
         if (this.isDraggingNode) return; // Prevent click during drag
@@ -879,7 +883,8 @@ class ArborGraph extends HTMLElement {
         const pos = this.nodePositions.get(nodeId);
         if (pos) {
             const isMobile = this.width < 768;
-            const k = isMobile ? 1.6 : 1.3;
+            // Reduced zoom for mobile to give more context (was 1.6)
+            const k = isMobile ? 1.25 : 1.3;
             const tx = (this.width / 2) - (pos.x * k);
             const ty = (this.height * 0.6) - (pos.y * k);
             this.viewport.zoomTo(tx, ty, k, 1200);
