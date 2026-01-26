@@ -152,7 +152,7 @@ class ArborSidebar extends HTMLElement {
                     <button class="js-btn-certs w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 
                         ${store.value.viewMode === 'certificates' 
                             ? 'bg-yellow-500 text-white shadow-lg shadow-yellow-500/30' 
-                            : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500 hover:text-white'}" 
+                            : 'bg-slate-100 dark:bg-slate-800 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500 hover:text-white'}" 
                         aria-label="${ui.navCertificates}">
                         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0V5.625a2.25 2.25 0 00-2.25-2.25h-1.5a2.25 2.25 0 00-2.25-2.25v7.875" /></svg>
                     </button>

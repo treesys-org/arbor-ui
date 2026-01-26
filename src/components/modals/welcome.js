@@ -6,6 +6,7 @@ class ArborModalWelcome extends HTMLElement {
         super();
         this.activeStep = 0;
         this.lastRenderKey = null;
+        this.lastContentHtml = null; // Cache to prevent re-animation loop
         // Bind the render method for event listeners
         this.handleStateChange = () => this.render();
     }
@@ -229,8 +230,12 @@ class ArborModalWelcome extends HTMLElement {
             const mobileProgress = this.querySelector('#mobile-progress');
             if (mobileProgress) mobileProgress.innerHTML = this.getMobileProgressHtml(steps);
 
-            // 3. Update Main Content
-            contentContainer.innerHTML = this.getContentHtml(current, ui);
+            // 3. Update Main Content (WITH CACHING CHECK)
+            const newContentHtml = this.getContentHtml(current, ui);
+            if (this.lastContentHtml !== newContentHtml) {
+                contentContainer.innerHTML = newContentHtml;
+                this.lastContentHtml = newContentHtml;
+            }
             
             // 4. Update Footer
             const footerContainer = this.querySelector('#welcome-footer');
@@ -289,6 +294,9 @@ class ArborModalWelcome extends HTMLElement {
                 </div>
             </div>
         </div>`;
+
+        // Cache initial content state
+        this.lastContentHtml = this.getContentHtml(current, ui);
 
         this.bindStaticEvents();
         this.bindDynamicEvents();
