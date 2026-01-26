@@ -274,16 +274,45 @@ class ArborGraph extends HTMLElement {
 
         const theme = store.value.theme;
         const color = theme === 'dark' ? '#334155' : '#22c55e';
-        const startY = bounds.maxY + 20;
         
-        const rect = this.engine.createSVG('rect', {
-            x: bounds.minX - 5000,
-            y: startY,
-            width: (bounds.maxX - bounds.minX) + 10000,
-            height: 10000,
+        const startY = bounds.maxY + 20; // The "valleys" of the hills
+        const hillHeight = 60; // How high the peaks are from the valleys
+        const hillWidth = 400; // How wide each hill is
+        
+        const startX = bounds.minX - 5000;
+        const totalWidth = (bounds.maxX - bounds.minX) + 10000;
+        const numHills = Math.ceil(totalWidth / hillWidth);
+
+        // Start path at the far left, at the valley line
+        let pathD = `M ${startX}, ${startY}`;
+
+        // Create a series of hills using quadratic bezier curves
+        for (let i = 0; i < numHills; i++) {
+            const currentHillX = startX + i * hillWidth;
+            
+            // Control point is halfway across the hill and at the peak
+            const controlX = currentHillX + hillWidth / 2;
+            const controlY = startY - hillHeight;
+            
+            // End point is at the start of the next hill, back at the valley line
+            const endX = currentHillX + hillWidth;
+            const endY = startY;
+            
+            pathD += ` Q ${controlX},${controlY} ${endX},${endY}`;
+        }
+
+        // The path is now at the far right edge of the last hill.
+        // We need to draw lines to close the shape at the bottom.
+        const endX = startX + numHills * hillWidth;
+        pathD += ` L ${endX}, ${startY + 10000}`;      // Line down to bottom-right
+        pathD += ` L ${startX}, ${startY + 10000}`;    // Line across to bottom-left
+        pathD += ` Z`;                               // Close path back to the start
+
+        const path = this.engine.createSVG('path', {
+            d: pathD,
             fill: color
         });
-        this.groundLayer.appendChild(rect);
+        this.groundLayer.appendChild(path);
     }
 
     renderLinks(links, isConstruct, allNodes) {
