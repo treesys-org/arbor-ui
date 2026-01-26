@@ -228,6 +228,10 @@ class ArborConstructionPanel extends HTMLElement {
             }
         }
 
+        // EXIT BUTTON (Easy Mobile Access)
+        html += `<div class="w-px h-6 bg-white/10 mx-1"></div>`;
+        html += `<button id="btn-exit-construct" class="${itemBaseClass} bg-red-600/80 hover:bg-red-500 text-white border-red-400" title="Exit Construction Mode"><span>✕</span></button>`;
+
         dock.innerHTML = html;
 
         // Rebind Dock Events
@@ -235,6 +239,8 @@ class ArborConstructionPanel extends HTMLElement {
             const el = dock.querySelector(id);
             if (el) el.onclick = (e) => { e.stopPropagation(); fn(e); };
         };
+
+        bind('#btn-exit-construct', () => store.toggleConstructionMode());
 
         if (isContributor) {
             bind('#btn-architect', () => store.setModal({ type: 'sage', mode: 'architect' }));

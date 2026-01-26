@@ -21,7 +21,7 @@ class ArborSidebar extends HTMLElement {
 
     render() {
         // Debounce / Memoize Render
-        const { theme, lang, viewMode, gamification, githubUser, constructionMode } = store.value;
+        const { theme, lang, viewMode, gamification, githubUser, constructionMode, activeSource, availableReleases } = store.value;
         const g = gamification;
         
         const seedsCount = g.seeds ? g.seeds.length : (g.fruits ? g.fruits.length : 0);
@@ -29,6 +29,24 @@ class ArborSidebar extends HTMLElement {
         const dueNodes = store.userStore.getDueNodes();
         const dueCount = dueNodes.length;
         
+        // Version Logic for Mobile Menu
+        const isArchive = activeSource?.type === 'archive';
+        const isLocal = activeSource?.type === 'local';
+        const isRolling = !isArchive && !isLocal;
+        
+        let versionLabel = "Live / Rolling";
+        let versionIcon = "🌊";
+        
+        if (isArchive) {
+            versionIcon = "📦";
+            // Try to resolve nice name from releases list
+            const relInfo = (availableReleases || []).find(r => r.url === activeSource.url);
+            versionLabel = relInfo ? (relInfo.year || relInfo.name) : "Snapshot";
+        } else if (isLocal) {
+            versionIcon = "🌱";
+            versionLabel = "Local Workspace";
+        }
+
         const currentKey = JSON.stringify({
             theme, lang, viewMode, 
             streak: g.streak, 
@@ -38,7 +56,8 @@ class ArborSidebar extends HTMLElement {
             username: g.username,
             avatar: g.avatar,
             constructionMode,
-            dueCount 
+            dueCount,
+            sourceId: activeSource?.id
         });
         
         if (currentKey === this.renderKey) return;
@@ -61,6 +80,22 @@ class ArborSidebar extends HTMLElement {
                         </div>
                     </button>
                 </div>
+                
+                <!-- Version Control (Mobile Specific) -->
+                ${!isLocal ? `
+                <div class="p-2 bg-slate-50 dark:bg-slate-900/50 rounded-lg mx-2 mb-2 border border-slate-100 dark:border-slate-700 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                         <span class="text-lg">${versionIcon}</span>
+                         <div class="flex flex-col">
+                             <span class="text-[10px] uppercase font-bold text-slate-400">Version</span>
+                             <span class="text-xs font-bold text-slate-700 dark:text-slate-200 truncate max-w-[100px]">${versionLabel}</span>
+                         </div>
+                    </div>
+                    <button class="js-btn-versions px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-purple-50 dark:hover:bg-purple-900/20 text-purple-600 dark:text-purple-400 border border-slate-200 dark:border-slate-700 rounded text-xs font-bold shadow-sm transition-colors">
+                        Switch
+                    </button>
+                </div>
+                ` : ''}
 
                 <!-- Menu Items -->
                 <nav class="flex flex-col">
@@ -237,6 +272,9 @@ class ArborSidebar extends HTMLElement {
         
         this.querySelectorAll('.js-btn-lang').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('language')));
         this.querySelectorAll('.js-btn-profile').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('profile')));
+        
+        // NEW: Version Switcher for Mobile
+        this.querySelectorAll('.js-btn-versions').forEach(b => b.onclick = mobileMenuAction(() => store.setModal('releases')));
         
         this.querySelectorAll('.js-btn-progress-mobile').forEach(b => b.onclick = mobileMenuAction(() => {
             document.dispatchEvent(new CustomEvent('toggle-progress-widget'));
