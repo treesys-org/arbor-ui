@@ -525,5 +525,6 @@
   "defaultLessonName": "Nueva Lección",
   "defaultLessonContent": "Tu primera lección.",
   "defaultHello": "Hola Mundo",
-  "defaultFolder": "Nueva Carpeta"
+  "defaultFolder": "Nueva Carpeta",
+  "themeToggle": "Cambiar Tema"
 }

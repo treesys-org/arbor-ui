@@ -519,5 +519,6 @@
   "defaultLessonName": "New Lesson",
   "defaultLessonContent": "Your very first lesson.",
   "defaultHello": "Hello World",
-  "defaultFolder": "New Folder"
+  "defaultFolder": "New Folder",
+  "themeToggle": "Toggle Theme"
 }

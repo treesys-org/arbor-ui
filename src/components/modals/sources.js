@@ -189,7 +189,7 @@ class ArborModalSources extends HTMLElement {
                     
                     <div class="flex gap-3 items-end">
                         <div class="flex-1">
-                            <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1.5">Version</label>
+                            <label class="block text-[10px] uppercase font-bold text-slate-400 mb-1.5">${ui.releasesSnapshot || "Version"}</label>
                             <div class="relative">
                                 <!-- Enforced appearance-none via style to guarantee hiding native arrow -->
                                 <select id="version-select" 

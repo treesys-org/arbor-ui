@@ -77,7 +77,7 @@ class ArborSidebar extends HTMLElement {
                     </button>
                     
                     <button class="js-btn-lang menu-item"><span>${store.currentLangInfo.flag}</span> <span>${ui.languageTitle}</span></button>
-                    <button class="js-btn-theme menu-item"><span>${store.value.theme === 'light' ? '🌙' : '☀️'}</span> <span>Toggle Theme</span></button>
+                    <button class="js-btn-theme menu-item"><span>${store.value.theme === 'light' ? '🌙' : '☀️'}</span> <span>${ui.themeToggle || 'Toggle Theme'}</span></button>
                     <div class="h-px bg-slate-100 dark:bg-slate-700 my-1 mx-2"></div>
                     <button class="js-btn-manual menu-item"><span>📖</span> <span>${ui.navManual || 'Field Guide'}</span></button>
                     <button class="js-btn-about menu-item"><span>ℹ️</span> <span>${ui.navAbout}</span></button>
@@ -147,10 +147,14 @@ class ArborSidebar extends HTMLElement {
 
                 <div class="sidebar-btn-wrapper"><button class="js-btn-search w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-sky-500 hover:text-white transition-colors" aria-label="${ui.navSearch}"><svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg></button><span class="tooltip">${ui.navSearch}</span></div>
                 
+                <!-- CERTIFICATES BUTTON (Enhanced) -->
                 <div class="sidebar-btn-wrapper">
-                    <button class="js-btn-certs w-10 h-10 rounded-xl flex items-center justify-center transition-colors
-                        ${store.value.viewMode === 'certificates' ? 'bg-yellow-500 text-white' : 'bg-yellow-100 dark:bg-yellow-900 text-yellow-500 dark:text-yellow-400 hover:bg-yellow-500 hover:text-white'}" aria-label="${ui.navCertificates}">
-                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0V5.625a2.25 2.25 0 00-2.25-2.25h-1.5a2.25 2.25 0 00-2.25-2.25v7.875" /></svg>
+                    <button class="js-btn-certs w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 border-2 shadow-sm hover:scale-105
+                        ${store.value.viewMode === 'certificates' 
+                            ? 'bg-yellow-500 text-white border-yellow-600 shadow-yellow-500/30' 
+                            : 'bg-white dark:bg-slate-800 border-yellow-200 dark:border-yellow-900/50 text-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-900/30'}" 
+                        aria-label="${ui.navCertificates}">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0V5.625a2.25 2.25 0 00-2.25-2.25h-1.5a2.25 2.25 0 00-2.25-2.25v7.875" /></svg>
                     </button>
                     <span class="tooltip">${ui.navCertificates}</span>
                 </div>
@@ -191,7 +195,7 @@ class ArborSidebar extends HTMLElement {
             <div class="flex flex-col gap-3 items-center w-full">
                 
                 <div class="sidebar-btn-wrapper"><button class="js-btn-lang w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 text-xl flex items-center justify-center" aria-label="${ui.languageTitle}">${store.currentLangInfo.flag}</button><span class="tooltip">${ui.languageTitle}</span></div>
-                <div class="sidebar-btn-wrapper"><button class="js-btn-theme w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 text-xl flex items-center justify-center" aria-label="Toggle Theme">${store.value.theme === 'light' ? '🌙' : '☀️'}</button><span class="tooltip">Toggle Theme</span></div>
+                <div class="sidebar-btn-wrapper"><button class="js-btn-theme w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 text-xl flex items-center justify-center" aria-label="${ui.themeToggle || 'Toggle Theme'}">${store.value.theme === 'light' ? '🌙' : '☀️'}</button><span class="tooltip">${ui.themeToggle || 'Toggle Theme'}</span></div>
                 
                 <div class="sidebar-btn-wrapper">
                     <button class="js-btn-profile w-10 h-10 rounded-full border-2 border-slate-200 dark:border-slate-700 p-0.5 overflow-hidden relative transition-transform hover:scale-105 active:scale-95" aria-label="${ui.navProfile}">

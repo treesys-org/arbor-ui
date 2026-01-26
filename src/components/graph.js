@@ -275,43 +275,59 @@ class ArborGraph extends HTMLElement {
         const theme = store.value.theme;
         const color = theme === 'dark' ? '#334155' : '#22c55e';
         
-        const startY = bounds.maxY + 20; // The "valleys" of the hills
-        const hillHeight = 60; // How high the peaks are from the valleys
-        const hillWidth = 400; // How wide each hill is
+        // --- NEW ORGANIC HORIZON LOGIC ---
+        // Instead of repeating sharp hills, we draw a long, smooth, gently undulating horizon.
         
+        const startY = bounds.maxY + 30; // Base ground level
         const startX = bounds.minX - 5000;
-        const totalWidth = (bounds.maxX - bounds.minX) + 10000;
-        const numHills = Math.ceil(totalWidth / hillWidth);
-
-        // Start path at the far left, at the valley line
+        const endX = bounds.maxX + 5000;
+        const width = endX - startX;
+        
+        // We create a few large control points to create a "rolling landscape" effect
+        // Divide the world width into large chunks
+        const segmentWidth = 2000; 
+        const segments = Math.ceil(width / segmentWidth);
+        
         let pathD = `M ${startX}, ${startY}`;
-
-        // Create a series of hills using quadratic bezier curves
-        for (let i = 0; i < numHills; i++) {
-            const currentHillX = startX + i * hillWidth;
+        
+        for (let i = 0; i < segments; i++) {
+            const currentX = startX + (i * segmentWidth);
+            const nextX = currentX + segmentWidth;
             
-            // Control point is halfway across the hill and at the peak
-            const controlX = currentHillX + hillWidth / 2;
-            const controlY = startY - hillHeight;
+            // Random-ish variations based on index to be deterministic but look organic
+            // Using Math.sin to create gentle waves
+            const variation = Math.sin(i) * 40; 
+            const cp1x = currentX + (segmentWidth * 0.3);
+            const cp1y = startY - variation - 20;
+            const cp2x = currentX + (segmentWidth * 0.7);
+            const cp2y = startY + variation + 10;
             
-            // End point is at the start of the next hill, back at the valley line
-            const endX = currentHillX + hillWidth;
-            const endY = startY;
-            
-            pathD += ` Q ${controlX},${controlY} ${endX},${endY}`;
+            // Cubic Bezier for smooth transitions
+            pathD += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${nextX},${startY}`;
         }
 
-        // The path is now at the far right edge of the last hill.
-        // We need to draw lines to close the shape at the bottom.
-        const endX = startX + numHills * hillWidth;
-        pathD += ` L ${endX}, ${startY + 10000}`;      // Line down to bottom-right
-        pathD += ` L ${startX}, ${startY + 10000}`;    // Line across to bottom-left
-        pathD += ` Z`;                               // Close path back to the start
+        // Close the shape at the bottom
+        pathD += ` L ${endX}, ${startY + 10000}`;      // Down
+        pathD += ` L ${startX}, ${startY + 10000}`;    // Left
+        pathD += ` Z`;                               // Close
 
         const path = this.engine.createSVG('path', {
             d: pathD,
-            fill: color
+            fill: color,
+            stroke: 'none'
         });
+        
+        // Add a second, darker layer behind for depth (Parallax-ish static)
+        const backColor = theme === 'dark' ? '#1e293b' : '#16a34a';
+        const backPathD = pathD.replace(new RegExp(`${startY}`, 'g'), `${startY - 40}`); // Shift up slightly visually, but behind
+        
+        const backPath = this.engine.createSVG('path', {
+            d: backPathD,
+            fill: backColor,
+            opacity: 0.6
+        });
+        
+        this.groundLayer.appendChild(backPath);
         this.groundLayer.appendChild(path);
     }
 
