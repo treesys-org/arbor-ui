@@ -81,11 +81,10 @@ class ArborGraph extends HTMLElement {
             }
 
             /* Node Transitions - Organic Growth Curve */
-            /* Using a longer duration and a smoother ease-out curve to prevent "snapping" */
+            /* Removed will-change to prevent sub-pixel jitter/shaking on some displays */
             .node-group { 
                 transition: transform 0.6s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.6s ease-out; 
                 cursor: pointer; 
-                will-change: transform, opacity;
             }
             .link-path { 
                 transition: d 0.6s cubic-bezier(0.25, 0.8, 0.25, 1), stroke 0.3s; 
@@ -461,8 +460,12 @@ class ArborGraph extends HTMLElement {
             }
         });
 
+        // Snapshot old positions for growth animation logic
+        const oldPositions = new Map(this.nodePositions);
+
         // Clear active registry to only contain valid nodes for this frame
         this.renderedNodes.clear();
+        this.nodePositions.clear(); 
 
         const touched = new Set();
         const harvested = store.value.gamification.seeds || [];
@@ -484,11 +487,24 @@ class ArborGraph extends HTMLElement {
                 existing.set(n.id, g);
                 
                 // --- GROWTH ANIMATION ---
-                // Start exactly at parent's current position to stay attached to the growing branch
-                const parentPos = n.parent ? { x: n.parent.x, y: n.parent.y } : { x: n.x, y: n.y };
+                // Start exactly at parent's PREVIOUS position to stay attached to the growing branch
+                let originX = n.x;
+                let originY = n.y;
+                
+                if (n.parent) {
+                    const oldParent = oldPositions.get(n.parent.id);
+                    if (oldParent) {
+                        originX = oldParent.x;
+                        originY = oldParent.y;
+                    } else {
+                        // Parent is also new? Use parent's target pos
+                        originX = n.parent.x;
+                        originY = n.parent.y;
+                    }
+                }
                 
                 g.style.transition = 'none'; 
-                g.setAttribute('transform', `translate(${parentPos.x}, ${parentPos.y}) scale(0.1)`);
+                g.setAttribute('transform', `translate(${originX}, ${originY}) scale(0.1)`);
                 g.style.opacity = '0';
                 
                 // Force Reflow
