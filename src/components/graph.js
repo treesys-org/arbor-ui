@@ -690,17 +690,29 @@ class ArborGraph extends HTMLElement {
         if (!isConstruct && d.type === 'leaf') icon.setAttribute('y', 42);
         else icon.setAttribute('y', 0);
 
-        // -- Label (Premium & Dark Mode Compliance) --
+        // -- Label (Fixed sizing for text and High Contrast) --
         labelText.textContent = d.name.length > 20 ? d.name.substring(0, 18) + '...' : d.name;
-        // Resize rect based on text length (Approximation: 8px per char)
-        const textWidth = Math.max(60, d.name.length * 8);
-        labelRect.setAttribute('width', textWidth + 20);
-        labelRect.setAttribute('x', -(textWidth + 20)/2);
         
-        // Theme-aware Label Styling
+        // Calculate precise width to avoid over-stretching
+        let width = 0;
+        try {
+            const bbox = labelText.getComputedTextLength();
+            width = bbox + 16; // 8px padding each side
+        } catch(e) {
+            width = Math.max(40, d.name.length * 7 + 10); // Fallback
+        }
+        // Enforce min width for visual balance
+        width = Math.max(width, 40);
+
+        labelRect.setAttribute('width', width);
+        labelRect.setAttribute('x', -width / 2);
+        
+        // Theme-aware Label Styling (High Contrast for Dark Mode)
         const theme = store.value.theme;
-        const labelBg = theme === 'dark' ? 'rgba(30, 41, 59, 0.9)' : 'rgba(255, 255, 255, 0.9)';
-        const labelTextFill = theme === 'dark' ? '#e2e8f0' : '#334155';
+        // Dark Mode: Slate 900 background (Solid/Dark), Slate 100 Text (Bright)
+        // Light Mode: White background (Semi-transparent), Slate 700 Text
+        const labelBg = theme === 'dark' ? '#0f172a' : 'rgba(255, 255, 255, 0.9)';
+        const labelTextFill = theme === 'dark' ? '#f1f5f9' : '#334155';
         
         labelRect.setAttribute('fill', labelBg);
         labelText.setAttribute('fill', labelTextFill);

@@ -147,22 +147,22 @@ class ArborSidebar extends HTMLElement {
 
                 <div class="sidebar-btn-wrapper"><button class="js-btn-search w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-sky-500 hover:text-white transition-colors" aria-label="${ui.navSearch}"><svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg></button><span class="tooltip">${ui.navSearch}</span></div>
                 
-                <!-- CERTIFICATES BUTTON (Enhanced) -->
+                <!-- CERTIFICATES BUTTON (Standardized Tinted Logic) -->
                 <div class="sidebar-btn-wrapper">
-                    <button class="js-btn-certs w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 border-2 shadow-sm hover:scale-105
+                    <button class="js-btn-certs w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 
                         ${store.value.viewMode === 'certificates' 
-                            ? 'bg-yellow-500 text-white border-yellow-600 shadow-yellow-500/30' 
-                            : 'bg-white dark:bg-slate-800 border-yellow-200 dark:border-yellow-900/50 text-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-900/30'}" 
+                            ? 'bg-yellow-500 text-white shadow-lg shadow-yellow-500/30' 
+                            : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-500 hover:text-white'}" 
                         aria-label="${ui.navCertificates}">
                         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0V5.625a2.25 2.25 0 00-2.25-2.25h-1.5a2.25 2.25 0 00-2.25-2.25v7.875" /></svg>
                     </button>
                     <span class="tooltip">${ui.navCertificates}</span>
                 </div>
 
-                <div class="sidebar-btn-wrapper"><button class="js-btn-sources w-10 h-10 rounded-xl flex items-center justify-center bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-400 hover:bg-purple-600 hover:text-white transition-colors" aria-label="${ui.navSources}"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" /></svg></button><span class="tooltip">${ui.navSources}</span></div>
+                <div class="sidebar-btn-wrapper"><button class="js-btn-sources w-10 h-10 rounded-xl flex items-center justify-center bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-600 hover:text-white transition-colors" aria-label="${ui.navSources}"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" /></svg></button><span class="tooltip">${ui.navSources}</span></div>
                 
                 <div class="sidebar-btn-wrapper">
-                    <button class="js-btn-arcade w-10 h-10 rounded-xl flex items-center justify-center bg-orange-100 dark:bg-orange-900 text-orange-600 dark:text-orange-400 hover:bg-orange-600 hover:text-white transition-colors relative" aria-label="${ui.navArcade || 'Arcade'}">
+                    <button class="js-btn-arcade w-10 h-10 rounded-xl flex items-center justify-center bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 hover:bg-orange-600 hover:text-white transition-colors relative" aria-label="${ui.navArcade || 'Arcade'}">
                         🎮
                         ${dueCount > 0 ? '<span class="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-white dark:border-slate-900 animate-pulse"></span>' : ''}
                     </button>
