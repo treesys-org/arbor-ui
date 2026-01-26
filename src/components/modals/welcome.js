@@ -143,7 +143,7 @@ class ArborModalWelcome extends HTMLElement {
 
     getFooterHtml(ui, total, isLast) {
         return `
-        <div class="p-6 md:p-8 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900 z-10 w-full shrink-0">
+        <div class="p-6 md:p-8 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] border-t border-slate-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900 z-10 w-full shrink-0">
             <!-- Previous / Skip -->
             <div>
                 ${this.activeStep === 0 

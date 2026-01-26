@@ -141,7 +141,7 @@ class ArborGraph extends HTMLElement {
             <div id="architect-ui"></div>
             
             <!-- Zoom Controls -->
-            <div class="absolute bottom-6 right-6 flex flex-col gap-2 z-20 pointer-events-auto group">
+            <div class="absolute bottom-20 md:bottom-6 right-4 md:right-6 flex flex-col gap-2 z-20 pointer-events-auto group">
                 <button id="btn-zoom-in" class="w-12 h-12 bg-white/90 dark:bg-slate-800/90 rounded-full shadow-lg flex items-center justify-center text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-bold text-xl active:scale-95">+</button>
                 <button id="btn-zoom-out" class="w-12 h-12 bg-white/90 dark:bg-slate-800/90 rounded-full shadow-lg flex items-center justify-center text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-bold text-xl active:scale-95">-</button>
                 <button id="btn-zoom-reset" class="w-12 h-12 bg-white/90 dark:bg-slate-800/90 rounded-full shadow-lg flex items-center justify-center text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 p-2 active:scale-95">⟲</button>

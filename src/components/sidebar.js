@@ -50,7 +50,7 @@ class ArborSidebar extends HTMLElement {
         if (this.isMobileMenuOpen) {
             mobileMenuHtml = `
             <div id="mobile-menu-backdrop" class="md:hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50"></div>
-            <div id="mobile-menu" class="md:hidden fixed top-16 right-4 w-72 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 z-[60] p-2 animate-in">
+            <div id="mobile-menu" class="md:hidden fixed top-16 right-4 w-72 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 z-[60] p-2 animate-in max-h-[calc(100vh-5rem)] overflow-y-auto custom-scrollbar">
                 <!-- User Profile -->
                 <div class="p-2 border-b border-slate-100 dark:border-slate-700 mb-2">
                     <button class="js-btn-profile w-full flex items-center gap-3 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-left">
