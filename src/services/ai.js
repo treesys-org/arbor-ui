@@ -258,7 +258,7 @@ class HybridAIService {
             const mode = store.value.ai?.contextMode || 'normal';
 
             if (lastMsg.startsWith('LOCAL_ACTION:')) {
-                return { text: "Command executed." };
+                return { text: "Command executed.", rawText: "Command executed." };
             }
 
             let systemContext = "";
@@ -306,7 +306,7 @@ class HybridAIService {
                             cleanText = cleanText.replace(/<\|im_end\|>/g, '').trim();
                             
                             const footer = `<br><br><span class='text-[10px] text-green-600 dark:text-green-400 font-bold opacity-75'>⚡ ${this.config.browserModel} (CPU/Worker)</span>`;
-                            resolve({ text: cleanText + footer });
+                            resolve({ text: cleanText + footer, rawText: cleanText });
                         }
                         if (status === 'error') {
                             this.worker.removeEventListener('message', handler);
@@ -357,7 +357,7 @@ class HybridAIService {
                 const txt = data.message.content;
                 
                 const footer = "<br><br><span class='text-[10px] text-orange-600 dark:text-orange-400 font-bold opacity-75'>⚡ Local (Ollama)</span>";
-                return { text: txt + footer };
+                return { text: txt + footer, rawText: txt };
             }
 
             // --- PUTER.JS (CLOUD) ---
@@ -379,13 +379,39 @@ class HybridAIService {
                 <button class='btn-sage-privacy hover:text-blue-500 hover:underline transition-colors'>Disclaimer</button>
             </div>`;
             
-            return { text: txt + footer };
+            return { text: txt + footer, rawText: txt };
 
         } catch (e) {
             console.error("Sage Chat Error:", e);
             
+            let msg = "An unexpected error occurred.";
             let hint = "";
-            const msg = e.message || e.toString();
+
+            // --- ROBUST ERROR EXTRACTOR ---
+            if (e instanceof Error) {
+                msg = e.message;
+            } else if (typeof e === 'string') {
+                msg = e;
+            } else if (typeof e === 'object') {
+                // Parse non-standard error objects (like XHR)
+                if (e.message) msg = e.message;
+                else if (e.statusText) msg = `Network Error: ${e.status || ''} ${e.statusText}`;
+                else if (e.status) msg = `Network Error: Status ${e.status}`;
+                else {
+                    try {
+                        const json = JSON.stringify(e);
+                        if (json !== '{}') msg = json;
+                        else msg = "Connection Error (Empty Response)";
+                    } catch(z) {
+                        msg = "Critical Connection Error";
+                    }
+                }
+            }
+
+            // Clean up common "object" noise
+            if (msg.includes('[object XMLHttpRequest]') || msg.includes('[object Object]')) {
+                msg = "Network Error: Could not connect to AI service.";
+            }
             
             if (msg.includes('Failed to fetch') || msg.includes('Cross-Origin') || msg.includes('NetworkError')) {
                 if (this.config.provider === 'ollama') {
@@ -399,7 +425,7 @@ class HybridAIService {
                 hint = "<br><br><b>🚨 ACCESS DENIED</b><br>The model you selected is Gated (Requires License).<br>Please switch to a public model like <b>Xenova/Qwen1.5-0.5B-Chat</b> in Settings.";
             }
             
-            return { text: `🦉 <span class="text-red-500 font-bold">ERROR:</span> ${msg}${hint}` };
+            return { text: `🦉 <span class="text-red-500 font-bold">ERROR:</span> ${msg}${hint}`, rawText: "Error" };
         }
     }
 }

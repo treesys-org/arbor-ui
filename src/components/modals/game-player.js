@@ -307,14 +307,38 @@ class ArborModalGamePlayer extends HTMLElement {
                                      timeoutPromise
                                  ]);
 
-                                 const txt = res.text;
-                                 const match = txt.match(/(\\{[\\s\\S]*\\}|\\[[\\s\\S]*\\])/);
-                                 if (!match) {
-                                     console.error("AI Response was not JSON:", txt);
-                                     throw new Error("AI did not return a valid JSON object or array.");
+                                 // ROBUST JSON EXTRACTION (Arbor v3.8)
+                                 const raw = res.rawText || res.text;
+                                 let clean = raw.trim();
+
+                                 // 1. Remove Markdown Wrappers (Common in local LLMs)
+                                 const mdMatch = clean.match(/\\\`\\\`\\\`(?:json)?\\s*([\\s\\S]*?)\\s*\\\`\\\`\\\`/i);
+                                 if (mdMatch) {
+                                     clean = mdMatch[1].trim();
                                  }
-                                 
-                                 const result = JSON.parse(match[0]);
+
+                                 // 2. Find JSON boundaries (First {/[ and last }/])
+                                 const firstBrace = clean.indexOf('{');
+                                 const firstBracket = clean.indexOf('[');
+                                 const lastBrace = clean.lastIndexOf('}');
+                                 const lastBracket = clean.lastIndexOf(']');
+
+                                 let start = -1;
+                                 let end = -1;
+
+                                 if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+                                     start = firstBrace;
+                                     end = lastBrace + 1;
+                                 } else if (firstBracket !== -1) {
+                                     start = firstBracket;
+                                     end = lastBracket + 1;
+                                 }
+
+                                 if (start !== -1 && end > start) {
+                                     clean = clean.substring(start, end);
+                                 }
+
+                                 const result = JSON.parse(clean);
                                  
                                  if (onComplete && typeof onComplete === 'function') {
                                      onComplete(result);
