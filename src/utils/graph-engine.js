@@ -134,8 +134,11 @@ export class ViewportSystem {
         this.svg = svgElement;
         this.g = contentGroup;
         this.transform = { x: 0, y: 0, k: 1 };
+        
         this.isDragging = false;
+        this.potentialDrag = false; // Tracks if mouse is down but hasn't moved enough to drag
         this.hasMoved = false; // Track intentional movement vs click
+        
         this.startClient = { x: 0, y: 0 };
         this.lastPoint = { x: 0, y: 0 };
         this.onZoom = null; // Callback
@@ -174,9 +177,6 @@ export class ViewportSystem {
 
     /**
      * Constraints the transform (x, y) STRICTLY.
-     * We do not allow the user to pan into the void.
-     * The viewport must be contained within the tree bounds (plus margin) if possible,
-     * or the tree must be centered if it's smaller than the viewport.
      */
     clamp() {
         if (!this.bounds) return;
@@ -203,24 +203,15 @@ export class ViewportSystem {
             // Content is smaller than screen width: Force Center
             this.transform.x = (w - contentW) / 2 - (cLeft * k);
         } else {
-            // Content is larger than screen: Clamp Edges
-            // MaxX (Left Pan Limit): Left content edge shouldn't leave left screen edge
-            // cLeft * k + x <= 0  ==> x <= -cLeft * k
             const maxTx = -cLeft * k;
-            
-            // MinX (Right Pan Limit): Right content edge shouldn't leave right screen edge
-            // cRight * k + x >= w ==> x >= w - cRight * k
             const minTx = w - cRight * k;
-            
             this.transform.x = Math.max(minTx, Math.min(maxTx, this.transform.x));
         }
         
         // --- Y AXIS CLAMP ---
         if (contentH <= h) {
-            // Center Vertically
             this.transform.y = (h - contentH) / 2 - (cTop * k);
         } else {
-            // Clamp Vertically
             const maxTy = -cTop * k;
             const minTy = h - cBottom * k;
             this.transform.y = Math.max(minTy, Math.min(maxTy, this.transform.y));
@@ -266,7 +257,6 @@ export class ViewportSystem {
         e.preventDefault();
         const delta = -e.deltaY * 0.002;
         // Limit Zoom Out (0.35) and Zoom In (3)
-        // Stricter zoom out prevents seeing too much empty space if content is small
         const newScale = Math.max(0.35, Math.min(3, this.transform.k * (1 + delta)));
         
         // Zoom towards mouse pointer
@@ -287,45 +277,65 @@ export class ViewportSystem {
     }
 
     handlePointerDown(e) {
-        // MOBILE IMPROVEMENT: Allow starting pan from anywhere (even on nodes),
-        // unless explicitly stopped by a child (like drag-and-drop handles in construction mode).
-        // Since ArborGraph doesn't stopPropagation on normal node clicks, we can catch it here.
-        
-        this.isDragging = true;
+        // Prepare for dragging, but do NOT capture yet to allow clicks to pass through
+        this.potentialDrag = true;
+        this.isDragging = false;
         this.hasMoved = false;
+        
         this.startClient = { x: e.clientX, y: e.clientY };
         this.lastPoint = this.getPoint(e);
-        this.svg.setPointerCapture(e.pointerId);
-        this.svg.style.cursor = 'grabbing';
+        
+        // Cursor feedback
+        this.svg.style.cursor = 'grab';
     }
 
     handlePointerMove(e) {
-        if (!this.isDragging) return;
+        if (!this.potentialDrag && !this.isDragging) return;
         
-        const currentClient = { x: e.clientX, y: e.clientY };
-        const dist = Math.hypot(currentClient.x - this.startClient.x, currentClient.y - this.startClient.y);
-        
-        // Threshold to distinguish Click vs Drag (5px)
-        if (dist > 5) {
-            this.hasMoved = true;
+        // Logic to detect drag initiation threshold (5px)
+        if (!this.isDragging) {
+            const currentClient = { x: e.clientX, y: e.clientY };
+            const dist = Math.hypot(currentClient.x - this.startClient.x, currentClient.y - this.startClient.y);
+            
+            if (dist > 5) {
+                this.isDragging = true;
+                this.hasMoved = true;
+                
+                // Now we capture the pointer to track movement even outside SVG bounds
+                this.svg.setPointerCapture(e.pointerId);
+                this.svg.style.cursor = 'grabbing';
+                
+                // Reset last point to current to prevent jump
+                this.lastPoint = this.getPoint(e);
+            }
         }
 
-        const p = this.getPoint(e);
-        const dx = p.x - this.lastPoint.x;
-        const dy = p.y - this.lastPoint.y;
-        
-        this.transform.x += dx;
-        this.transform.y += dy;
-        this.lastPoint = p;
-        
-        this.clamp();
-        this.update();
+        // Execute Pan
+        if (this.isDragging) {
+            const p = this.getPoint(e);
+            const dx = p.x - this.lastPoint.x;
+            const dy = p.y - this.lastPoint.y;
+            
+            this.transform.x += dx;
+            this.transform.y += dy;
+            this.lastPoint = p;
+            
+            this.clamp();
+            this.update();
+        }
     }
 
     handlePointerUp(e) {
-        this.isDragging = false;
-        this.svg.releasePointerCapture(e.pointerId);
-        this.svg.style.cursor = 'grab';
+        this.potentialDrag = false;
+        
+        if (this.isDragging) {
+            this.isDragging = false;
+            this.svg.releasePointerCapture(e.pointerId);
+            this.svg.style.cursor = 'grab';
+        }
+        
+        // If not dragging, this was a click. 
+        // Because we didn't capture pointer immediately, the click event will propagate to children (Nodes).
     }
     
     // Helper to project screen coordinates to world coordinates

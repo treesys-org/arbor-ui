@@ -1,20 +1,38 @@
 {
   "name": "arbor",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
+  "version": "1.0.0",
+  "description": "Visual Knowledge Explorer. A free, open-source, and community-driven platform for decentralized learning.",
+  "main": "electron-main.js",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "start": "electron .",
+    "dist": "electron-builder"
   },
-  "dependencies": {
-
-  },
+  "author": "Treesys",
+  "license": "GPL-3.0-or-later",
   "devDependencies": {
-    "@types/node": "^22.14.0",
-    
-    "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "org.treesys.arbor",
+    "productName": "Arbor",
+    "files": [
+      "**/*",
+      "!dist/",
+      "!release/"
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Education"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    }
   }
 }

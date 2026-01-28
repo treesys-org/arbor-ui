@@ -13,6 +13,7 @@ class ArborSage extends HTMLElement {
         this.pullStatus = '';
         this.hasTriedLoadingModels = false; 
         this.lastRenderKey = null;
+        this.ollamaConnectionError = false; 
         
         // GDPR Consent (Unified Key)
         this.hasConsent = localStorage.getItem('arbor-ai-consent') === 'true';
@@ -30,6 +31,12 @@ class ArborSage extends HTMLElement {
             if (!this.isVisible) {
                 this.isVisible = true;
                 this.mode = modal.mode || 'chat';
+                
+                // AUTO-START LOGIC:
+                // Only if browser provider, and only if idle.
+                if (aiService.config.provider === 'browser' && store.value.ai.status === 'idle') {
+                    store.initSage();
+                }
             } 
             else if (modal.mode && modal.mode !== this.mode) {
                 this.mode = modal.mode;
@@ -65,6 +72,11 @@ class ArborSage extends HTMLElement {
                     ollamaHost: host || 'http://127.0.0.1:11434'
                 });
             }
+        } else if (provider === 'browser') {
+            aiService.setConfig({ provider: 'browser' });
+            if (store.value.ai.status === 'idle') {
+                store.initSage();
+            }
         }
         this.mode = 'chat';
         this.render();
@@ -78,7 +90,16 @@ class ArborSage extends HTMLElement {
 
     async loadOllamaModels() {
         this.hasTriedLoadingModels = true;
-        this.ollamaModels = await aiService.listOllamaModels();
+        this.ollamaConnectionError = false; 
+        this.render(); 
+
+        const models = await aiService.listOllamaModels();
+        if (models === null) {
+            this.ollamaConnectionError = true;
+            this.ollamaModels = [];
+        } else {
+            this.ollamaModels = models;
+        }
         this.render();
     }
     
@@ -114,25 +135,14 @@ class ArborSage extends HTMLElement {
     
     extractBlueprint(text) {
         if (!text) return null;
-        
-        // 1. Try Markdown Code Block (with or without json tag, case insensitive)
-        // Matches ```json { ... } ``` or ``` { ... } ```
         const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-        
         if (codeBlockMatch) {
             try {
                 const potentialJson = codeBlockMatch[1];
                 const json = JSON.parse(potentialJson);
-                // Validate structure to ensure it's a blueprint and not random code
-                if (json.modules || (json.title && Array.isArray(json.lessons)) || json.languages) {
-                    return json;
-                }
-            } catch (e) {
-                // Not valid JSON inside the block
-            }
+                if (json.modules || (json.title && Array.isArray(json.lessons)) || json.languages) return json;
+            } catch (e) {}
         }
-        
-        // 2. Try Raw JSON (if the model outputted just the JSON without fences)
         const trimmed = text.trim();
         if ((trimmed.startsWith('{') && trimmed.endsWith('}'))) {
             try {
@@ -140,7 +150,6 @@ class ArborSage extends HTMLElement {
                 if (json.modules || json.languages) return json;
             } catch (e) {}
         }
-        
         return null;
     }
     
@@ -157,15 +166,10 @@ class ArborSage extends HTMLElement {
                     alert("You can only build in a Local Garden.");
                     return;
                 }
-                
                 store.userStore.applyBlueprintToTree(activeSource.id, json);
-                
-                // Refresh Graph
                 await store.loadData(activeSource, store.value.lang, true);
-                
                 store.notify("✅ Garden Constructed!");
                 this.close(); 
-                
             } catch(err) {
                 alert("Blueprint Error: " + err.message);
             }
@@ -193,9 +197,11 @@ class ArborSage extends HTMLElement {
              ollamaModels: this.ollamaModels,
              pullStatus: this.pullStatus,
              aiStatus: ai.status,
+             aiProgress: ai.progress,
              msgCount: ai.messages.length,
              provider: provider,
-             hasConsent: this.hasConsent
+             hasConsent: this.hasConsent,
+             ollamaError: this.ollamaConnectionError
         });
 
         if (stateKey === this.lastRenderKey) return;
@@ -212,14 +218,63 @@ class ArborSage extends HTMLElement {
         } else if (this.mode === 'menu') {
             this.renderMenu();
         } else {
-            this.renderChat();
+            // Check loading state specifically for Browser AI
+            if (provider === 'browser' && ai.status === 'loading') {
+                this.renderLoadingScreen(ai.progress);
+            } else {
+                this.renderChat();
+            }
         }
+    }
+    
+    renderLoadingScreen(progressText) {
+        // Parse percentage for visual bar
+        let percent = 0;
+        if (progressText) {
+            const match = progressText.match(/(\d+)%/);
+            if (match) percent = parseInt(match[1]);
+        }
+
+        // --- PARTIAL UPDATE LOGIC (Fix for flickering) ---
+        // Only update the style and text if the container already exists
+        const existingBar = this.querySelector('.js-progress-bar');
+        const existingText = this.querySelector('.js-progress-text');
+        const container = this.querySelector('#loading-container');
+
+        if (existingBar && existingText && container) {
+            existingBar.style.width = `${percent}%`;
+            existingText.textContent = progressText || 'Starting...';
+            return; // Skip full re-render
+        }
+
+        // Full Render (Initial)
+        this.className = "fixed inset-x-0 bottom-0 z-[100] flex flex-col items-end md:bottom-6 md:right-6 md:w-auto pointer-events-none";
+        this.innerHTML = `
+            <div id="loading-container" class="pointer-events-auto transition-all duration-300 origin-bottom md:origin-bottom-right shadow-2xl md:rounded-2xl w-full md:w-[380px] h-auto bg-white dark:bg-slate-900 flex flex-col border border-slate-200 dark:border-slate-800 animate-in slide-in-from-bottom-10 fade-in rounded-t-2xl p-8 text-center">
+                <div class="w-16 h-16 bg-green-50 dark:bg-green-900/20 rounded-full mx-auto flex items-center justify-center text-3xl mb-4 animate-bounce">
+                    🧠
+                </div>
+                <h3 class="text-lg font-black text-slate-800 dark:text-white mb-2">Initializing Brain</h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mb-6">Downloading AI Model to your browser. This only happens once.</p>
+                
+                <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-3 mb-2 overflow-hidden border border-slate-200 dark:border-slate-700">
+                    <div class="js-progress-bar bg-green-500 h-full transition-all duration-300" style="width: ${percent}%"></div>
+                </div>
+                <p class="js-progress-text text-xs font-mono font-bold text-green-600 dark:text-green-400">${progressText || 'Starting...'}</p>
+                
+                <button class="btn-close mt-6 text-xs text-slate-400 hover:text-slate-600 underline">Cancel</button>
+            </div>
+        `;
+        
+        this.querySelector('.btn-close').onclick = () => {
+            // store.abortSage(); // Optional: Implement abort logic in store
+            this.close();
+        };
     }
     
     renderConsent() {
         const ui = store.ui;
         this.className = "fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4";
-        
         this.innerHTML = `
             <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-sm w-full relative overflow-hidden flex flex-col animate-in zoom-in duration-200 border border-slate-200 dark:border-slate-800">
                 <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950">
@@ -229,37 +284,31 @@ class ArborSage extends HTMLElement {
                     </div>
                     <button class="btn-close w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors">✕</button>
                 </div>
-                
                 <div class="p-6">
                     <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800 mb-6">
                         <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
-                            ${ui.sageGdprText || 'This service uses Puter.js to provide Artificial Intelligence. Your messages will be processed by an external service (Puter.com). Arbor does not store your conversation history on any server.'}
+                            ${ui.sageGdprText || 'This service uses Puter.js to provide Artificial Intelligence.'}
                         </p>
                     </div>
-                    
                     <div class="mb-6 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
                         <p class="text-xs font-bold text-red-600 dark:text-red-400 leading-tight">
-                            ${ui.sageGdprAge || '⚠️ Age Requirement: By using this service, you confirm you are 13+ years old (per Puter.com terms).'}
+                            ${ui.sageGdprAge || '⚠️ Age Requirement: 16+ years old.'}
                         </p>
                     </div>
-                    
                     <button id="btn-accept-consent" class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-transform">
                         ${ui.sageGdprAccept || 'I Understand & Accept'}
                     </button>
-                    
                     <div class="mt-4 text-center">
                         <button id="btn-config-local" class="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 underline">
                             ${ui.sageModeLocal || 'Switch to Local AI (Ollama)'}
                         </button>
                     </div>
                 </div>
-                
                 <div class="p-3 bg-slate-50 dark:bg-slate-950 text-center border-t border-slate-100 dark:border-slate-800">
                     <p class="text-[10px] text-slate-400 uppercase font-bold tracking-widest">${ui.sagePoweredBy || 'Powered by Puter.com'}</p>
                 </div>
             </div>
         `;
-        
         this.querySelector('.btn-close').onclick = () => this.close();
         this.querySelector('#btn-accept-consent').onclick = () => this.acceptConsent();
         this.querySelector('#btn-config-local').onclick = () => {
@@ -271,7 +320,6 @@ class ArborSage extends HTMLElement {
     renderMenu() {
         const ui = store.ui;
         this.className = "fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4";
-
         this.innerHTML = `
             <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-sm w-full relative overflow-hidden flex flex-col animate-in zoom-in duration-200 border border-slate-200 dark:border-slate-800">
                 <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950">
@@ -281,7 +329,6 @@ class ArborSage extends HTMLElement {
                     </div>
                     <button class="btn-close w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors">✕</button>
                 </div>
-                
                 <div class="p-6 space-y-4">
                     <button id="btn-menu-chat" class="w-full text-left p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-all group">
                          <div class="flex items-center gap-4">
@@ -292,7 +339,6 @@ class ArborSage extends HTMLElement {
                             </div>
                          </div>
                     </button>
-
                     <button id="btn-menu-settings" class="w-full text-left p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all group">
                          <div class="flex items-center gap-4">
                             <div class="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 flex items-center justify-center text-xl">⚙️</div>
@@ -305,7 +351,6 @@ class ArborSage extends HTMLElement {
                 </div>
             </div>
         `;
-
         this.querySelector('.btn-close').onclick = () => this.close();
         this.querySelector('#btn-menu-chat').onclick = () => { this.mode = 'chat'; this.render(); };
         this.querySelector('#btn-menu-settings').onclick = () => { this.mode = 'settings'; this.render(); };
@@ -316,97 +361,61 @@ class ArborSage extends HTMLElement {
         this.className = "fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4";
         
         const isOllamaActive = aiService.config.provider === 'ollama';
+        const isBrowserActive = aiService.config.provider === 'browser';
+        const isPuterActive = !isOllamaActive && !isBrowserActive;
+        const progress = store.value.ai.progress || '';
 
         let modelsListHtml = '';
-        if (this.ollamaModels.length === 0 && !this.hasTriedLoadingModels) {
+        if (this.ollamaConnectionError) {
+             modelsListHtml = `<div class="p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-lg text-center"><p class="text-xs font-bold text-red-600 dark:text-red-400 mb-1">Connection Failed</p><button id="btn-retry-ollama" class="px-3 py-1 bg-red-100 dark:bg-red-800 text-red-700 dark:text-red-200 text-[10px] font-bold rounded transition-colors">Retry</button></div>`;
+        } else if (this.ollamaModels.length === 0 && !this.hasTriedLoadingModels) {
              setTimeout(() => this.loadOllamaModels(), 0);
              modelsListHtml = `<div class="text-center p-4 text-slate-400 text-xs animate-pulse">${ui.sageSearchingModels}</div>`;
+        } else if (this.ollamaModels.length === 0) {
+             modelsListHtml = `<div class="text-center p-4 text-slate-400 text-xs italic">${ui.sageNoModels || "No models found."}</div>`;
         } else {
-             modelsListHtml = this.ollamaModels.map(m => `
-                 <div class="flex items-center justify-between p-2 rounded-lg border border-slate-100 dark:border-slate-700">
-                    <button class="flex-1 text-left btn-select-model truncate font-mono text-xs text-slate-700 dark:text-slate-300" data-name="${m.name}">
-                        ${m.name}
-                    </button>
-                 </div>`).join('');
+             modelsListHtml = this.ollamaModels.map(m => `<div class="flex items-center justify-between p-2 rounded-lg border border-slate-100 dark:border-slate-700"><button class="flex-1 text-left btn-select-model truncate font-mono text-xs text-slate-700 dark:text-slate-300" data-name="${m.name}">${m.name}</button></div>`).join('');
         }
 
         this.innerHTML = `
-            <!-- Increased width to max-w-lg -->
             <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full relative overflow-hidden flex flex-col animate-in zoom-in duration-200 border border-slate-200 dark:border-slate-800 max-h-[90vh]">
                 <div class="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950 shrink-0">
-                    <div class="flex items-center gap-3">
-                        <span class="text-3xl">⚙️</span>
-                        <h3 class="font-black text-xl text-slate-800 dark:text-white">${ui.sageConfigTitle}</h3>
-                    </div>
+                    <div class="flex items-center gap-3"><span class="text-3xl">⚙️</span><h3 class="font-black text-xl text-slate-800 dark:text-white">${ui.sageConfigTitle}</h3></div>
                     <button class="btn-close w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors">✕</button>
                 </div>
-                
                 <div class="p-6 space-y-6 overflow-y-auto custom-scrollbar">
-                    
-                    <!-- PUTER (Default) -->
                     <div class="bg-teal-50 dark:bg-teal-900/10 p-4 rounded-xl border border-teal-100 dark:border-teal-800/30">
-                        <div class="flex items-center justify-between mb-2">
-                            <div class="flex items-center gap-2">
-                                <span class="text-2xl">☁️</span>
-                                <p class="text-sm font-bold text-teal-700 dark:text-teal-300">Puter Cloud (Default)</p>
-                            </div>
-                            ${!isOllamaActive ? '<span class="text-[10px] font-black bg-teal-200 text-teal-800 px-2 py-1 rounded">ACTIVE</span>' : ''}
-                        </div>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">
-                            Free, secure cloud AI. 
-                            <br><strong>Privacy Note:</strong> Data is processed by Puter.com.
-                        </p>
-                        <button id="btn-use-puter" class="w-full py-3 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-lg text-xs shadow transition-colors">
-                            Use Puter Cloud
-                        </button>
+                        <div class="flex items-center justify-between mb-2"><div class="flex items-center gap-2"><span class="text-2xl">☁️</span><p class="text-sm font-bold text-teal-700 dark:text-teal-300">Puter Cloud (Default)</p></div>${isPuterActive ? '<span class="text-[10px] font-black bg-teal-200 text-teal-800 px-2 py-1 rounded">ACTIVE</span>' : ''}</div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">Free, secure cloud AI.</p>
+                        <button id="btn-use-puter" class="w-full py-3 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-lg text-xs shadow transition-colors">Use Puter Cloud</button>
                     </div>
-
                     <div class="h-px bg-slate-200 dark:bg-slate-800"></div>
-
-                    <!-- OLLAMA (Advanced) -->
+                    <div class="bg-green-50 dark:bg-green-900/10 p-4 rounded-xl border border-green-100 dark:border-green-800/30">
+                        <div class="flex items-center justify-between mb-2"><div class="flex items-center gap-2"><span class="text-2xl">🧠</span><p class="text-sm font-bold text-green-700 dark:text-green-400">In-Browser (Private)</p></div>${isBrowserActive ? '<span class="text-[10px] font-black bg-green-200 text-green-800 px-2 py-1 rounded">ACTIVE</span>' : ''}</div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-4">Runs directly in your browser using CPU.</p>
+                        ${progress && isBrowserActive ? `<div class="mb-4"><p class="text-[10px] font-bold text-green-600 mb-1">${progress}</p><div class="w-full bg-green-200 rounded-full h-1.5 overflow-hidden"><div class="bg-green-600 h-full animate-pulse w-full"></div></div></div>` : ''}
+                        <button id="btn-use-browser" class="w-full py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg text-xs shadow transition-colors">Activate In-Browser AI</button>
+                    </div>
+                    <div class="h-px bg-slate-200 dark:bg-slate-800"></div>
                     <div class="bg-orange-50 dark:bg-orange-900/10 p-4 rounded-xl border border-orange-100 dark:border-orange-800/30">
-                        <div class="flex items-center justify-between mb-2">
-                            <div class="flex items-center gap-2">
-                                <span class="text-2xl">💻</span>
-                                <p class="text-sm font-bold text-orange-700 dark:text-orange-400">Local (Ollama)</p>
-                            </div>
-                            ${isOllamaActive ? '<span class="text-[10px] font-black bg-orange-200 text-orange-800 px-2 py-1 rounded">ACTIVE</span>' : ''}
-                        </div>
-                        
-                        <div class="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 p-2 rounded text-[10px] mb-4 border border-red-200 dark:border-red-800">
-                            <strong>⚠️ ADVANCED ONLY:</strong> Requires a local Ollama instance running on <code>127.0.0.1:11434</code> with <code>OLLAMA_ORIGINS="*"</code> enabled.
-                        </div>
-
+                        <div class="flex items-center justify-between mb-2"><div class="flex items-center gap-2"><span class="text-2xl">💻</span><p class="text-sm font-bold text-orange-700 dark:text-orange-400">Local (Ollama)</p></div>${isOllamaActive ? '<span class="text-[10px] font-black bg-orange-200 text-orange-800 px-2 py-1 rounded">ACTIVE</span>' : ''}</div>
                         <label class="text-[10px] font-bold text-slate-400 uppercase">Host</label>
                         <input id="inp-ollama-host" type="text" class="w-full text-xs p-2 border rounded mb-2 bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-white" value="${aiService.config.ollamaHost}">
-
                         <label class="text-[10px] font-bold text-slate-400 uppercase">Model</label>
                         <input id="inp-ollama-model" type="text" class="w-full text-xs p-2 border rounded mb-4 bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-white" value="${aiService.config.ollamaModel}">
-                        
-                        <div class="space-y-2">
-                            <div class="flex gap-2">
-                                <input id="inp-pull-model" type="text" placeholder="Pull model (e.g. mistral)" class="flex-1 text-xs p-2 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-                                <button id="btn-pull" class="px-3 py-1 bg-slate-800 text-white text-xs font-bold rounded hover:bg-black">Pull</button>
-                            </div>
-                            <p id="pull-status" class="text-[10px] font-mono text-blue-500 h-4">${this.pullStatus}</p>
-                            <div class="max-h-24 overflow-y-auto custom-scrollbar bg-white/50 dark:bg-slate-900/50 rounded border border-slate-100 dark:border-slate-800">
-                                ${modelsListHtml}
-                            </div>
-                        </div>
-
-                        <button id="btn-use-ollama" class="w-full mt-4 py-3 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-lg text-xs shadow transition-colors">
-                            Connect & Use Ollama
-                        </button>
+                        <div class="space-y-2"><div class="flex gap-2"><input id="inp-pull-model" type="text" placeholder="Pull model (e.g. mistral)" class="flex-1 text-xs p-2 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"><button id="btn-pull" class="px-3 py-1 bg-slate-800 text-white text-xs font-bold rounded hover:bg-black">Pull</button></div><p id="pull-status" class="text-[10px] font-mono text-blue-500 h-4">${this.pullStatus}</p><div class="max-h-24 overflow-y-auto custom-scrollbar bg-white/50 dark:bg-slate-900/50 rounded border border-slate-100 dark:border-slate-800">${modelsListHtml}</div></div>
+                        <button id="btn-use-ollama" class="w-full mt-4 py-3 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-lg text-xs shadow transition-colors">Connect & Use Ollama</button>
                     </div>
                 </div>
             </div>
         `;
-
         this.querySelector('.btn-close').onclick = () => this.close();
         this.querySelector('#btn-use-puter').onclick = () => this.saveConfig('puter');
+        this.querySelector('#btn-use-browser').onclick = () => this.saveConfig('browser');
         this.querySelector('#btn-use-ollama').onclick = () => this.saveConfig('ollama');
-        
         this.querySelector('#btn-pull').onclick = () => this.pullModel();
+        const btnRetry = this.querySelector('#btn-retry-ollama');
+        if (btnRetry) btnRetry.onclick = () => this.loadOllamaModels();
         this.querySelectorAll('.btn-select-model').forEach(b => {
              b.onclick = (e) => this.querySelector('#inp-ollama-model').value = e.currentTarget.dataset.name;
         });
@@ -426,87 +435,56 @@ class ArborSage extends HTMLElement {
         
         const displayStatus = aiState.status;
         const isOllama = aiService.config.provider === 'ollama';
-        const isThinking = displayStatus === 'thinking';
+        const isBrowser = aiService.config.provider === 'browser';
+        const isThinking = displayStatus === 'thinking' || displayStatus === 'loading';
         
-        // --- BUTTON STATE LOGIC (Send vs Stop) ---
-        let sendBtnColor = isArchitect ? 'bg-orange-600' : (isOllama ? 'bg-orange-600' : 'bg-teal-600');
+        let sendBtnColor = isArchitect ? 'bg-orange-600' : (isOllama ? 'bg-orange-600' : (isBrowser ? 'bg-green-600' : 'bg-teal-600'));
         let btnIcon = `<svg class="w-5 h-5 translate-x-0.5 -translate-y-0.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>`;
         let btnClass = `w-11 h-11 ${sendBtnColor} text-white rounded-xl hover:opacity-90 transition-all flex items-center justify-center shadow-lg active:scale-95`;
 
         if (isThinking) {
             btnClass = "w-11 h-11 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-all flex items-center justify-center shadow-lg active:scale-95 animate-pulse";
-            btnIcon = `<div class="w-4 h-4 bg-white rounded-sm"></div>`; // Stop Square
+            btnIcon = `<div class="w-4 h-4 bg-white rounded-sm"></div>`; 
         }
 
         const getMessagesHTML = () => {
              return displayMessages.map(m => {
                 let displayContent = m.content;
                 let blueprintCard = '';
-                
-                // CRITICAL: REMOVE JSON FROM DISPLAY IF BLUEPRINT DETECTED
                 const blueprint = this.extractBlueprint(m.content);
-                
                 if (blueprint && m.role === 'assistant') {
-                    // Strip the JSON block (Markdown or raw) from display
                     displayContent = displayContent.replace(/```(?:json)?\s*[\s\S]*?\s*```/ig, '');
-                    
-                    // If it was raw JSON (starts with { ends with }), clear text
-                    if (displayContent.trim().startsWith('{') && displayContent.trim().endsWith('}')) {
-                        displayContent = ""; 
-                    }
-                    
-                    // Fallback friendly text if message is now empty
+                    if (displayContent.trim().startsWith('{') && displayContent.trim().endsWith('}')) displayContent = ""; 
                     if (!displayContent.trim()) {
                         displayContent = store.value.lang === 'ES' 
                             ? "Aquí está la estructura que pediste." 
                             : "Here is the structure you requested.";
                     }
-
-                    // Build the Card
                     const cardTitle = blueprint.title || 'Custom Course';
                     const msgReady = ui.sageBlueprintReady || "Blueprint Ready";
                     const btnLabel = ui.sageBuildBtn || "Build Structure";
-
                     blueprintCard = `
                         <div class="mt-3 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm animate-in fade-in zoom-in duration-300">
                             <div class="bg-slate-50 dark:bg-slate-900 p-3 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3">
                                 <div class="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 text-orange-600 flex items-center justify-center text-xl">🏗️</div>
-                                <div>
-                                    <p class="font-bold text-slate-800 dark:text-slate-200 text-xs uppercase tracking-wider">${msgReady}</p>
-                                    <p class="text-[10px] text-slate-500 truncate max-w-[150px]">${cardTitle}</p>
-                                </div>
+                                <div><p class="font-bold text-slate-800 dark:text-slate-200 text-xs uppercase tracking-wider">${msgReady}</p><p class="text-[10px] text-slate-500 truncate max-w-[150px]">${cardTitle}</p></div>
                             </div>
-                            <button class="btn-construct-blueprint w-full py-3 bg-green-600 hover:bg-green-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors active:bg-green-700" data-msg-index="${displayMessages.indexOf(m)}">
-                                <span>🔨</span> ${btnLabel}
-                            </button>
+                            <button class="btn-construct-blueprint w-full py-3 bg-green-600 hover:bg-green-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors active:bg-green-700" data-msg-index="${displayMessages.indexOf(m)}"><span>🔨</span> ${btnLabel}</button>
                         </div>
                     `;
                 }
-
                 let contentHtml = this.formatMessage(displayContent);
-
                 return `
                 <div class="flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 fade-in duration-300">
                     <div class="max-w-[85%] relative group text-left">
-                        <div class="p-3 rounded-2xl text-sm leading-relaxed shadow-sm 
-                            ${m.role === 'user' 
-                                ? (sendBtnColor + ' text-white rounded-br-none') 
-                                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-bl-none'
-                            }">
+                        <div class="p-3 rounded-2xl text-sm leading-relaxed shadow-sm select-text ${m.role === 'user' ? (sendBtnColor + ' text-white rounded-br-none') : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-bl-none'}">
                             ${contentHtml}
                         </div>
                         ${blueprintCard}
                     </div>
                 </div>
              `;
-             }).join('') + (isThinking ? `
-                <div class="flex justify-start">
-                    <div class="bg-white dark:bg-slate-800 p-3 rounded-2xl rounded-bl-none border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-1.5 w-16 justify-center">
-                        <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
-                        <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay:0.1s"></div>
-                        <div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay:0.2s"></div>
-                    </div>
-                </div>` : '');
+             }).join('') + (isThinking ? `<div class="flex justify-start"><div class="bg-white dark:bg-slate-800 p-3 rounded-2xl rounded-bl-none border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-1.5 w-auto justify-center min-w-[60px]"><div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div><div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay:0.1s"></div><div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay:0.2s"></div></div></div>` : '');
         };
 
         if (chatArea) {
@@ -514,14 +492,11 @@ class ArborSage extends HTMLElement {
             chatArea.scrollTop = chatArea.scrollHeight;
             this.bindMessageEvents(chatArea);
             
-            // Update button directly for existing DOM
             const btnSubmit = this.querySelector('button[type="submit"]');
             if(btnSubmit) {
                 btnSubmit.className = btnClass;
                 btnSubmit.innerHTML = btnIcon;
             }
-            
-            // Update input state
             const inp = this.querySelector('#sage-input');
             if(inp) {
                 inp.disabled = isThinking;
@@ -534,8 +509,8 @@ class ArborSage extends HTMLElement {
 
         this.className = "fixed inset-x-0 bottom-0 z-[100] flex flex-col items-end md:bottom-6 md:right-6 md:w-auto pointer-events-none";
         
-        let headerGradient = isArchitect ? 'from-amber-500 to-orange-600' : (isOllama ? 'from-orange-500 to-red-500' : 'from-teal-500 to-emerald-600');
-        let providerName = isOllama ? 'Local (Ollama)' : 'Puter Cloud';
+        let headerGradient = isArchitect ? 'from-amber-500 to-orange-600' : (isOllama ? 'from-orange-500 to-red-500' : (isBrowser ? 'from-green-500 to-teal-600' : 'from-teal-500 to-emerald-600'));
+        let providerName = isBrowser ? 'In-Browser' : (isOllama ? 'Local (Ollama)' : 'Puter Cloud');
         if (isArchitect) providerName = 'Sage Constructor'; 
 
         this.innerHTML = `
@@ -544,17 +519,8 @@ class ArborSage extends HTMLElement {
                 
                 <div class="p-4 bg-gradient-to-r ${headerGradient} text-white flex justify-between items-center shadow-md z-10 shrink-0 rounded-t-2xl">
                     <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-xl backdrop-blur-sm shadow-inner relative">
-                            <span>🦉</span>
-                            ${isArchitect ? '<span class="absolute -top-1 -right-1 text-xs">⛑️</span>' : ''}
-                        </div>
-                        <div>
-                            <h3 class="font-black text-sm leading-none">${isArchitect ? (ui.sageArchitectTitle || 'Architect') : ui.sageTitle}</h3>
-                            <div class="flex items-center gap-1 mt-0.5">
-                                <span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
-                                <p class="text-[10px] opacity-80 font-medium">${providerName}</p>
-                            </div>
-                        </div>
+                        <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-xl backdrop-blur-sm shadow-inner relative"><span>🦉</span>${isArchitect ? '<span class="absolute -top-1 -right-1 text-xs">⛑️</span>' : ''}</div>
+                        <div><h3 class="font-black text-sm leading-none">${isArchitect ? (ui.sageArchitectTitle || 'Architect') : ui.sageTitle}</h3><div class="flex items-center gap-1 mt-0.5"><span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span><p class="text-[10px] opacity-80 font-medium">${providerName}</p></div></div>
                     </div>
                     <div class="flex items-center gap-2">
                         <button id="btn-clear" class="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/20 transition-colors" title="${ui.sageClearChat}">🗑️</button>
@@ -567,55 +533,29 @@ class ArborSage extends HTMLElement {
                      ${getMessagesHTML()}
                 </div>
                 
-                <!-- Puter Badge -->
-                ${!isOllama ? `
-                <div class="px-4 py-1 text-center bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0">
-                    <p class="text-[9px] text-slate-400 uppercase font-bold tracking-widest opacity-60">${ui.sagePoweredBy || 'Powered by Puter.com'}</p>
-                </div>
-                ` : ''}
+                ${!isOllama && !isBrowser ? `<div class="px-4 py-1 text-center bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0"><p class="text-[9px] text-slate-400 uppercase font-bold tracking-widest opacity-60">${ui.sagePoweredBy || 'Powered by Puter.com'}</p></div>` : ''}
 
-                ${!isArchitect ? `
-                <div class="px-3 py-2 flex gap-2 overflow-x-auto custom-scrollbar bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0">
-                    <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-100 dark:border-blue-800" data-action="summarize">📝 ${ui.sageBtnSummarize}</button>
-                    <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-100 dark:border-blue-800" data-action="explain">🎓 ${ui.sageBtnExplain}</button>
-                    <button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-100 dark:border-blue-800" data-action="quiz">❓ ${ui.sageBtnQuiz}</button>
-                </div>
-                ` : ''}
+                ${!isArchitect ? `<div class="px-3 py-2 flex gap-2 overflow-x-auto custom-scrollbar bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0"><button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-100 dark:border-blue-800" data-action="summarize">📝 ${ui.sageBtnSummarize}</button><button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-100 dark:border-blue-800" data-action="explain">🎓 ${ui.sageBtnExplain}</button><button class="btn-qa whitespace-nowrap px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-100 dark:border-blue-800" data-action="quiz">❓ ${ui.sageBtnQuiz}</button></div>` : ''}
 
                 <form id="sage-form" class="p-3 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex gap-2 shrink-0 pb-[calc(0.75rem+env(safe-area-inset-bottom,20px))] md:pb-3">
-                    <input id="sage-input" type="text" class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 ${isOllama || isArchitect ? 'focus:ring-orange-500' : 'focus:ring-teal-500'} dark:text-white placeholder:text-slate-400 disabled:opacity-50" placeholder="${isArchitect ? (ui.sageArchitectPlaceholder || 'Instruct the Architect...') : ui.sageInputPlaceholder}" autocomplete="off" ${isThinking ? 'disabled style="cursor:not-allowed; opacity:0.5"' : ''}>
-                    <button type="submit" class="${btnClass}">
-                        ${btnIcon}
-                    </button>
+                    <input id="sage-input" type="text" class="flex-1 bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 ${isOllama || isArchitect ? 'focus:ring-orange-500' : (isBrowser ? 'focus:ring-green-500' : 'focus:ring-teal-500')} dark:text-white placeholder:text-slate-400 disabled:opacity-50" placeholder="${isArchitect ? (ui.sageArchitectPlaceholder || 'Instruct the Architect...') : ui.sageInputPlaceholder}" autocomplete="off" ${isThinking ? 'disabled style="cursor:not-allowed; opacity:0.5"' : ''}>
+                    <button type="submit" class="${btnClass}">${btnIcon}</button>
                 </form>
             </div>
         `;
 
         this.querySelector('.btn-close').onclick = () => this.close();
-        this.querySelector('#btn-settings').onclick = () => {
-            this.mode = 'settings';
-            this.render();
-        };
+        this.querySelector('#btn-settings').onclick = () => { this.mode = 'settings'; this.render(); };
         this.querySelector('#btn-clear').onclick = () => store.clearSageChat();
 
         const form = this.querySelector('#sage-form');
         form.onsubmit = (e) => {
              e.preventDefault();
-             
-             // INTERCEPT: Stop Generation if Thinking
-             if (isThinking) {
-                 store.abortSage();
-                 return;
-             }
-
+             if (isThinking) { store.abortSage(); return; }
              const inp = this.querySelector('#sage-input');
              if (inp.value.trim()) {
-                 // Pass context to chat if in architect mode
-                 if (isArchitect) {
-                     store.update({ ai: { ...store.value.ai, contextMode: 'architect' } }); 
-                 } else {
-                     store.update({ ai: { ...store.value.ai, contextMode: 'normal' } }); 
-                 }
+                 if (isArchitect) store.update({ ai: { ...store.value.ai, contextMode: 'architect' } }); 
+                 else store.update({ ai: { ...store.value.ai, contextMode: 'normal' } }); 
                  store.chatWithSage(inp.value.trim());
                  inp.value = '';
              }
@@ -640,21 +580,14 @@ class ArborSage extends HTMLElement {
                 store.setModal('privacy');
             }
         });
-        
         container.querySelectorAll('.btn-construct-blueprint').forEach(btn => {
             btn.onclick = (e) => this.handleConstruct(e);
         });
     }
 
     formatMessage(text) {
-        let formatted = text
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\n/g, '<br>');
-        
-        formatted = formatted.replace(
-            /\[(.*?)\]\((.*?)\)/g, 
-            '<a href="$2" target="_blank" class="text-blue-500 hover:underline inline-flex items-center gap-1 font-bold"><svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>$1</a>'
-        );
+        let formatted = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+        formatted = formatted.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" class="text-blue-500 hover:underline inline-flex items-center gap-1 font-bold"><svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>$1</a>');
         return formatted;
     }
 }

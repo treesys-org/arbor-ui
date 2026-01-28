@@ -188,7 +188,7 @@ img, video { max-width: 100%; height: auto; }
 
 /* Interactions */
 .cursor-pointer { cursor: pointer; } .cursor-not-allowed { cursor: not-allowed; } .cursor-help { cursor: help; } .cursor-grab { cursor: grab; } .cursor-grabbing { cursor: grabbing; } .cursor-auto { cursor: auto; } .cursor-default { cursor: default; }
-.select-none { user-select: none; } .select-all { user-select: all; }
+.select-none { user-select: none; } .select-all { user-select: all; } .select-text { user-select: text; cursor: text; }
 .pointer-events-none { pointer-events: none; } .pointer-events-auto { pointer-events: auto; }
 .outline-none { outline: 2px solid transparent; outline-offset: 2px; }
 

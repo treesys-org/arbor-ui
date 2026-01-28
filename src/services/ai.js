@@ -1,19 +1,23 @@
 
-
-
 import { store } from "../store.js";
-import { puterSync } from "./puter-sync.js"; // Import to use the lazy loader
+import { puterSync } from "./puter-sync.js"; 
 
-// AI Service (Simplified: Puter Default + Local Ollama Option)
 class HybridAIService {
     constructor() {
         this.onProgress = null;
         this.config = {
-            provider: localStorage.getItem('arbor_ai_provider') || 'puter', // Default to Puter
+            provider: localStorage.getItem('arbor_ai_provider') || 'puter', 
             ollamaModel: localStorage.getItem('arbor_ollama_model') || 'llama3',
-            ollamaHost: localStorage.getItem('arbor_ollama_host') || 'http://127.0.0.1:11434'
+            ollamaHost: localStorage.getItem('arbor_ollama_host') || 'http://127.0.0.1:11434',
+            browserModel: localStorage.getItem('arbor_browser_model') || 'Xenova/Qwen1.5-0.5B-Chat',
         };
         this.currentController = null; 
+        
+        // Worker State
+        this.worker = null;
+        this.workerReady = false;
+        this.workerInitializing = false;
+        this.workerPromise = null;
     }
 
     setCallback(cb) {
@@ -26,25 +30,91 @@ class HybridAIService {
         if (newConfig.provider) localStorage.setItem('arbor_ai_provider', newConfig.provider);
         if (newConfig.ollamaModel) localStorage.setItem('arbor_ollama_model', newConfig.ollamaModel);
         if (newConfig.ollamaHost) localStorage.setItem('arbor_ollama_host', newConfig.ollamaHost);
-    }
+        if (newConfig.browserModel) localStorage.setItem('arbor_browser_model', newConfig.browserModel);
 
-    isSmartMode() {
-        return true; 
+        if (newConfig.provider === 'browser') {
+            this.initWorker();
+        }
     }
 
     async initialize() {
-        // If provider is Puter, pre-load the library when AI is explicitly initialized
         if (this.config.provider === 'puter') {
             await puterSync.loadLibrary();
+        }
+        if (this.config.provider === 'browser') {
+            await this.initWorker();
         }
         return true;
     }
     
-    // --- HEALTH CHECK ---
+    // --- WORKER MANAGEMENT ---
+    
+    async initWorker() {
+        if (this.workerReady) return Promise.resolve();
+        if (this.workerPromise) return this.workerPromise;
+        
+        this.workerInitializing = true;
+
+        this.workerPromise = new Promise((resolve, reject) => {
+            if (!this.worker) {
+                try {
+                    this.worker = new Worker(new URL('../workers/ai-worker.js', import.meta.url), { type: 'module' });
+                    
+                    this.worker.addEventListener('message', (e) => {
+                        const { status, message, progress, text } = e.data;
+                        
+                        if (status === 'progress') {
+                            if (this.onProgress) {
+                                const pct = progress ? Math.round(progress) + '%' : '...';
+                                this.onProgress({ text: `${message} ${pct}` });
+                            }
+                        } else if (status === 'ready') {
+                            this.workerReady = true;
+                            this.workerInitializing = false;
+                            if (this.onProgress) this.onProgress({ text: 'Neural Engine Ready (CPU).' });
+                            resolve(); // Resolve only when ready
+                        } else if (status === 'error') {
+                            console.error("Worker Error:", message);
+                            this.workerInitializing = false;
+                            this.workerPromise = null; // Reset promise to allow retry
+                            if (this.onProgress) this.onProgress({ text: `Error: ${message}` });
+                            reject(new Error(message));
+                        }
+                    });
+                    
+                    this.worker.addEventListener('error', (e) => {
+                        console.error("Worker Global Error:", e);
+                        if (this.onProgress) this.onProgress({ text: "Worker Initialization Failed (CSP/Security)" });
+                        this.workerInitializing = false;
+                        this.workerPromise = null;
+                        reject(new Error("Worker Failed to Start"));
+                    });
+
+                } catch (e) {
+                    console.error("Failed to create worker:", e);
+                    if (this.onProgress) this.onProgress({ text: "Failed to start AI Worker. Check console." });
+                    this.workerInitializing = false;
+                    this.workerPromise = null;
+                    reject(e);
+                    return;
+                }
+            }
+
+            // Trigger model load inside worker
+            if (this.onProgress) this.onProgress({ text: 'Initializing Worker...' });
+            
+            this.worker.postMessage({ 
+                type: 'init', 
+                data: { model: this.config.browserModel } 
+            });
+        });
+        
+        return this.workerPromise;
+    }
+    
     async checkHealth() {
         if (this.config.provider === 'ollama') {
             try {
-                // Short timeout to avoid hanging if Ollama is down
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 2000);
                 
@@ -58,15 +128,17 @@ class HybridAIService {
             } catch (e) {
                 return false;
             }
+        } else if (this.config.provider === 'browser') {
+            if (!this.worker) {
+                try { await this.initWorker(); } catch(e) { return false; }
+            }
+            return true;
         } else {
-            // Puter Check
-            // We lazily load it here if needed
             await puterSync.loadLibrary();
             return !!window.puter; 
         }
     }
 
-    // Abort current generation
     abort() {
         if (this.currentController) {
             this.currentController.abort();
@@ -74,17 +146,15 @@ class HybridAIService {
         }
     }
 
-    // --- OLLAMA MANAGEMENT API ---
-
     async listOllamaModels() {
         try {
             const response = await fetch(`${this.config.ollamaHost}/api/tags`);
-            if (!response.ok) return [];
+            if (!response.ok) return null;
             const data = await response.json();
             return data.models || [];
         } catch (e) {
             console.warn("Could not list Ollama models", e);
-            return [];
+            return null;
         }
     }
 
@@ -144,7 +214,6 @@ class HybridAIService {
         }
     }
 
-    // --- LOCAL RAG ENGINE ---
     retrieveRelevantContext(userQuery, fullContent) {
         if (!fullContent) return "";
 
@@ -181,64 +250,85 @@ class HybridAIService {
 
     async chat(messages, contextNode = null) {
         this.abort(); 
-        const ui = store.ui;
-        const lang = store.value.lang || 'EN';
-
-        const lastMsgObj = messages[messages.length - 1];
-        const lastMsg = lastMsgObj.content;
         
-        // Detect Context Mode from Store
-        const mode = store.value.ai?.contextMode || 'normal';
+        try {
+            const lang = store.value.lang || 'EN';
+            const lastMsgObj = messages[messages.length - 1];
+            const lastMsg = lastMsgObj.content;
+            const mode = store.value.ai?.contextMode || 'normal';
 
-        // 1. Check for LOCAL COMMANDS
-        if (lastMsg.startsWith('LOCAL_ACTION:')) {
-            return { text: "Command executed." };
-        }
-
-        // 2. Determine System Context
-        let systemContext = "";
-        
-        // Dynamic Prompts
-        const prompts = {
-            EN: {
-                sage: "You are the Sage Owl of Arbor Academy. Answer general questions helpfully and concisely.",
-                guardrails: "SAFETY PROTOCOL: You are an educational assistant. If the user asks for medical, legal, or dangerous chemical advice for the REAL WORLD, refuse politely. ROLEPLAY EXCEPTION: If the user is playing an Arbor Arcade game or a specific scenario, you MAY generate fictional combat, magic, or fantasy descriptions, provided they are clearly distinguished as fiction.",
-                context: "CONTEXT FROM CURRENT LESSON",
-                architect: "ROLE: You are the Sage Constructor (Architect) of the Arbor Knowledge Tree.\nTASK: Generate structured curriculum blueprints in JSON format.\nRULES: Output MUST include a JSON block using ```json ... ``` following this schema: { \"title\": \"Title\", \"modules\": [ { \"title\": \"Module\", \"description\": \"\", \"lessons\": [ { \"title\": \"Lesson\", \"description\": \"\", \"outline\": \"Markdown content\" } ] } ] }"
-            },
-            ES: {
-                sage: "Eres el Búho Sabio de la Academia Arbor. Responde preguntas generales de forma útil y concisa.",
-                guardrails: "PROTOCOLO DE SEGURIDAD: Eres un asistente educativo. Si el usuario pide consejo médico, legal o químico peligroso para el MUNDO REAL, recházalo educadamente. EXCEPCIÓN DE ROL: Si el usuario está jugando a Arbor Arcade o en un escenario específico, PUEDES generar descripciones de combate ficticio, magia o fantasía, siempre que se distingan claramente como ficción.",
-                context: "CONTEXTO DE LA LECCIÓN ACTUAL",
-                architect: "ROL: Eres el Arquitecto Sabio del Árbol de Conocimiento.\nTAREA: Generar planos de currículo estructurados en formato JSON.\nREGLAS: La salida DEBE incluir un bloque JSON usando ```json ... ``` siguiendo este esquema: { \"title\": \"Título\", \"modules\": [ { \"title\": \"Módulo\", \"description\": \"\", \"lessons\": [ { \"title\": \"Lección\", \"description\": \"\", \"outline\": \"Contenido Markdown\" } ] } ] }"
+            if (lastMsg.startsWith('LOCAL_ACTION:')) {
+                return { text: "Command executed." };
             }
-        };
-        
-        const currentPrompts = prompts[lang] || prompts['EN'];
-        
-        if (mode === 'architect') {
-            systemContext = currentPrompts.architect;
-        } else if (contextNode && contextNode.content) {
-            const relevantText = this.retrieveRelevantContext(lastMsg, contextNode.content);
-            systemContext = `
-            ${currentPrompts.context} ("${contextNode.name}"):
-            ${relevantText}
-            INSTRUCTIONS:
-            ${currentPrompts.sage}
-            ${currentPrompts.guardrails}
-            `;
-        } else {
-             systemContext = currentPrompts.sage + " " + currentPrompts.guardrails;
-        }
 
-        // 3. EXECUTE BASED ON PROVIDER
+            let systemContext = "";
+            const prompts = {
+                EN: {
+                    sage: "You are the Sage Owl of Arbor Academy. Answer concisely.",
+                    guardrails: "If asked for dangerous real-world advice, refuse.",
+                    context: "CONTEXT:",
+                    architect: "ROLE: Architect.\nTASK: Generate JSON curriculum."
+                },
+                ES: {
+                    sage: "Eres el Búho Sabio. Responde de forma concisa.",
+                    guardrails: "Si piden consejos peligrosos, rechaza.",
+                    context: "CONTEXTO:",
+                    architect: "ROL: Arquitecto.\nTAREA: Generar JSON curricular."
+                }
+            };
+            
+            const currentPrompts = prompts[lang] || prompts['EN'];
+            let retrievedContext = "";
 
-        // --- OLLAMA (LOCAL) ---
-        if (this.config.provider === 'ollama') {
-            try {
+            if (mode === 'architect') {
+                systemContext = currentPrompts.architect;
+            } else if (contextNode && contextNode.content) {
+                retrievedContext = this.retrieveRelevantContext(lastMsg, contextNode.content);
+                systemContext = `${currentPrompts.sage}`;
+            } else {
+                 systemContext = currentPrompts.sage;
+            }
+
+            // --- IN-BROWSER (WORKER) ---
+            if (this.config.provider === 'browser') {
+                // Ensure ready before sending message
+                if (!this.workerReady) await this.initWorker();
+                
+                return new Promise((resolve, reject) => {
+                    const handler = (e) => {
+                        const { status, text, message } = e.data;
+                        if (status === 'complete') {
+                            this.worker.removeEventListener('message', handler);
+                            
+                            // Cleanup
+                            let cleanText = text.replace(/^User Question:.*$/im, '').replace(/^Answer:/i, '').trim();
+                            cleanText = cleanText.replace(/<end_of_turn>/g, '').trim(); 
+                            cleanText = cleanText.replace(/<\|im_end\|>/g, '').trim();
+                            
+                            const footer = `<br><br><span class='text-[10px] text-green-600 dark:text-green-400 font-bold opacity-75'>⚡ ${this.config.browserModel} (CPU/Worker)</span>`;
+                            resolve({ text: cleanText + footer });
+                        }
+                        if (status === 'error') {
+                            this.worker.removeEventListener('message', handler);
+                            reject(new Error(message));
+                        }
+                    };
+                    
+                    this.worker.addEventListener('message', handler);
+                    
+                    this.worker.postMessage({ 
+                        type: 'generate', 
+                        data: { messages, config: {} }
+                    });
+                });
+            }
+
+            // --- OLLAMA (LOCAL) ---
+            if (this.config.provider === 'ollama') {
+                const ollamaContext = retrievedContext ? `CONTEXT:\n${retrievedContext}\n\n` : "";
                 const ollamaMessages = [
                     { role: 'system', content: systemContext },
-                    ...messages
+                    { role: 'user', content: ollamaContext + lastMsg }
                 ];
 
                 this.currentController = new AbortController();
@@ -261,49 +351,28 @@ class HybridAIService {
                 clearTimeout(timeoutId);
                 this.currentController = null;
 
-                if (!response.ok) throw new Error(`Ollama status: ${response.status}`);
+                if (!response.ok) throw new Error(`Ollama responded with Status ${response.status}`);
 
                 const data = await response.json();
                 const txt = data.message.content;
-                const trimmedTxt = txt.trim();
                 
-                if ((trimmedTxt.startsWith('{') && trimmedTxt.endsWith('}')) || (trimmedTxt.startsWith('[') && trimmedTxt.endsWith(']'))) {
-                    try { JSON.parse(trimmedTxt); return { text: txt }; } catch (e) {}
-                }
-                
-                const footer = "<br><br><span class='text-[10px] text-orange-600 dark:text-orange-400 font-bold opacity-75'>⚡ Local Intelligence (Ollama)</span>";
+                const footer = "<br><br><span class='text-[10px] text-orange-600 dark:text-orange-400 font-bold opacity-75'>⚡ Local (Ollama)</span>";
                 return { text: txt + footer };
-
-            } catch (e) {
-                this.currentController = null;
-                console.error("Ollama Error:", e);
-                // Use localized error prefix
-                const prefix = store.ui.aiErrorLocal || "Local AI Error: ";
-                return { text: `🦉 ${prefix}${e.message}\nEnsure Ollama is running at ${this.config.ollamaHost}` };
             }
-        }
 
-        // --- PUTER.JS (DEFAULT CLOUD) ---
-        // Ensure library is loaded before call
-        await puterSync.loadLibrary();
+            // --- PUTER.JS (CLOUD) ---
+            await puterSync.loadLibrary();
 
-        try {
-            if (!window.puter) {
-                return { text: "🦉 Puter.js system failed to load. Check blocklist or connection." };
-            }
+            if (!window.puter) throw new Error("Puter.js not loaded. Check internet.");
             
+            const puterContext = retrievedContext ? `CONTEXT:\n${retrievedContext}\n\n` : "";
             const messagesFormat = [
                 { role: 'system', content: systemContext },
-                ...messages
+                { role: 'user', content: puterContext + lastMsg }
             ];
 
             const response = await window.puter.ai.chat(messagesFormat);
             const txt = response?.message?.content || response.toString();
-            
-            const trimmedTxt = txt.trim();
-            if ((trimmedTxt.startsWith('{') && trimmedTxt.endsWith('}')) || (trimmedTxt.startsWith('[') && trimmedTxt.endsWith(']'))) {
-                try { JSON.parse(trimmedTxt); return { text: txt }; } catch (e) {}
-            }
             
             const footer = `<br><br><div class='pt-2 mt-1 border-t border-slate-200 dark:border-slate-700/50 flex items-center justify-between text-[10px] text-slate-400'>
                 <span class='font-bold opacity-75'>Powered by Puter.com</span>
@@ -313,38 +382,24 @@ class HybridAIService {
             return { text: txt + footer };
 
         } catch (e) {
-            console.error("Puter Error:", e);
-            // Use localized error prefix
-            const prefix = store.ui.aiErrorCloud || "Cloud AI Error: ";
-            return { text: `🦉 ${prefix}${e.message || "Connection failed"}` };
-        }
-    }
-
-    // --- ARCHITECT MODE (Structure Generation) ---
-    async generateStructure(topic, instructions = "") {
-        const constraints = instructions 
-            ? `USER INSTRUCTIONS: ${instructions}` 
-            : `GUIDANCE: Create a standard course outline with at least 3 modules and 2 lessons per module.`;
-
-        const prompt = `
-        Act as a curriculum architect. Create a structured course outline for: "${topic}".
-        ${constraints}
-        Return strict JSON format with this structure:
-        { "title": "Course Title", "description": "Brief desc", "modules": [ { "title": "Module Title", "description": "", "lessons": [ { "title": "Lesson Title", "description": "", "outline": "3 bullet points" } ] } ] }
-        IMPORTANT: Return ONLY the JSON. No markdown.
-        `;
-
-        try {
-            const response = await this.chat([{ role: 'user', content: prompt }]);
-            let text = response.text;
-            text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-            const start = text.indexOf('{');
-            const end = text.lastIndexOf('}');
-            if (start !== -1 && end !== -1) text = text.substring(start, end + 1);
-            return JSON.parse(text);
-        } catch (e) {
-            console.error("Architect Error:", e);
-            throw new Error("Failed to generate structure: " + e.message);
+            console.error("Sage Chat Error:", e);
+            
+            let hint = "";
+            const msg = e.message || e.toString();
+            
+            if (msg.includes('Failed to fetch') || msg.includes('Cross-Origin') || msg.includes('NetworkError')) {
+                if (this.config.provider === 'ollama') {
+                    hint = "<br><br><b>🚨 CORS ERROR DETECTED</b><br>Your browser blocked the connection to Ollama.<br>To fix this, restart Ollama with this command:<br><code class='bg-black text-white p-1 rounded'>OLLAMA_ORIGINS=\"*\" ollama serve</code>";
+                } else if (this.config.provider === 'browser') {
+                    hint = "<br><br><b>Hint:</b> The browser could not download the model. Check your internet connection.";
+                }
+            }
+            
+            if (msg.includes('401') || msg.includes('403')) {
+                hint = "<br><br><b>🚨 ACCESS DENIED</b><br>The model you selected is Gated (Requires License).<br>Please switch to a public model like <b>Xenova/Qwen1.5-0.5B-Chat</b> in Settings.";
+            }
+            
+            return { text: `🦉 <span class="text-red-500 font-bold">ERROR:</span> ${msg}${hint}` };
         }
     }
 }

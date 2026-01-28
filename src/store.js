@@ -340,14 +340,25 @@ class Store extends EventTarget {
     // --- INTEGRATIONS (AI, Cloud, User) ---
 
     async initSage() {
+        // Prevent infinite re-init loops if already busy
+        if (this.state.ai.status === 'loading' || this.state.ai.status === 'thinking') return;
+
         this.update({ ai: { ...this.state.ai, status: 'loading', progress: '0%' } });
+        
         aiService.setCallback((progressReport) => {
              this.update({ ai: { ...this.state.ai, progress: progressReport.text } });
         });
+        
         try {
             await aiService.initialize();
-            const msgs = [{ role: 'assistant', content: this.ui.sageHello }];
-            this.update({ ai: { ...this.state.ai, status: 'ready', messages: msgs } });
+            
+            // Only add greeting AFTER successful init and if chat is empty
+            let currentMsgs = [...this.state.ai.messages];
+            if (currentMsgs.length === 0) {
+                currentMsgs.push({ role: 'assistant', content: this.ui.sageHello });
+            }
+            
+            this.update({ ai: { ...this.state.ai, status: 'ready', messages: currentMsgs } });
         } catch (e) {
             console.error(e);
             this.update({ ai: { ...this.state.ai, status: 'error', progress: e.message } });
@@ -370,22 +381,37 @@ class Store extends EventTarget {
         }
 
         const currentMsgs = [...this.state.ai.messages, { role: 'user', content: userText }];
-        this.update({ ai: { ...this.state.ai, status: 'thinking', messages: currentMsgs } });
+        
+        // Critical: Clear progress so the "Thinking" spinner appears instead of old status text
+        this.update({ ai: { ...this.state.ai, status: 'thinking', progress: null, messages: currentMsgs } });
 
         try {
             let contextNode = this.state.selectedNode || this.state.previewNode;
-            if (contextNode && !contextNode.content && contextNode.contentPath) await this.loadNodeContent(contextNode);
+            // Handle unloaded context content
+            if (contextNode && !contextNode.content && contextNode.contentPath) {
+                try {
+                    await this.loadNodeContent(contextNode);
+                } catch(err) {
+                    console.warn("Could not load context for AI:", err);
+                }
+            }
 
             const responseObj = await aiService.chat(currentMsgs, contextNode);
             let finalText = responseObj.text;
+            
             if (responseObj.sources && responseObj.sources.length > 0) {
                 finalText += `\n\n**Sources:**\n` + responseObj.sources.map(s => `• [${s.title}](${s.url})`).join('\n');
             }
             const newMsgs = [...currentMsgs, { role: 'assistant', content: finalText }];
             this.update({ ai: { ...this.state.ai, status: 'ready', messages: newMsgs } });
         } catch (e) {
-            const errorMsg = this.state.lang === 'ES' ? 'Error al pensar...' : 'Error thinking...';
-            const newMsgs = [...currentMsgs, { role: 'assistant', content: `🦉 ${errorMsg}` }];
+            // CRITICAL: SHOW THE REAL ERROR TO THE USER
+            console.error("AI Error masked in Store:", e);
+            const errorMsg = this.state.lang === 'ES' 
+                ? `❌ Error del Sistema: ${e.message || e}` 
+                : `❌ System Error: ${e.message || e}`;
+            
+            const newMsgs = [...currentMsgs, { role: 'assistant', content: errorMsg }];
             this.update({ ai: { ...this.state.ai, status: 'ready', messages: newMsgs } });
         }
     }

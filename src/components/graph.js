@@ -643,9 +643,15 @@ class ArborGraph extends HTMLElement {
         badgeG.appendChild(badgeText);
         g.appendChild(badgeG);
 
-        // Events
-        g.onclick = (e) => this.handleNodeClick(e, n.data);
-        g.onpointerdown = (e) => this.handleNodeDragStart(e, n.data);
+        // Events - FIX: Use dynamic property lookup to avoid stale closures on data reload
+        g.onclick = (e) => {
+            const data = e.currentTarget._layoutNode ? e.currentTarget._layoutNode.data : n.data;
+            this.handleNodeClick(e, data);
+        };
+        g.onpointerdown = (e) => {
+            const data = e.currentTarget._layoutNode ? e.currentTarget._layoutNode.data : n.data;
+            this.handleNodeDragStart(e, data);
+        };
 
         return g;
     }

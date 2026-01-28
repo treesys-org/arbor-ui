@@ -1,18 +1,32 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <!-- ELECTRON SECURITY: Content-Security-Policy -->
+  <!-- Added https://cdn.jsdelivr.net to worker-src to allow remote scripts in Web Workers -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://js.puter.com blob:; worker-src 'self' blob: https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://avatars.githubusercontent.com https://raw.githubusercontent.com; connect-src 'self' https://raw.githubusercontent.com https://huggingface.co https://*.huggingface.co https://*.hf.co https://*.amazonaws.com https://*.cloudfront.net https://api.github.com http://127.0.0.1:11434 http://localhost:11434 https://cdn.jsdelivr.net blob: https://js.puter.com wss://*.puter.com;">
+  
   <title>Arbor: Visual Knowledge Explorer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover">
   
-  <!-- Optimization: Preconnect to CDNs -->
-  <link rel="preconnect" href="https://esm.sh">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="preconnect" href="https://huggingface.co">
+
+  <!-- STABLE IMPORT MAP: Uses the bundled browser version directly (Fixes "buffer is not defined") -->
+  <script type="importmap">
+  {
+    "imports": {
+      "@xenova/transformers": "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js"
+    }
+  }
+  </script>
 
   <!-- Local CSS (Premium Engine - Replaces Tailwind) -->
   <link rel="stylesheet" href="./src/style.css">
   
   <style>
-    /* NATIVE APP LOCK: Fixes the viewport to prevent swaying/rubber-banding */
+    /* NATIVE APP LOCK */
     html {
       width: 100%;
       height: 100%;
@@ -23,32 +37,28 @@
     body {
       width: 100%;
       height: 100%;
-      position: fixed; /* Locks the body in place relative to the viewport */
+      position: fixed;
       overflow: hidden; 
-      overscroll-behavior: none; /* Disables pull-to-refresh/bounce effects */
+      overscroll-behavior: none;
       user-select: none;
       -webkit-tap-highlight-color: transparent;
       margin: 0;
       padding: 0;
     }
     
-    /* ACCESSIBILITY & FOCUS MANAGEMENT */
-    /* Remove default focus outline for mouse users */
+    /* FOCUS MANAGEMENT */
     :focus:not(:focus-visible) {
       outline: none !important;
       box-shadow: none !important;
     }
     
-    /* High-visibility focus ring ONLY for keyboard navigation */
     :focus-visible {
       outline: 2px solid #3b82f6; 
       outline-offset: 2px;
     }
     
-    /* Web Component loading helper */
     :not(:defined) { display: none; }
 
-    /* TREE VIEW STYLES */
     .tree-item.drag-over {
         background-color: #e0f2fe;
         border: 1px dashed #3b82f6;
@@ -75,7 +85,7 @@
         </div>
      </main>
      
-     <!-- Content Panel (Slide over) -->
+     <!-- Content Panel -->
      <arbor-content></arbor-content>
      
      <!-- Construction Panel -->
@@ -90,10 +100,10 @@
      <!-- Sage (AI) Modal -->
      <arbor-sage></arbor-sage>
 
-     <!-- Version Widget (Top Right, left of Progress) -->
+     <!-- Version Widget -->
      <arbor-version-widget></arbor-version-widget>
 
-     <!-- Progress Widget (Top Right) -->
+     <!-- Progress Widget -->
      <arbor-progress-widget></arbor-progress-widget>
   </div>
 
