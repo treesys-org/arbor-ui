@@ -484,7 +484,17 @@ class ArborSage extends HTMLElement {
                     </div>
                 </div>
              `;
-             }).join('') + (isThinking ? `<div class="flex justify-start"><div class="bg-white dark:bg-slate-800 p-3 rounded-2xl rounded-bl-none border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-1.5 w-auto justify-center min-w-[60px]"><div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div><div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay:0.1s"></div><div class="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style="animation-delay:0.2s"></div></div></div>` : '');
+             }).join('') + (isThinking ? 
+                `<div class="flex justify-start animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl rounded-bl-none border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-3">
+                        <div class="flex gap-1.5">
+                            <div class="w-2 h-2 bg-purple-400 rounded-full animate-bounce"></div>
+                            <div class="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style="animation-delay:0.15s"></div>
+                            <div class="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style="animation-delay:0.3s"></div>
+                        </div>
+                        <span class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">${ui.sageThinking || 'Thinking...'}</span>
+                    </div>
+                </div>` : '');
         };
 
         if (chatArea) {

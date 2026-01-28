@@ -101,12 +101,22 @@ async function generate(messages, config) {
             if (text.startsWith(fullPrompt)) {
                 text = text.substring(fullPrompt.length);
             } 
-            // 2. Fallback: Regex strip up to the last assistant marker (handles spacing variations)
+            // 2. Strict splitting by the assistant token.
+            // We specifically injected <|im_start|>assistant\n at the end of the prompt.
+            // Everything before the LAST occurrence of this token is likely the prompt/system/context.
+            else if (text.includes('<|im_start|>assistant')) {
+                const parts = text.split('<|im_start|>assistant');
+                // The answer is the last part (or the part after the prompt's assistant tag)
+                text = parts[parts.length - 1];
+            }
+            // 3. Fallback: Regex to catch the specific leakage "system ... CONTEXT:"
             else {
                 text = text.replace(/^[\s\S]*<\|im_start\|>assistant\s*/i, '');
+                // Specific cleanup for raw text leaks if tokens are missing/malformed
+                text = text.replace(/^[\s\S]*system\s+CONTEXT:[\s\S]*?user[\s\S]*?assistant/im, '');
             }
             
-            // 3. Final cleanup of any lingering closing tags
+            // 4. Final cleanup of any lingering closing tags
             text = text.replace(/<\|im_end\|>$/, '');
         }
         
